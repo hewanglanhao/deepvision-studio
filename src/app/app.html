@@ -1,0 +1,539 @@
+﻿<div class="playground-shell">
+  <header class="pg-header">
+    <div class="page-width header-row">
+      <div>
+        <p class="kicker">DeepVision Studio</p>
+        <h1>像 Playground 一样调网络，像 CNN Explainer 一样看内部机制</h1>
+        <p class="intro">
+          拖拽网络层、控制训练过程、观察特征图和 Grad-CAM，让深度学习过程可见、可对比、可解释。
+        </p>
+      </div>
+      <div class="header-actions">
+        <button class="help-btn" (click)="showHelp = true">使用手册</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="top-controls">
+    <div class="page-width controls-row">
+      <div class="play-cluster">
+        <button class="icon-btn" (click)="startTraining()" title="开始训练">▶</button>
+        <button class="icon-btn" (click)="pauseTraining()" title="暂停训练">⏸</button>
+        <button class="icon-btn" (click)="stopTraining()" title="停止训练">■</button>
+      </div>
+
+      <div class="control-pill stat">
+        <span>Epoch</span>
+        <strong>{{ currentEpoch }}/{{ totalEpochs }}</strong>
+      </div>
+      <div class="control-pill stat">
+        <span>Loss</span>
+        <strong>{{ latestLoss.toFixed(4) }}</strong>
+      </div>
+      <div class="control-pill stat">
+        <span>Accuracy</span>
+        <strong>{{ (latestAccuracy * 100).toFixed(2) }}%</strong>
+      </div>
+      <div class="control-pill stat">
+        <span>Val Acc</span>
+        <strong>{{ (latestValAccuracy * 100).toFixed(2) }}%</strong>
+      </div>
+
+      <label class="control-pill">
+        <span>Batch</span>
+        <input type="number" [(ngModel)]="batchSize" min="1" />
+      </label>
+      <label class="control-pill">
+        <span>Epochs</span>
+        <input type="number" [(ngModel)]="totalEpochs" min="1" />
+      </label>
+      <label class="control-pill">
+        <span>Learning Rate</span>
+        <input type="number" [(ngModel)]="learningRate" step="0.0001" min="0.0001" />
+      </label>
+      <label class="control-pill">
+        <span>Optimizer</span>
+        <select [(ngModel)]="optimizer">
+          <option value="Adam">Adam</option>
+          <option value="AdamW">AdamW</option>
+          <option value="RMSProp">RMSProp</option>
+          <option value="SGD">SGD</option>
+          <option value="Momentum">Momentum</option>
+          <option value="Nesterov">Nesterov</option>
+          <option value="Adagrad">Adagrad</option>
+          <option value="Adadelta">Adadelta</option>
+        </select>
+      </label>
+      <label class="control-pill">
+        <span>Scheduler</span>
+        <select [(ngModel)]="scheduler">
+          <option value="none">none</option>
+          <option value="step">step</option>
+          <option value="cosine">cosine</option>
+        </select>
+      </label>
+      <label class="control-pill">
+        <span>Decay</span>
+        <input type="number" [(ngModel)]="lrDecay" min="0.5" max="0.99" step="0.01" />
+      </label>
+      <div class="control-pill stat">
+        <span>Current LR</span>
+        <strong>{{ currentLr.toFixed(5) }}</strong>
+      </div>
+      <label class="control-pill">
+        <span>Template</span>
+        <select [(ngModel)]="selectedTemplateId">
+          @for (tpl of modelTemplates; track tpl.id) {
+            <option [value]="tpl.id">{{ tpl.name }}</option>
+          }
+        </select>
+      </label>
+      <button class="control-apply-btn" (click)="applyTemplate()">应用模板</button>
+    </div>
+  </section>
+
+  <section class="page-width newbie-rail">
+    <article>
+      <h3>Step 1</h3>
+      <p>先选模板并调训练参数，再点开始训练。</p>
+    </article>
+    <article>
+      <h3>Step 2</h3>
+      <p>在 Network 区点击层，改卷积核和激活函数。</p>
+    </article>
+    <article>
+      <h3>Step 3</h3>
+      <p>在 Output 区看 Loss 曲线、散点图和谷地图。</p>
+    </article>
+    <article>
+      <h3>Step 4</h3>
+      <p>上传真实图片，观察卷积和池化效果。</p>
+    </article>
+  </section>
+
+  <main class="page-width board">
+    <section class="column data-column">
+      <h2>Data</h2>
+      <p class="helper">选择数据子集并查看样本分布。</p>
+
+      <div class="dataset-switch">
+        <button [class.active]="selectedDataset === 'MNIST'" (click)="selectDataset('MNIST')">MNIST</button>
+        <button [class.active]="selectedDataset === 'CIFAR-10'" (click)="selectDataset('CIFAR-10')">CIFAR-10</button>
+      </div>
+
+      <div class="sample-grid">
+        @for (sample of datasetSamples; track sample.id) {
+          <button
+            class="sample-tile"
+            [class.active]="sample.id === selectedSampleId"
+            (click)="selectedSampleId = sample.id; refreshVisuals()"
+          >
+            <div class="pixel-grid" [style.--size]="selectedDataset === 'MNIST' ? 8 : 10">
+              @for (px of sample.pixels; track $index) {
+                <span [style.background]="getCellColor(px)"></span>
+              }
+            </div>
+            <small>label {{ sample.label }}</small>
+          </button>
+        }
+      </div>
+
+      <div class="sub-block">
+        <h3>真实图片卷积实验</h3>
+        <input type="file" accept="image/*" (change)="onImageUpload($event)" />
+
+        <div class="conv-toolbar">
+          <label>
+            卷积核
+            <select [(ngModel)]="convKernelType" (change)="simulateUploadedConvolution()">
+              <option value="edge">edge</option>
+              <option value="sharpen">sharpen</option>
+              <option value="blur">blur</option>
+              <option value="emboss">emboss</option>
+            </select>
+          </label>
+          <label>
+            stride
+            <input type="number" min="1" max="2" [(ngModel)]="convStride" (change)="simulateUploadedConvolution()" />
+          </label>
+        </div>
+
+        @if (uploadedImageUrl) {
+          <div class="upload-preview-row">
+            <img [src]="uploadedImageUrl" alt="uploaded image" class="upload-preview" />
+            <div>
+              <small>输入灰度图 ({{ uploadedInputSize }}x{{ uploadedInputSize }})</small>
+              <div class="pixel-grid" [style.--size]="uploadedInputSize">
+                @for (px of uploadedInputMap; track $index) {
+                  <span [style.background]="getCellColor(px)"></span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="upload-result-grid">
+            <div>
+              <small>卷积输出 ({{ uploadedConvSize }}x{{ uploadedConvSize }})</small>
+              <div class="pixel-grid" [style.--size]="uploadedConvSize">
+                @for (px of uploadedConvMap; track $index) {
+                  <span [style.background]="getCellColor(px)"></span>
+                }
+              </div>
+            </div>
+            <div>
+              <small>MaxPool 输出 ({{ uploadedPoolSize }}x{{ uploadedPoolSize }})</small>
+              <div class="pixel-grid" [style.--size]="uploadedPoolSize">
+                @for (px of uploadedPoolMap; track $index) {
+                  <span [style.background]="getCellColor(px)"></span>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="sub-block">
+        <h3>单样本推理</h3>
+        <button (click)="runInference()">运行前向传播</button>
+        <div class="activation-list compact">
+          @for (item of inferenceActivations; track item.layerName) {
+            <div class="act-item">
+              <strong>{{ item.layerName }}</strong>
+              <div class="bars">
+                @for (value of item.values; track $index) {
+                  <span [style.height.%]="value * 100"></span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="column network-column">
+      <h2>Network</h2>
+      <p class="helper">可点击节点选中，按 Ctrl/Shift 可多选。网络区支持滑动和放大查看。</p>
+
+      @if (selectedTemplate) {
+        <p class="template-note">模板说明: {{ selectedTemplate.description }}</p>
+      }
+
+      <div class="network-tools">
+        <button (click)="showNetworkModal = true">放大查看/编辑</button>
+        <button class="small" (click)="resetNodeSelection()">清空节点选择</button>
+      </div>
+
+      <div class="network-scroll-slider">
+        <label>
+          左右滑动
+          <input type="range" min="0" max="100" value="0" (input)="onNetworkPan($event, networkScroller)" />
+        </label>
+      </div>
+
+      <div class="network-scroll-shell" #networkScroller>
+        <app-network-overview
+          [layers]="layers"
+          [connections]="connections"
+          [selectedLayerId]="selectedLayerId"
+          [selectedNodeKeys]="selectedNodeKeys"
+          [zoom]="networkZoom"
+          (layerSelected)="selectedLayerId = $event"
+          (nodeSelected)="onNodeSelected($event)"
+          (neuronDelta)="adjustLayerUnits($event.layerId, $event.delta)"
+        ></app-network-overview>
+      </div>
+
+      @if (selectedNodeKeys.length > 0) {
+        <div class="picked-nodes-panel">
+          <strong>已选节点</strong>
+          <div class="picked-tags">
+            @for (key of selectedNodeKeys; track key) {
+              <span>{{ key }}</span>
+            }
+          </div>
+        </div>
+      }
+
+      <div class="layer-types">
+        @for (type of layerPalette; track type) {
+          <div class="layer-chip" draggable="true" (dragstart)="onLayerDragStart(type)">
+            + {{ getLayerTypeLabel(type) }}
+          </div>
+        }
+      </div>
+
+      <div class="network-canvas" (dragover)="onCanvasDragOver($event)" (drop)="onCanvasDrop($event)">
+        @for (layer of layers; track layer.id) {
+          <button
+            class="network-node"
+            [class.active]="layer.id === selectedLayerId"
+            (click)="selectedLayerId = layer.id"
+          >
+            <b>{{ layer.name }}</b>
+            <small>{{ getLayerTypeLabel(layer.type) }}</small>
+          </button>
+        }
+      </div>
+
+      <div class="editor-grid">
+        <div class="panel">
+          <h3>层参数</h3>
+          @if (selectedLayer) {
+            <label>神经元 / 通道
+              <input type="number" [(ngModel)]="selectedLayer.units" min="1" (change)="refreshVisuals()" />
+            </label>
+            <label>卷积核
+              <input
+                type="number"
+                [(ngModel)]="selectedLayer.kernelSize"
+                min="1"
+                [disabled]="selectedLayer.type !== 'conv'"
+                (change)="refreshVisuals()"
+              />
+            </label>
+            <label>激活函数
+              <select [(ngModel)]="selectedLayer.activation" (change)="refreshVisuals()">
+                <option value="none">none</option>
+                <option value="relu">relu</option>
+                <option value="tanh">tanh</option>
+                <option value="gelu">gelu</option>
+                <option value="softmax">softmax</option>
+              </select>
+            </label>
+            <label>Dropout
+              <input
+                type="number"
+                [(ngModel)]="selectedLayer.dropoutRate"
+                min="0"
+                max="0.9"
+                step="0.05"
+                [disabled]="selectedLayer.type !== 'dropout'"
+                (change)="refreshVisuals()"
+              />
+            </label>
+            <button class="danger" (click)="removeSelectedLayer()">删除当前层</button>
+          }
+        </div>
+
+        <div class="panel">
+          <h3>连接</h3>
+          <div class="pair">
+            <select [(ngModel)]="connectFromId">
+              @for (layer of layers; track layer.id) {
+                <option [value]="layer.id">{{ layer.name }}</option>
+              }
+            </select>
+            <select [(ngModel)]="connectToId">
+              @for (layer of layers; track layer.id) {
+                <option [value]="layer.id">{{ layer.name }}</option>
+              }
+            </select>
+          </div>
+          <button (click)="addConnection()">添加连接</button>
+          <div class="links">
+            @for (conn of connections; track $index) {
+              <div>
+                <span>L{{ conn.from }} → L{{ conn.to }}</span>
+                <button class="small" (click)="removeConnection(conn)">移除</button>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="column output-column">
+      <h2>Output</h2>
+      <p class="helper">训练曲线、loss 散点图、loss 谷地图、特征图和评估面板。</p>
+
+      <div class="curve-grid">
+        <div class="chart-box">
+          <h3>Loss</h3>
+          <svg viewBox="0 0 280 120" preserveAspectRatio="none">
+            <polyline [attr.points]="lossPolyline"></polyline>
+          </svg>
+        </div>
+        <div class="chart-box">
+          <h3>Train Accuracy</h3>
+          <svg viewBox="0 0 280 120" preserveAspectRatio="none">
+            <polyline [attr.points]="accPolyline"></polyline>
+          </svg>
+        </div>
+        <div class="chart-box full">
+          <h3>Validation Accuracy</h3>
+          <svg viewBox="0 0 280 120" preserveAspectRatio="none">
+            <polyline [attr.points]="valPolyline"></polyline>
+          </svg>
+        </div>
+      </div>
+
+      <div class="sub-block viz-grid-2">
+        <div class="mini-viz">
+          <h3>Loss 散点图</h3>
+          <div class="scatter-box">
+            @for (point of lossScatter; track $index) {
+              <span
+                class="dot"
+                [style.left.%]="point.x"
+                [style.bottom.%]="point.y"
+                [title]="'loss=' + point.loss.toFixed(4)"
+              ></span>
+            }
+          </div>
+        </div>
+
+        <div class="mini-viz">
+          <h3>Loss Landscape (谷地图)</h3>
+          <div class="landscape-grid">
+            @for (row of lossLandscape; track $index) {
+              <div class="land-row">
+                @for (cell of row; track $index) {
+                  <span [style.background]="getCellColor(1 - cell, 'heat')"></span>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <h3>卷积特征图</h3>
+        <div class="feature-grid">
+          @for (map of featureMaps; track $index) {
+            <div class="feature-box">
+              <small>Feature {{ $index + 1 }}</small>
+              <div class="pixel-grid" [style.--size]="selectedDataset === 'MNIST' ? 8 : 10">
+                @for (px of map; track $index) {
+                  <span [style.background]="getCellColor(px)"></span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <h3>Grad-CAM</h3>
+        <div class="pixel-grid heat" [style.--size]="10">
+          @for (px of gradCamMap; track $index) {
+            <span [style.background]="getCellColor(px, 'heat')"></span>
+          }
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <h3>混淆矩阵 (10 x 10)</h3>
+        <div class="confusion-wrap">
+          @for (row of confusionMatrix; track $index; let i = $index) {
+            <div class="conf-row">
+              @for (val of row; track $index) {
+                <span
+                  class="conf-cell"
+                  [class.diag]="i === $index"
+                  [style.opacity]="0.35 + val / 120"
+                >{{ val }}</span>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <h3>结构影响实验</h3>
+        <div class="experiment-actions">
+          <button (click)="runStructureExperiment('deeper')">增加深度</button>
+          <button (click)="runStructureExperiment('activation')">改激活函数</button>
+          <button (click)="runStructureExperiment('optimizer')">改优化器</button>
+        </div>
+        @if (experimentNote) {
+          <p class="notice">{{ experimentNote }}</p>
+        }
+
+        <div class="result-table">
+          <div class="table-head">
+            <span>实验项</span>
+            <span>轮数</span>
+            <span>精度</span>
+            <span>速度</span>
+          </div>
+          @for (res of experimentResults; track res.name + res.epochs) {
+            <div class="table-row">
+              <span>{{ res.name }}</span>
+              <span>{{ res.epochs }}</span>
+              <span>{{ (res.finalAccuracy * 100).toFixed(1) }}%</span>
+              <span>{{ res.speedScore.toFixed(2) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <h3>预设任务评估</h3>
+        <div class="task-runner">
+          <select [(ngModel)]="selectedTaskId">
+            @for (task of presetTasks; track task.id) {
+              <option [value]="task.id">{{ task.name }}</option>
+            }
+          </select>
+          <button (click)="runSelectedTask()">运行并评估</button>
+        </div>
+        @if (selectedTask) {
+          <p class="helper">{{ selectedTask.description }}</p>
+        }
+        <div class="logs">
+          @for (log of evaluationLogs; track $index) {
+            <p>{{ log }}</p>
+          }
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <h3>大模型辅助分析（占位）</h3>
+        <textarea
+          rows="3"
+          [(ngModel)]="aiQuestion"
+          placeholder="例如：训练到第 12 轮后 loss 震荡，准确率不再提升"
+        ></textarea>
+        <button (click)="askAiHelper()">生成建议</button>
+        <pre>{{ aiAnswer }}</pre>
+      </div>
+    </section>
+  </main>
+
+  <app-help-manual [open]="showHelp" (closed)="showHelp = false"></app-help-manual>
+
+  @if (showNetworkModal) {
+    <div class="network-modal-mask" (click)="showNetworkModal = false">
+      <section class="network-modal-card" (click)="$event.stopPropagation()">
+        <header>
+          <h3>网络结构放大编辑</h3>
+          <div>
+            <label>
+              缩放
+              <input type="range" min="1" max="2" step="0.1" [(ngModel)]="networkZoom" />
+            </label>
+            <button (click)="showNetworkModal = false">关闭</button>
+          </div>
+        </header>
+
+        <div class="network-scroll-shell modal" #networkScrollerModal>
+          <app-network-overview
+            [layers]="layers"
+            [connections]="connections"
+            [selectedLayerId]="selectedLayerId"
+            [selectedNodeKeys]="selectedNodeKeys"
+            [zoom]="networkZoom"
+            (layerSelected)="selectedLayerId = $event"
+            (nodeSelected)="onNodeSelected($event)"
+            (neuronDelta)="adjustLayerUnits($event.layerId, $event.delta)"
+          ></app-network-overview>
+        </div>
+
+        <label class="modal-slider">
+          左右滑动
+          <input type="range" min="0" max="100" value="0" (input)="onNetworkPan($event, networkScrollerModal)" />
+        </label>
+      </section>
+    </div>
+  }
+</div>
