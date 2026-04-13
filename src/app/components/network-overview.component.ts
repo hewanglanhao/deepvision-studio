@@ -1,278 +1,208 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Connection, NetworkLayer } from '../sim-models';
+import { NetworkLayer } from '../sim-models';
 
-interface DrawNode {
-  layerIndex: number;
-  nodeIndex: number;
-  x: number;
-  y: number;
-}
-
-interface DrawLayer {
-  index: number;
-  id: number;
-  x: number;
-  yTop: number;
-  yBottom: number;
-  displayNodes: number;
-  units: number;
-  type: string;
-  nodes: DrawNode[];
-}
-
-interface NodeSelectionEvent {
-  layerId: number;
-  nodeIndex: number;
-  append: boolean;
-}
+const LAYER_COLOR: Record<string, string> = {
+  input: '#6366f1', conv2d: '#0ea5e9', pool2d: '#10b981',
+  flatten: '#f59e0b', dense: '#8b5cf6', activation: '#ec4899',
+  dropout: '#94a3b8', output: '#ef4444'
+};
+const LAYER_ICON: Record<string, string> = {
+  input: '⬛', conv2d: '⊞', pool2d: '⊟', flatten: '≡',
+  dense: '◉', activation: 'ƒ', dropout: '⊘', output: '▶'
+};
 
 @Component({
   selector: 'app-network-overview',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="network-overview">
-      <svg
-        [attr.viewBox]="'0 0 ' + svgWidth + ' 420'"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="network overview"
-      >
-        @for (pair of layerPairs; track $index) {
-          @for (fromNode of pair.from.nodes; track $index) {
-            @for (toNode of pair.to.nodes; track $index) {
-              <path
-                [attr.d]="linkPath(fromNode, toNode)"
-                [attr.stroke]="linkColor(pair.from.index, fromNode.nodeIndex, pair.to.index, toNode.nodeIndex)"
-                [attr.stroke-width]="linkWidth(pair.from.index, fromNode.nodeIndex, pair.to.index, toNode.nodeIndex)"
-                class="link"
-              ></path>
+    <div class="nw-scroll" (dragover)="onDragOver($event)" (drop)="onDropCanvas($event)">
+      <div class="nw-track">
+        @for (layer of layers; track layer.id; let i = $index) {
+          <!-- 插入区 -->
+          <div class="drop-slot"
+               [class.drag-over]="dropTargetIndex === i"
+               (dragover)="onSlotOver($event, i)"
+               (dragleave)="dropTargetIndex = -1"
+               (drop)="onDropSlot($event, i)">
+            <div class="slot-line"></div>
+          </div>
+
+          <!-- 层卡片 -->
+          <div class="layer-card"
+               [class.selected]="layer.id === selectedLayerId"
+               [class.has-error]="hasError(layer.id)"
+               [class.dragging]="dragSourceIndex === i"
+               [style.--accent]="color(layer.type)"
+               draggable="true"
+               (dragstart)="onCardDragStart($event, i)"
+               (dragend)="onCardDragEnd()"
+               (click)="layerSelected.emit(layer.id)">
+            <div class="card-top-bar" [style.background]="color(layer.type)"></div>
+            <div class="card-icon" [style.color]="color(layer.type)">{{ icon(layer.type) }}</div>
+            <div class="card-name">{{ layer.name }}</div>
+            <div class="card-type" [style.color]="color(layer.type)">{{ typeLabel(layer.type) }}</div>
+            @if (shapeHints[layer.id]) {
+              <div class="card-shape">{{ shapeHints[layer.id] }}</div>
             }
+            @if (layer.type === 'conv2d') {
+              <div class="card-badge">{{ layer.params.outChannels }}ch · k{{ layer.params.kernelSize }}</div>
+            }
+            @if (layer.type === 'dense' || layer.type === 'output') {
+              <div class="card-badge">{{ layer.params.units }} 单元</div>
+            }
+            @if (layer.type === 'pool2d') {
+              <div class="card-badge">{{ layer.params.mode }} · k{{ layer.params.kernelSize }}</div>
+            }
+          </div>
+
+          <!-- 连接箭头 -->
+          @if (i < layers.length - 1) {
+            <div class="nw-arrow">
+              <svg width="32" height="24" viewBox="0 0 32 24">
+                <line x1="0" y1="12" x2="24" y2="12" stroke="#334155" stroke-width="1.5"/>
+                <polygon points="24,7 32,12 24,17" fill="#334155"/>
+              </svg>
+            </div>
           }
         }
 
-        @for (layer of drawLayers; track layer.id) {
-          <g class="layer-title" (click)="layerSelected.emit(layer.id)">
-            <text [attr.x]="layer.x" [attr.y]="24" text-anchor="middle">{{ layer.type }}</text>
-            <text [attr.x]="layer.x" [attr.y]="40" text-anchor="middle" class="units">{{ layer.units }} units</text>
-          </g>
-
-          @if (layer.index > 0 && layer.index < drawLayers.length - 1) {
-            <g class="layer-controls">
-              <rect [attr.x]="layer.x - 24" y="48" width="18" height="18" rx="4" (click)="neuronDelta.emit({ layerId: layer.id, delta: 1 })"></rect>
-              <text [attr.x]="layer.x - 15" y="61" text-anchor="middle" (click)="neuronDelta.emit({ layerId: layer.id, delta: 1 })">+</text>
-
-              <rect [attr.x]="layer.x + 6" y="48" width="18" height="18" rx="4" (click)="neuronDelta.emit({ layerId: layer.id, delta: -1 })"></rect>
-              <text [attr.x]="layer.x + 15" y="61" text-anchor="middle" (click)="neuronDelta.emit({ layerId: layer.id, delta: -1 })">-</text>
-            </g>
-          }
-
-          @for (node of layer.nodes; track $index) {
-            <g (click)="onNodeClick(layer.id, node.nodeIndex, $event)" class="node-group">
-              <circle
-                [attr.cx]="node.x"
-                [attr.cy]="node.y"
-                r="13"
-                [class.active]="layer.id === selectedLayerId"
-                [class.node-picked]="isNodeSelected(layer.id, node.nodeIndex)"
-              ></circle>
-            </g>
-          }
-
-          @if (layer.units > layer.displayNodes) {
-            <text [attr.x]="layer.x" [attr.y]="layer.yBottom + 18" class="ellipsis" text-anchor="middle">...</text>
-          }
-        }
-      </svg>
+        <!-- 末尾插入区 -->
+        <div class="drop-slot"
+             [class.drag-over]="dropTargetIndex === layers.length"
+             (dragover)="onSlotOver($event, layers.length)"
+             (dragleave)="dropTargetIndex = -1"
+             (drop)="onDropSlot($event, layers.length)">
+          <div class="slot-line"></div>
+        </div>
+      </div>
     </div>
   `,
-  styles: [
-    `
-      .network-overview {
-        border: 1px solid #d6deea;
-        border-radius: 10px;
-        background: linear-gradient(180deg, #f8fbff 0%, #f0f6fd 100%);
-        padding: 8px;
-      }
+  styles: [`
+    .nw-scroll {
+      overflow-x: auto; overflow-y: hidden;
+      padding: 10px 8px; min-height: 118px;
+    }
+    .nw-scroll::-webkit-scrollbar { height: 5px; }
+    .nw-scroll::-webkit-scrollbar-thumb { background: #d0d7de; border-radius: 999px; }
 
-      svg {
-        width: 100%;
-        height: 360px;
-        min-width: 860px;
-      }
+    .nw-track {
+      display: flex; align-items: center;
+      gap: 0; min-width: max-content;
+    }
 
-      .layer-title text {
-        fill: #334155;
-        font-size: 12px;
-        cursor: pointer;
-      }
+    .layer-card {
+      width: 106px; min-height: 98px;
+      background: #fff;
+      border: 1.5px solid #e2e6ea;
+      border-radius: 12px;
+      padding: 7px 8px 6px;
+      cursor: pointer; flex-shrink: 0;
+      transition: border-color .15s, box-shadow .15s, transform .1s;
+      position: relative; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .layer-card:hover { border-color: var(--accent,#2563eb); box-shadow: 0 2px 8px rgba(37,99,235,.12); }
+    .layer-card.selected {
+      border-color: var(--accent,#2563eb);
+      box-shadow: 0 0 0 2px rgba(37,99,235,.2), 0 2px 12px rgba(37,99,235,.15);
+      background: #eff6ff;
+    }
+    .layer-card.has-error { border-color: #dc2626 !important; background: #fef2f2 !important; }
+    .layer-card.has-error .card-name { color: #991b1b; }
+    .layer-card.dragging { opacity: .35; transform: scale(.95); }
 
-      .layer-title .units {
-        fill: #64748b;
-        font-size: 10px;
-      }
+    .card-top-bar {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 3px; border-radius: 12px 12px 0 0;
+    }
+    .card-icon { font-size: 20px; margin-top: 5px; line-height: 1; }
+    .card-name { font-size: 11px; font-weight: 600; color: #1a2332; text-align: center; line-height: 1.3; }
+    .card-type { font-size: 10px; font-weight: 700; text-align: center; letter-spacing: .04em; }
+    .card-shape { font-size: 9px; font-family: monospace; color: #8a9ab0; text-align: center; }
+    .card-badge {
+      font-size: 9px; color: #8a9ab0; text-align: center;
+      background: #f7f8fa; border-radius: 999px; padding: 1px 6px;
+      border: 1px solid #e2e6ea;
+    }
 
-      .link {
-        fill: none;
-        stroke-linecap: round;
-        opacity: 0.9;
-      }
+    .nw-arrow { display: flex; align-items: center; flex-shrink: 0; }
 
-      .layer-controls rect {
-        fill: #ffffff;
-        stroke: #b8c6d8;
-        cursor: pointer;
-      }
-
-      .layer-controls text {
-        fill: #1f2937;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      circle {
-        fill: #ffffff;
-        stroke: #8ea2ba;
-        stroke-width: 1.8;
-        cursor: pointer;
-      }
-
-      circle.active {
-        fill: #dbeafe;
-        stroke: #2563eb;
-      }
-
-      circle.node-picked {
-        fill: #fde68a;
-        stroke: #d97706;
-        stroke-width: 2.2;
-      }
-
-      text {
-        font-size: 11px;
-        fill: #1f2937;
-        pointer-events: none;
-      }
-
-      .ellipsis {
-        fill: #64748b;
-        font-size: 16px;
-      }
-    `
-  ]
+    .drop-slot {
+      width: 16px; min-height: 98px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: width .15s;
+    }
+    .drop-slot.drag-over { width: 44px; }
+    .slot-line {
+      width: 2px; height: 50px; background: transparent;
+      border-radius: 999px; transition: all .15s;
+    }
+    .drop-slot.drag-over .slot-line { background: #2563eb; box-shadow: 0 0 6px rgba(37,99,235,.4); }
+  `]
 })
 export class NetworkOverviewComponent {
   @Input() layers: NetworkLayer[] = [];
-  @Input() connections: Connection[] = [];
   @Input() selectedLayerId = -1;
-  @Input() selectedNodeKeys: string[] = [];
-  @Input() zoom = 1;
+  @Input() shapeHints: Record<number, string> = {};
+  @Input() errorLayerIds: number[] = [];
   @Output() layerSelected = new EventEmitter<number>();
-  @Output() neuronDelta = new EventEmitter<{ layerId: number; delta: number }>();
-  @Output() nodeSelected = new EventEmitter<NodeSelectionEvent>();
+  @Output() layersReordered = new EventEmitter<NetworkLayer[]>();
+  @Output() newLayerDropped = new EventEmitter<{ type: string; index: number }>();
 
-  get svgWidth(): number {
-    const base = 980;
-    const extra = Math.max(0, this.layers.length - 6) * 180;
-    return Math.round((base + extra) * Math.max(1, this.zoom));
+  hasError(id: number): boolean { return this.errorLayerIds.includes(id); }
+
+  dragSourceIndex = -1;
+  dropTargetIndex = -1;
+  private dragType: 'card' | 'new' = 'card';
+  private dragNewType = '';
+
+  color(t: string) { return LAYER_COLOR[t] ?? '#64748b'; }
+  icon(t: string)  { return LAYER_ICON[t] ?? '□'; }
+
+  typeLabel(type: string): string {
+    const m: Record<string, string> = {
+      input: 'Input', conv2d: 'Conv2D', pool2d: 'Pool2D', flatten: 'Flatten',
+      dense: 'Dense', activation: 'Activation', dropout: 'Dropout', output: 'Output'
+    };
+    return m[type] ?? type;
   }
 
-  get drawLayers(): DrawLayer[] {
-    const count = Math.max(1, this.layers.length);
-    const yTop = 86;
-    const yBottom = 310;
-
-    return this.layers.map((layer, idx) => {
-      const x = 50 + (idx * (this.svgWidth - 100)) / Math.max(1, count - 1);
-      const displayNodes = this.displayNodeCount(layer);
-      const spacing = displayNodes > 1 ? (yBottom - yTop) / (displayNodes - 1) : 0;
-      const nodes: DrawNode[] = Array.from({ length: displayNodes }, (_, nodeIdx) => {
-        return {
-          layerIndex: idx,
-          nodeIndex: nodeIdx,
-          x,
-          y: yTop + spacing * nodeIdx
-        };
-      });
-
-      return {
-        index: idx,
-        id: layer.id,
-        x,
-        yTop,
-        yBottom,
-        displayNodes,
-        units: layer.units,
-        type: layer.type,
-        nodes
-      };
-    });
+  onCardDragStart(e: DragEvent, i: number): void {
+    this.dragSourceIndex = i;
+    this.dragType = 'card';
+    e.dataTransfer?.setData('text/plain', String(i));
   }
+  onCardDragEnd(): void { this.dragSourceIndex = -1; this.dropTargetIndex = -1; }
 
-  get layerPairs(): Array<{ from: DrawLayer; to: DrawLayer }> {
-    const pairs: Array<{ from: DrawLayer; to: DrawLayer }> = [];
-    for (let i = 0; i < this.drawLayers.length - 1; i += 1) {
-      pairs.push({ from: this.drawLayers[i], to: this.drawLayers[i + 1] });
-    }
-    return pairs;
-  }
+  onSlotOver(e: DragEvent, i: number): void { e.preventDefault(); this.dropTargetIndex = i; }
+  onDragOver(e: DragEvent): void { e.preventDefault(); }
 
-  linkPath(fromNode: DrawNode, toNode: DrawNode): string {
-    const mid = (fromNode.x + toNode.x) / 2;
-    return `M${fromNode.x},${fromNode.y} C${mid},${fromNode.y} ${mid},${toNode.y} ${toNode.x},${toNode.y}`;
-  }
+  onDropSlot(e: DragEvent, targetIndex: number): void {
+    e.preventDefault();
+    this.dropTargetIndex = -1;
+    const data = e.dataTransfer?.getData('text/plain') ?? '';
 
-  onNodeClick(layerId: number, nodeIndex: number, event: MouseEvent): void {
-    event.stopPropagation();
-    this.layerSelected.emit(layerId);
-    this.nodeSelected.emit({
-      layerId,
-      nodeIndex,
-      append: event.ctrlKey || event.metaKey || event.shiftKey
-    });
-  }
-
-  isNodeSelected(layerId: number, nodeIndex: number): boolean {
-    return this.selectedNodeKeys.includes(`${layerId}-${nodeIndex}`);
-  }
-
-  linkColor(fromLayer: number, fromNode: number, toLayer: number, toNode: number): string {
-    const w = this.syntheticWeight(fromLayer, fromNode, toLayer, toNode);
-    const intensity = Math.min(1, Math.abs(w));
-    if (w >= 0) {
-      const r = Math.round(225 - intensity * 130);
-      const g = Math.round(235 - intensity * 70);
-      const b = Math.round(245);
-      return `rgb(${r},${g},${b})`;
-    }
-    const r = Math.round(245);
-    const g = Math.round(228 - intensity * 85);
-    const b = Math.round(210 - intensity * 120);
-    return `rgb(${r},${g},${b})`;
-  }
-
-  linkWidth(fromLayer: number, fromNode: number, toLayer: number, toNode: number): number {
-    const w = Math.abs(this.syntheticWeight(fromLayer, fromNode, toLayer, toNode));
-    return 0.6 + w * 2.2;
-  }
-
-  private displayNodeCount(layer: NetworkLayer): number {
-    if (layer.type === 'input') {
-      return 7;
-    }
-    if (layer.type === 'output') {
-      return Math.min(8, Math.max(2, layer.units));
+    if (this.dragType === 'new') {
+      this.newLayerDropped.emit({ type: this.dragNewType, index: targetIndex });
+      return;
     }
 
-    const scaled = Math.round(Math.sqrt(Math.max(1, layer.units)));
-    return Math.min(8, Math.max(3, scaled));
+    const from = this.dragSourceIndex;
+    if (from < 0 || from === targetIndex || from === targetIndex - 1) return;
+
+    const arr = [...this.layers];
+    const [moved] = arr.splice(from, 1);
+    const insertAt = targetIndex > from ? targetIndex - 1 : targetIndex;
+    arr.splice(insertAt, 0, moved);
+    this.layersReordered.emit(arr);
+    this.dragSourceIndex = -1;
   }
 
-  private syntheticWeight(fromLayer: number, fromNode: number, toLayer: number, toNode: number): number {
-    const seed = Math.sin((fromLayer + 1) * 12.9898 + (fromNode + 1) * 78.233 + (toLayer + 1) * 37.719 + (toNode + 1) * 11.131) * 43758.5453;
-    const frac = seed - Math.floor(seed);
-    return frac * 2 - 1;
-  }
+  onDropCanvas(e: DragEvent): void { e.preventDefault(); }
+
+  /** 供外部 palette chip 调用：设置拖拽类型为 new layer */
+  setDragNew(type: string): void { this.dragType = 'new'; this.dragNewType = type; }
 }
