@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { HelpManualComponent } from './components/help-manual.component';
 import { NetworkOverviewComponent } from './components/network-overview.component';
+import { ForwardBackendService } from './services/forward-backend.service';
 import { TrainingLog, TrainingRuntimeService } from './services/training-runtime.service';
 import { SimEngine } from './sim-engine';
 import {
@@ -18,8 +19,8 @@ import {
 const MAX_IMAGE_SIDE = 640;
 /** 图片解码超时 ms */
 const IMAGE_DECODE_TIMEOUT = 5000;
-/** 像素网格预览最大边长，避免大图导致 DOM 过重 */
-const MAX_PREVIEW_GRID_SIDE = 56;
+/** 像素网格按真实尺寸展示（不做前端缩略） */
+const MAX_PREVIEW_GRID_SIDE = Number.POSITIVE_INFINITY;
 
 export interface KernelPreset {
   label: string;
@@ -76,6 +77,11 @@ export class App implements OnInit, OnDestroy {
 
   forwardResult: ForwardPassResult | null = null;
   forwardLayerShapeMap: Record<number, string> = {};
+  forwardBusy = false;
+  forwardBackendError = '';
+  autoForwardCompute = false;
+  pendingForwardChanges = false;
+  forwardStatusMessage = '';
 
   trainingConfig: TrainingConfig & { lossFunction: string } = {
     batchSize: 32, totalEpochs: 20, learningRate: 0.001,
@@ -111,8 +117,14 @@ export class App implements OnInit, OnDestroy {
   private tensorPreviewCache = new WeakMap<ForwardTensor, { mode: 'rgb' | 'gray'; width: number; height: number; colors?: string[]; values?: number[] }>();
   private rgbColorsCache = new WeakMap<object, string[]>();
   private tensorChannelPreviewCache = new WeakMap<ForwardTensor, ChannelPreviewItem[]>();
+  private forwardDebounceTimer: number | null = null;
+  private forwardRequestSeq = 0;
+  private activeForwardAbort: AbortController | null = null;
 
-  constructor(private trainingSvc: TrainingRuntimeService) {}
+  constructor(
+    private trainingSvc: TrainingRuntimeService,
+    private forwardBackend: ForwardBackendService
+  ) {}
 
   ngOnInit(): void {
     this.applyTemplate();
@@ -131,6 +143,12 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();
+    if (this.forwardDebounceTimer !== null) {
+      window.clearTimeout(this.forwardDebounceTimer);
+      this.forwardDebounceTimer = null;
+    }
+    this.activeForwardAbort?.abort();
+    this.activeForwardAbort = null;
     this.trainingSvc.pause();
   }
 
@@ -224,9 +242,8 @@ export class App implements OnInit, OnDestroy {
   get finalImageViz() {
     const t = this.forwardResult?.finalTensor;
     if (!t || t.shape.length !== 3) return null;
-    const sampled = this.sampleTensorForPreview(t, MAX_PREVIEW_GRID_SIDE);
-    const [h, w, c] = sampled.shape as [number, number, number];
-    const srcValues = sampled.values;
+    const [h, w, c] = t.shape as [number, number, number];
+    const srcValues = t.values;
     const channelPreviews = this.buildChannelPreviews(t, 4);
     if (c === 3 && (t.colorMode === 'rgb' || t.colorMode === undefined)) {
       const colors = Array.from({ length: h * w }, (_, i) => {
@@ -532,15 +549,91 @@ export class App implements OnInit, OnDestroy {
   }
 
   // ── Forward pass ──────────────────────────────────────
-  runForward(): void {
+  runForward(force = false): void {
     if (this.mode !== 'forward') return;
-    this.forwardResult = SimEngine.executeForwardGraph({
-      layers: this.layers, connections: this.connections, inputAsset: this.currentInputAsset
-    });
-    this.forwardLayerShapeMap = this.forwardResult.layerShapeMap;
-    const hasSelected = this.forwardResult.layerResults.some(r => r.layerId === this.selectedLayerId);
-    if (!hasSelected && this.forwardResult.layerResults.length) {
-      this.selectedLayerId = this.forwardResult.layerResults[0].layerId;
+    if (!force && !this.autoForwardCompute) {
+      this.pendingForwardChanges = true;
+      this.forwardStatusMessage = '参数已更新，点击“开始计算”执行前向传播。';
+      return;
+    }
+    const activeSeq = ++this.forwardRequestSeq;
+    if (this.forwardDebounceTimer !== null) {
+      window.clearTimeout(this.forwardDebounceTimer);
+    }
+
+    this.forwardDebounceTimer = window.setTimeout(async () => {
+      const inputTensor = this.currentInputAsset?.prepared.tensor;
+      if (!inputTensor) {
+        const local = SimEngine.executeForwardGraph({
+          layers: this.layers,
+          connections: this.connections,
+          inputAsset: this.currentInputAsset
+        });
+        this.applyForwardResult(local, activeSeq);
+        return;
+      }
+
+      this.forwardBusy = true;
+      this.pendingForwardChanges = false;
+      this.forwardStatusMessage = '计算中...';
+      this.activeForwardAbort?.abort();
+      this.activeForwardAbort = new AbortController();
+      try {
+        const remote = await this.forwardBackend.executeForward({
+          layers: this.layers,
+          connections: this.connections,
+          inputTensor
+        }, this.activeForwardAbort.signal);
+        this.forwardBackendError = '';
+        this.forwardStatusMessage = '计算完成。';
+        this.applyForwardResult(remote, activeSeq);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          this.forwardStatusMessage = '计算已取消。';
+          return;
+        }
+        const local = SimEngine.executeForwardGraph({
+          layers: this.layers,
+          connections: this.connections,
+          inputAsset: this.currentInputAsset
+        });
+        this.forwardBackendError = '后端未连接，已回退本地计算。';
+        this.forwardStatusMessage = '后端失败，已回退本地计算。';
+        this.applyForwardResult(local, activeSeq);
+      } finally {
+        if (activeSeq === this.forwardRequestSeq) {
+          this.forwardBusy = false;
+          this.activeForwardAbort = null;
+        }
+      }
+    }, 80);
+  }
+
+  triggerForwardCompute(): void {
+    this.runForward(true);
+  }
+
+  cancelForwardCompute(): void {
+    this.activeForwardAbort?.abort();
+    this.activeForwardAbort = null;
+    this.forwardBusy = false;
+    this.forwardStatusMessage = '计算已取消。';
+    this.forwardRequestSeq += 1;
+  }
+
+  onAutoForwardComputeToggle(): void {
+    if (this.autoForwardCompute && this.pendingForwardChanges) {
+      this.runForward(true);
+    }
+  }
+
+  private applyForwardResult(result: ForwardPassResult, seq: number): void {
+    if (seq !== this.forwardRequestSeq) return;
+    this.forwardResult = result;
+    this.forwardLayerShapeMap = result.layerShapeMap;
+    const hasSelected = result.layerResults.some(r => r.layerId === this.selectedLayerId);
+    if (!hasSelected && result.layerResults.length) {
+      this.selectedLayerId = result.layerResults[0].layerId;
     }
   }
 
@@ -689,9 +782,8 @@ export class App implements OnInit, OnDestroy {
   private previewTensorForGrid(tensor: ForwardTensor): { mode: 'rgb' | 'gray'; width: number; height: number; colors?: string[]; values?: number[] } {
     const cached = this.tensorPreviewCache.get(tensor);
     if (cached) return cached;
-    const sampled = this.sampleTensorForPreview(tensor, MAX_PREVIEW_GRID_SIDE);
-    const [h, w, c] = sampled.shape as [number, number, number];
-    const srcValues = sampled.values;
+    const [h, w, c] = tensor.shape as [number, number, number];
+    const srcValues = tensor.values;
     const built = c === 3
       ? {
           mode: 'rgb' as const,
@@ -717,13 +809,12 @@ export class App implements OnInit, OnDestroy {
     const cachedAll = this.tensorChannelPreviewCache.get(tensor);
     if (cachedAll) return typeof limit === 'number' ? cachedAll.slice(0, limit) : cachedAll;
 
-    const sampled = this.sampleTensorForPreview(tensor, MAX_PREVIEW_GRID_SIDE);
-    const [h, w, c] = sampled.shape as [number, number, number];
+    const [h, w, c] = tensor.shape as [number, number, number];
     const all = Array.from({ length: c }, (_, ch) => ({
       channel: ch,
       width: w,
       height: h,
-      values: this.normalizeChannel(this.extractChannel(sampled.values, h, w, c, ch))
+      values: this.normalizeChannel(this.extractChannel(tensor.values, h, w, c, ch))
     }));
     this.tensorChannelPreviewCache.set(tensor, all);
     return typeof limit === 'number' ? all.slice(0, limit) : all;

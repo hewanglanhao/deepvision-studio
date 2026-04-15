@@ -13,6 +13,13 @@
       <button class="mode-tab" [class.active]="mode==='training'" (click)="setMode('training')">模式 B · 训练工作台</button>
     </div>
     <div class="topbar-right">
+      @if (mode === 'forward') {
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:0">
+          <input type="checkbox" [(ngModel)]="autoForwardCompute" (ngModelChange)="onAutoForwardComputeToggle()" />
+          自动计算
+        </label>
+        <button class="btn-sm" (click)="triggerForwardCompute()" [disabled]="forwardBusy">开始计算</button>
+      }
       <span class="meta-pill">{{ layerCount }} 层</span>
       <span class="meta-pill">{{ parameterCount | number }} 参数</span>
       <button class="icon-btn" (click)="showHelp=true">?</button>
@@ -24,6 +31,23 @@
       <strong>配置错误：</strong>
       @for (msg of globalErrorMessages; track $index) {
         <span class="err-item">{{ msg }}</span>
+      }
+    </div>
+  }
+
+  @if (mode === 'forward' && (forwardBusy || forwardBackendError || pendingForwardChanges)) {
+    <div class="global-error-banner" style="background:#eff6ff;border-bottom-color:#bfdbfe;color:#1d4ed8">
+      @if (forwardBusy) {
+        <span>后端计算中...</span>
+      }
+      @if (forwardBackendError) {
+        <span>{{ forwardBackendError }}</span>
+      }
+      @if (pendingForwardChanges && !forwardBusy) {
+        <span>参数已变更，等待开始计算。</span>
+      }
+      @if (forwardStatusMessage) {
+        <span>{{ forwardStatusMessage }}</span>
       }
     </div>
   }
@@ -56,12 +80,9 @@
                 <option value="original">原图（可能卡顿）</option>
               </select>
             </label>
+            <div class="muted" style="margin-top:4px">说明：上传计算档位决定“真实计算尺寸”；下方像素网格是显示缩略图，不代表真实计算尺寸。</div>
             @if (uploadError) {
               <div class="error-box" style="margin-top:5px">⚠ {{ uploadError }}</div>
-            }
-            @if (uploadedImageUrl && !uploadError) {
-              <img [src]="uploadedImageUrl" alt="上传预览"
-                style="width:100%;border-radius:8px;border:1px solid var(--border);margin-top:5px;max-height:160px;object-fit:contain" />
             }
           </div>
         </div>
@@ -74,11 +95,12 @@
               <div class="info-row"><span class="info-k">高度</span><span class="info-v">{{ currentInputAsset.originalHeight }}px</span></div>
               <div class="info-row"><span class="info-k">通道</span><span class="info-v">{{ currentInputAsset.originalChannels }}</span></div>
               <div class="info-row"><span class="info-k">颜色</span><span class="info-v">{{ currentInputAsset.originalColorMode }}</span></div>
+              <div class="info-row"><span class="info-k">实际计算尺寸</span><span class="info-v">{{ currentInputAsset.prepared.tensor.shape[1] }} × {{ currentInputAsset.prepared.tensor.shape[0] }} × {{ currentInputAsset.prepared.tensor.shape[2] }}</span></div>
             </div>
             <!-- 原始预览：RGB 或灰度 -->
             @if (originalInputPreview; as orig) {
               <div style="margin-top:8px">
-                <div class="section-title" style="margin-bottom:3px">原始图像 · {{ orig.width }}×{{ orig.height }}</div>
+                <div class="section-title" style="margin-bottom:3px">原始图像显示缩略 · {{ orig.width }}×{{ orig.height }}</div>
                 @if (orig.mode === 'rgb') {
                   <div class="pixel-grid" [style.--w]="orig.width">
                     @for (c of orig.colors; track $index) { <span [style.background]="c"></span> }
@@ -93,7 +115,7 @@
             <!-- 预处理后预览 -->
             @if (preparedInputPreview; as prep) {
               <div style="margin-top:8px">
-                <div class="section-title" style="margin-bottom:3px">预处理后 · {{ prep.width }}×{{ prep.height }}</div>
+                <div class="section-title" style="margin-bottom:3px">预处理后显示缩略 · {{ prep.width }}×{{ prep.height }}</div>
                 @if (prep.mode === 'rgb') {
                   <div class="pixel-grid" [style.--w]="prep.width">
                     @for (c of prep.colors; track $index) { <span [style.background]="c"></span> }
@@ -179,11 +201,17 @@
 
               @if (layer.type === 'input') {
                 <div class="row-3">
-                  <label>缩放模式
-                    <select [(ngModel)]="layer.params.preprocessing.resizeMode" (ngModelChange)="onLayerConfigChange()">
-                      <option value="none">不缩放</option><option value="fit">自适应</option>
-                    </select>
-                  </label>
+                  @if (!uploadedImageUrl) {
+                    <label>缩放模式
+                      <select [(ngModel)]="layer.params.preprocessing.resizeMode" (ngModelChange)="onLayerConfigChange()">
+                        <option value="none">不缩放</option><option value="fit">自适应</option>
+                      </select>
+                    </label>
+                  } @else {
+                    <label>缩放模式
+                      <input value="上传图片时由“上传计算档位”决定" disabled />
+                    </label>
+                  }
                   <label>颜色模式
                     <select [(ngModel)]="layer.params.preprocessing.colorMode" (ngModelChange)="onLayerConfigChange()">
                       @for (m of inputColorModeOptions; track m.value) {
@@ -197,7 +225,7 @@
                     </select>
                   </label>
                 </div>
-                @if (layer.params.preprocessing.resizeMode === 'fit') {
+                @if (!uploadedImageUrl && layer.params.preprocessing.resizeMode === 'fit') {
                   <div class="row-2">
                     <label>目标宽 <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetWidth" (ngModelChange)="onLayerConfigChange()" /></label>
                     <label>目标高 <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetHeight" (ngModelChange)="onLayerConfigChange()" /></label>
@@ -509,6 +537,25 @@
           </div>
         }
       </aside>
+    </div>
+  }
+
+  @if (forwardBusy) {
+    <div class="modal-mask">
+      <div class="modal-card" style="max-width:420px">
+        <div class="modal-header">
+          <div class="modal-title">后端计算中</div>
+        </div>
+        <div class="modal-body">
+          <p>正在执行前向传播，请稍候...</p>
+          @if (forwardStatusMessage) {
+            <p>{{ forwardStatusMessage }}</p>
+          }
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn-danger" (click)="cancelForwardCompute()">取消计算</button>
+          </div>
+        </div>
+      </div>
     </div>
   }
 

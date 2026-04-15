@@ -1204,7 +1204,7 @@ export class SimEngine {
 
   private static buildLayerVisualization(tensor: ForwardTensor): ForwardLayerResult['visualization'] {
     if (tensor.shape.length === 3) {
-      const sampled = SimEngine.downsampleTensor3d(tensor, SimEngine.maxVisualizationSide);
+      const sampled = tensor;
       const [h, w, c] = sampled.shape as [number, number, number];
       const channelPreviews = Array.from({ length: Math.min(c, 4) }, (_, channel) => {
         const values = SimEngine.extractChannel(sampled.values, h, w, c, channel);
