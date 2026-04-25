@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Any, Dict, List, Tuple
+import random
 
 MAX_VISUALIZATION_SIDE = 56
 EDGE_KERNEL_3X3 = [
@@ -427,12 +428,17 @@ def run_pool2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> 
                     for kx in range(k):
                         iy = oy * stride + ky - pad
                         ix = ox * stride + kx - pad
-                        val = 0.0 if iy < 0 or iy >= h or ix < 0 or ix >= w else tensor3d_get(input_tensor["values"], w, c, iy, ix, ch)
+                        if iy < 0 or iy >= h or ix < 0 or ix >= w:
+                            continue
+                        val = tensor3d_get(input_tensor["values"], w, c, iy, ix, ch)
                         if val > max_val:
                             max_val = val
                         total += val
                         cnt += 1
-                pooled = total / max(1, cnt) if p["mode"] == "avg" else max_val
+                if p["mode"] == "avg":
+                    pooled = total / max(1, cnt)
+                else:
+                    pooled = max_val if cnt > 0 else 0.0
                 tensor3d_set(output, out_w, c, oy, ox, ch, pooled)
 
     return {
@@ -478,7 +484,13 @@ def run_dense_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> D
         for i in range(in_dim):
             w = weights[o][i] if weights and o < len(weights) and i < len(weights[o]) else synthetic_weight(layer["id"], o, i)
             acc += input_vector[i] * w
-        out[o] = activate_value(acc, p["activation"])
+        out[o] = acc
+
+    activation = p["activation"]
+    if activation == "softmax":
+        out = softmax(out)
+    else:
+        out = [activate_value(v, activation) for v in out]
 
     return {
         "tensor": {
@@ -524,7 +536,8 @@ def run_dropout_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) ->
         }
 
     keep = 1 - rate
-    values = [((0.0 if ((idx + 7) % 5 == 0) else val) / max(keep, 1e-6)) for idx, val in enumerate(input_tensor["values"])]
+    rng = random.Random(layer["id"])
+    values = [(value / keep) if rng.random() < keep else 0.0 for value in input_tensor["values"]]
     tensor = dict(input_tensor)
     tensor["values"] = values
     return {

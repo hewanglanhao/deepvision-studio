@@ -733,12 +733,10 @@ export class App implements OnInit, OnDestroy {
     this.forwardDebounceTimer = window.setTimeout(async () => {
       const inputTensor = this.currentInputAsset?.prepared.tensor;
       if (!inputTensor) {
-        const local = SimEngine.executeForwardGraph({
-          layers: this.layers,
-          connections: this.connections,
-          inputAsset: this.currentInputAsset
-        });
-        this.applyForwardResult(local, activeSeq);
+        this.forwardBackendError = '';
+        this.forwardStatusMessage = 'No input asset available.';
+        this.forwardResult = null;
+        this.forwardLayerShapeMap = {};
         return;
       }
 
@@ -761,14 +759,8 @@ export class App implements OnInit, OnDestroy {
           this.forwardStatusMessage = '计算已取消。';
           return;
         }
-        const local = SimEngine.executeForwardGraph({
-          layers: this.layers,
-          connections: this.connections,
-          inputAsset: this.currentInputAsset
-        });
-        this.forwardBackendError = '后端未连接，已回退本地计算。';
-        this.forwardStatusMessage = '后端失败，已回退本地计算。';
-        this.applyForwardResult(local, activeSeq);
+        this.forwardBackendError = '后端不可用，前端本地前向推理已移除。';
+        this.forwardStatusMessage = '后端请求失败。';
       } finally {
         if (activeSeq === this.forwardRequestSeq) {
           this.forwardBusy = false;

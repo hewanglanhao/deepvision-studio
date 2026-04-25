@@ -37,6 +37,8 @@ yarn-error.log
 testem.log
 /typings
 __screenshots__/
+__pycache__/
+*.pyc
 
 # System files
 .DS_Store
