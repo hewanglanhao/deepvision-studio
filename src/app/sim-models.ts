@@ -244,8 +244,14 @@ export interface TrainingState {
   currentEpoch: number;
   currentLr: number;
   latestLoss: number;
+  latestValLoss: number;
   latestAccuracy: number;
   latestValAccuracy: number;
+  latestGradientNorm: number;
+  latestWeightMean: number;
+  latestWeightStd: number;
+  elapsedSeconds: number;
+  etaSeconds: number;
 }
 
 export interface ForwardModeState {
@@ -257,9 +263,15 @@ export interface ForwardModeState {
 export interface MetricPoint {
   step: number;
   loss: number;
+  valLoss: number;
   accuracy: number;
   valAccuracy: number;
   lr: number;
+  gradientNorm: number;
+  weightMean: number;
+  weightStd: number;
+  elapsedSeconds: number;
+  etaSeconds: number;
 }
 
 export interface TrainingConfig {
@@ -279,6 +291,67 @@ export interface TrainingDataInfo {
   source: 'builtin' | 'uploaded';
   hasLabels: boolean;
   sampleCount: number;
+}
+
+export type TrainingDatasetSource = 'builtin' | 'upload';
+export type TrainingDatasetKind = 'image' | 'table' | 'points';
+export type DatasetUploadStatus = 'idle' | 'ready' | 'error';
+
+export interface TrainingDatasetOption {
+  id: string;
+  name: string;
+  source: TrainingDatasetSource;
+  kind: TrainingDatasetKind;
+  description: string;
+  sampleCount: number;
+  classCount: number;
+  inputShape: string;
+  recommendedSplit: string;
+  labels: string[];
+}
+
+export interface LabelDistributionItem {
+  label: string;
+  count: number;
+  color: string;
+}
+
+export interface TablePreview {
+  headers: string[];
+  rows: string[][];
+}
+
+export interface ImagePreviewItem {
+  name: string;
+  label: string;
+  url: string;
+}
+
+export interface PointPreviewItem {
+  x: number;
+  y: number;
+  label: string;
+  color: string;
+}
+
+export interface TrainingDatasetDetail extends TrainingDatasetOption {
+  hasLabels: boolean;
+  trainRatio: number;
+  valRatio: number;
+  testRatio: number;
+  labelDistribution: LabelDistributionItem[];
+  tablePreview?: TablePreview;
+  imagePreview?: ImagePreviewItem[];
+  pointPreview?: PointPreviewItem[];
+  warnings: string[];
+}
+
+export interface DatasetImportDraft {
+  status: DatasetUploadStatus;
+  message: string;
+  files: File[];
+  detectedKind: TrainingDatasetKind | null;
+  detail: TrainingDatasetDetail | null;
 }
 
 export interface PresetTask {

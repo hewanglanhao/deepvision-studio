@@ -36,8 +36,14 @@ export class TrainingRuntimeService implements OnDestroy {
     currentEpoch: 0,
     currentLr: 0.001,
     latestLoss: 1.7,
+    latestValLoss: 1.78,
     latestAccuracy: 0.2,
     latestValAccuracy: 0.18,
+    latestGradientNorm: 1.2,
+    latestWeightMean: 0,
+    latestWeightStd: 0.16,
+    elapsedSeconds: 0,
+    etaSeconds: 0,
     message: 'Ready.'
   });
 
@@ -83,8 +89,14 @@ export class TrainingRuntimeService implements OnDestroy {
       currentEpoch: 0,
       currentLr: this.config.learningRate,
       latestLoss: 1.7,
+      latestValLoss: 1.78,
       latestAccuracy: 0.2,
       latestValAccuracy: 0.18,
+      latestGradientNorm: 1.2,
+      latestWeightMean: 0,
+      latestWeightStd: 0.16,
+      elapsedSeconds: 0,
+      etaSeconds: 0,
       message: 'Stopped.'
     });
     this.history$.next([]);
@@ -126,7 +138,7 @@ export class TrainingRuntimeService implements OnDestroy {
       this.history$.next(history);
       this.epochTick$.next(tick.metric);
       if (tick.state.currentEpoch % 5 === 0) {
-        this.log('info', `Epoch ${tick.state.currentEpoch}: loss=${tick.metric.loss.toFixed(4)}, acc=${(tick.metric.accuracy * 100).toFixed(1)}%`);
+        this.log('info', `Epoch ${tick.state.currentEpoch}: loss=${tick.metric.loss.toFixed(4)}, val_loss=${tick.metric.valLoss.toFixed(4)}, acc=${(tick.metric.accuracy * 100).toFixed(1)}%`);
       }
     }, 280);
   }

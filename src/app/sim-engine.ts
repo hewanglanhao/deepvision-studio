@@ -717,17 +717,30 @@ export class SimEngine {
     );
     const valGap = 0.012 + Math.max(0, layers.length - 6) * 0.004;
     const valAcc = Math.max(0.04, Math.min(0.992, trainAcc - valGap + jitter * 0.3));
+    const overfitGap = Math.max(0.015, valGap * 1.8);
+    const valLoss = Math.max(0.04, loss + overfitGap + Math.sin(currentEpoch * 0.43) * 0.015);
+    const gradientNorm = Math.max(0.0004, 1.2 * Math.exp(-1.9 * progress) + Math.abs(Math.sin(currentEpoch * 0.5)) * 0.08 + lrPenalty * 2);
+    const weightMean = Math.sin(currentEpoch * 0.2) * 0.018;
+    const weightStd = Math.max(0.02, 0.16 - progress * 0.06 + depthBonus * 0.08);
+    const elapsedSeconds = currentEpoch * 2.8;
+    const etaSeconds = Math.max(0, (totalEpochs - currentEpoch) * 2.8);
 
     return {
       step: currentEpoch,
       loss,
+      valLoss,
       accuracy: trainAcc,
       valAccuracy: valAcc,
-      lr: lrNow
+      lr: lrNow,
+      gradientNorm,
+      weightMean,
+      weightStd,
+      elapsedSeconds,
+      etaSeconds
     };
   }
 
-  static buildPolyline(history: MetricPoint[], metric: 'loss' | 'accuracy' | 'valAccuracy'): string {
+  static buildPolyline(history: MetricPoint[], metric: 'loss' | 'valLoss' | 'accuracy' | 'valAccuracy' | 'lr' | 'gradientNorm'): string {
     if (history.length === 0) {
       return '';
     }
@@ -736,8 +749,9 @@ export class SimEngine {
     const height = 120;
     const maxStep = Math.max(1, history[history.length - 1].step);
     const values = history.map((point) => point[metric]);
-    const maxValue = Math.max(...values, metric === 'loss' ? 1.8 : 1);
-    const minValue = Math.min(...values, metric === 'loss' ? 0.02 : 0);
+    const isLoss = metric === 'loss' || metric === 'valLoss';
+    const maxValue = Math.max(...values, isLoss ? 1.8 : metric === 'lr' ? Math.max(...values, 0.001) : 1);
+    const minValue = Math.min(...values, isLoss ? 0.02 : 0);
     const span = Math.max(0.001, maxValue - minValue);
 
     return history
@@ -877,8 +891,14 @@ export class SimEngine {
       currentEpoch: 0,
       currentLr: learningRate,
       latestLoss: 1.7,
+      latestValLoss: 1.78,
       latestAccuracy: 0.22,
-      latestValAccuracy: 0.2
+      latestValAccuracy: 0.2,
+      latestGradientNorm: 1.2,
+      latestWeightMean: 0,
+      latestWeightStd: 0.16,
+      elapsedSeconds: 0,
+      etaSeconds: 0
     };
   }
 
@@ -919,7 +939,13 @@ export class SimEngine {
         currentLr: point.lr,
         latestLoss: point.loss,
         latestAccuracy: point.accuracy,
-        latestValAccuracy: point.valAccuracy
+        latestValAccuracy: point.valAccuracy,
+        latestValLoss: point.valLoss,
+        latestGradientNorm: point.gradientNorm,
+        latestWeightMean: point.weightMean,
+        latestWeightStd: point.weightStd,
+        elapsedSeconds: point.elapsedSeconds,
+        etaSeconds: point.etaSeconds
       },
       metric: point
     };

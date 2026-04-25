@@ -8,11 +8,13 @@ import { ForwardBackendService } from './services/forward-backend.service';
 import { TrainingLog, TrainingRuntimeService } from './services/training-runtime.service';
 import { SimEngine } from './sim-engine';
 import {
-  AppMode, Connection, DataSample, ExperimentResult,
+  AppMode, Connection, DataSample, DatasetImportDraft, ExperimentResult,
   ConvKernelSpec,
   ForwardInputAsset, ForwardLayerResult, ForwardPassResult,
-  ForwardTensor, InputLayer, LayerType, LayerValidationIssue, MetricPoint,
-  ModelTemplate, NetworkLayer, PresetTask, TrainingConfig
+  ForwardTensor, ImagePreviewItem, InputLayer, LabelDistributionItem, LayerType,
+  LayerValidationIssue, MetricPoint, ModelTemplate, NetworkLayer, PointPreviewItem,
+  PresetTask, TablePreview, TrainingConfig, TrainingDatasetDetail, TrainingDatasetKind,
+  TrainingDatasetOption
 } from './sim-models';
 
 /** 上传图片显示预览最大边长（保留较高分辨率） */
@@ -44,6 +46,8 @@ export const KERNEL_PRESETS: KernelPreset[] = [
   { label: 'Sobel X',      matrix: [[-1,0,1],[-2,0,2],[-1,0,1]] },
   { label: 'Sobel Y',      matrix: [[-1,-2,-1],[0,0,0],[1,2,1]] },
 ];
+
+const DATASET_COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be123c', '#4b5563'];
 
 @Component({
   selector: 'app-root',
@@ -92,8 +96,14 @@ export class App implements OnInit, OnDestroy {
   trainingEpoch = 0;
   trainingLr = 0.001;
   trainingLoss = 1.7;
+  trainingValLoss = 1.78;
   trainingAcc = 0.2;
   trainingValAcc = 0.18;
+  trainingGradientNorm = 1.2;
+  trainingWeightMean = 0;
+  trainingWeightStd = 0.16;
+  trainingElapsedSeconds = 0;
+  trainingEtaSeconds = 0;
   trainingHistory: MetricPoint[] = [];
   trainingLogs: TrainingLog[] = [];
 
@@ -113,6 +123,68 @@ export class App implements OnInit, OnDestroy {
     { id: 'regression',      name: '回归任务（占位）', type: 'regression',   dataset: 'Custom',   description: '回归任务（待后端支持）' }
   ];
 
+  readonly builtinTrainingDatasets: TrainingDatasetOption[] = [
+    {
+      id: 'mnist-1000',
+      name: 'MNIST 1000 张',
+      source: 'builtin',
+      kind: 'image',
+      description: '28x28 灰度手写数字，小规模分类教学样本。',
+      sampleCount: 1000,
+      classCount: 10,
+      inputShape: '28 x 28 x 1',
+      recommendedSplit: '70% / 15% / 15%',
+      labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+    },
+    {
+      id: 'cifar10-500',
+      name: 'CIFAR-10 500 张',
+      source: 'builtin',
+      kind: 'image',
+      description: '32x32 RGB 彩色图片，覆盖 10 个常见物体类别。',
+      sampleCount: 500,
+      classCount: 10,
+      inputShape: '32 x 32 x 3',
+      recommendedSplit: '70% / 15% / 15%',
+      labels: ['airplane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    },
+    {
+      id: 'iris',
+      name: '鸢尾花数据集',
+      source: 'builtin',
+      kind: 'table',
+      description: '4 维表格特征，适合全连接网络分类演示。',
+      sampleCount: 150,
+      classCount: 3,
+      inputShape: '4 numeric features',
+      recommendedSplit: '80% / 20%',
+      labels: ['setosa', 'versicolor', 'virginica']
+    },
+    {
+      id: 'points-2d',
+      name: '二维分类数据集',
+      source: 'builtin',
+      kind: 'points',
+      description: '二维坐标点，适合展示决策边界和二分类过程。',
+      sampleCount: 300,
+      classCount: 2,
+      inputShape: 'x, y',
+      recommendedSplit: '70% / 15% / 15%',
+      labels: ['class A', 'class B']
+    }
+  ];
+
+  selectedTrainingDatasetId = 'mnist-1000';
+  trainingDatasetDetail: TrainingDatasetDetail | null = null;
+  trainingDatasetError = '';
+  datasetImportDraft: DatasetImportDraft = {
+    status: 'idle',
+    message: '尚未导入自定义数据。',
+    files: [],
+    detectedKind: null,
+    detail: null
+  };
+
   private subs = new Subscription();
   private tensorPreviewCache = new WeakMap<ForwardTensor, { mode: 'rgb' | 'gray'; width: number; height: number; colors?: string[]; values?: number[] }>();
   private rgbColorsCache = new WeakMap<object, string[]>();
@@ -129,13 +201,20 @@ export class App implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.applyTemplate();
     this.selectDataset('MNIST');
+    this.selectTrainingDataset(this.selectedTrainingDatasetId);
     this.subs.add(this.trainingSvc.state$.subscribe(s => {
       this.trainingStatus  = s.status;
       this.trainingEpoch   = s.currentEpoch;
       this.trainingLr      = s.currentLr;
       this.trainingLoss    = s.latestLoss;
+      this.trainingValLoss = s.latestValLoss;
       this.trainingAcc     = s.latestAccuracy;
       this.trainingValAcc  = s.latestValAccuracy;
+      this.trainingGradientNorm = s.latestGradientNorm;
+      this.trainingWeightMean = s.latestWeightMean;
+      this.trainingWeightStd = s.latestWeightStd;
+      this.trainingElapsedSeconds = s.elapsedSeconds;
+      this.trainingEtaSeconds = s.etaSeconds;
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
@@ -159,8 +238,65 @@ export class App implements OnInit, OnDestroy {
   get selectedTemplate() { return this.modelTemplates.find(t => t.id === this.selectedTemplateId); }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
   get inputLayer(): InputLayer | undefined { const l = this.layers.find(l => l.type === 'input'); return l?.type === 'input' ? l : undefined; }
+  get outputLayer() { const l = this.layers.find(l => l.type === 'output'); return l?.type === 'output' ? l : undefined; }
   get datasetSamples() { return this.datasets[this.selectedDataset] ?? []; }
   get selectedSample() { return this.datasetSamples.find(s => s.id === this.selectedSampleId); }
+  get trainingDatasetReady(): boolean { return !!this.trainingDatasetDetail?.hasLabels; }
+  get trainingDatasetMaxLabelCount(): number {
+    return Math.max(1, ...(this.trainingDatasetDetail?.labelDistribution ?? []).map(i => i.count));
+  }
+  get importedDatasetSelected(): boolean {
+    return this.selectedTrainingDatasetId === 'custom-upload' && !!this.datasetImportDraft.detail;
+  }
+  get datasetSplitSumPercent(): number {
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return 0;
+    return Math.round((ds.trainRatio + ds.valRatio + ds.testRatio) * 1000) / 10;
+  }
+  get datasetSplitError(): string {
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return '请先选择或导入一个训练数据集。';
+    const ratios = [ds.trainRatio, ds.valRatio, ds.testRatio];
+    if (ratios.some(v => !Number.isFinite(v) || v < 0 || v > 1)) return '划分比例必须在 0% 到 100% 之间。';
+    if (ds.trainRatio <= 0) return '训练集比例必须大于 0%。';
+    if (Math.abs(ds.trainRatio + ds.valRatio + ds.testRatio - 1) > 0.001) return '训练集、验证集、测试集比例总和必须等于 100%。';
+    return '';
+  }
+  get trainingModelIssues(): Array<{ level: 'ok' | 'warn' | 'error'; message: string }> {
+    const issues: Array<{ level: 'ok' | 'warn' | 'error'; message: string }> = [];
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return [{ level: 'error', message: '请先选择训练数据集。' }];
+    if (!this.inputLayer) issues.push({ level: 'error', message: '网络缺少输入层。' });
+    if (!this.outputLayer) issues.push({ level: 'error', message: '网络缺少输出层。' });
+
+    if (this.outputLayer && ds.classCount > 0 && this.outputLayer.params.units !== ds.classCount) {
+      issues.push({
+        level: 'error',
+        message: `输出层类别数为 ${this.outputLayer.params.units}，当前数据集需要 ${ds.classCount}。`
+      });
+    }
+
+    if (this.inputLayer && ds.kind === 'image') {
+      const shape = ds.inputShape.match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)/i);
+      if (shape) {
+        const [, h, w, c] = shape.map(Number);
+        const p = this.inputLayer.params;
+        if (p.height !== h || p.width !== w || p.channels !== c) {
+          issues.push({ level: 'warn', message: `输入层为 ${p.height}x${p.width}x${p.channels}，数据集为 ${h}x${w}x${c}。` });
+        }
+      }
+    }
+
+    if (ds.kind !== 'image') {
+      issues.push({ level: 'warn', message: '表格/二维数据训练时将由后端转换为向量输入。' });
+    }
+
+    if (!this.layers.some(l => l.type === 'dense' || l.type === 'conv2d')) {
+      issues.push({ level: 'error', message: '网络至少需要一个可训练层。' });
+    }
+
+    return issues.length ? issues : [{ level: 'ok', message: '当前网络结构可用于训练配置。' }];
+  }
 
   get selectedForwardResult(): ForwardLayerResult | null {
     if (!this.forwardResult?.layerResults.length) return null;
@@ -315,8 +451,41 @@ export class App implements OnInit, OnDestroy {
 
   get isRgbInput(): boolean { return (this.currentInputAsset?.originalChannels ?? 1) >= 3; }
   get lossPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'loss'); }
+  get valLossPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'valLoss'); }
   get accPolyline()  { return SimEngine.buildPolyline(this.trainingHistory, 'accuracy'); }
   get valPolyline()  { return SimEngine.buildPolyline(this.trainingHistory, 'valAccuracy'); }
+  get lrPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'lr'); }
+  get gradientPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'gradientNorm'); }
+  get trainingTotalBatches(): number {
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return 0;
+    const trainSamples = Math.max(1, Math.round(ds.sampleCount * ds.trainRatio));
+    return Math.max(1, Math.ceil(trainSamples / Math.max(1, this.trainingConfig.batchSize)));
+  }
+  get trainingCurrentBatch(): number {
+    if (this.trainingStatus === 'idle' || this.trainingEpoch === 0) return 0;
+    return this.trainingTotalBatches;
+  }
+  get trainingProgressPercent(): number {
+    return this.trainingConfig.totalEpochs > 0 ? (this.trainingEpoch / this.trainingConfig.totalEpochs) * 100 : 0;
+  }
+  get gradientAlert(): string {
+    if (this.trainingGradientNorm < 0.02) return '梯度可能消失';
+    if (this.trainingGradientNorm > 2.5) return '梯度可能爆炸';
+    return '梯度稳定';
+  }
+  get weightHistogramBins(): Array<{ label: string; value: number }> {
+    const mean = this.trainingWeightMean;
+    const std = Math.max(0.01, this.trainingWeightStd);
+    return Array.from({ length: 13 }, (_, i) => {
+      const x = -3 + i * 0.5;
+      const density = Math.exp(-0.5 * Math.pow((x * std - mean) / std, 2));
+      return { label: (x * std).toFixed(2), value: density };
+    });
+  }
+  get maxWeightBin(): number {
+    return Math.max(1e-6, ...this.weightHistogramBins.map(bin => bin.value));
+  }
 
   get validationIssues(): LayerValidationIssue[] { return this.forwardResult?.validationIssues ?? []; }
 
@@ -638,14 +807,126 @@ export class App implements OnInit, OnDestroy {
   }
 
   // ── Training ──────────────────────────────────────────
+  selectTrainingDataset(id: string): void {
+    if (id === 'custom-upload') {
+      this.useImportedTrainingDataset();
+      return;
+    }
+    const option = this.builtinTrainingDatasets.find(d => d.id === id);
+    if (!option) return;
+    this.selectedTrainingDatasetId = option.id;
+    this.trainingDatasetDetail = this.buildBuiltinTrainingDatasetDetail(option);
+    this.trainingDatasetError = '';
+  }
+
+  useImportedTrainingDataset(): void {
+    if (!this.datasetImportDraft.detail) return;
+    this.selectedTrainingDatasetId = 'custom-upload';
+    this.trainingDatasetDetail = this.datasetImportDraft.detail;
+    this.trainingDatasetError = '';
+  }
+
+  clearImportedTrainingDataset(): void {
+    this.datasetImportDraft = {
+      status: 'idle',
+      message: '尚未导入自定义数据。',
+      files: [],
+      detectedKind: null,
+      detail: null
+    };
+    if (this.selectedTrainingDatasetId === 'custom-upload') {
+      this.selectTrainingDataset('mnist-1000');
+    }
+  }
+
+  async onTrainingDatasetUpload(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (!files.length) return;
+
+    this.datasetImportDraft = {
+      status: 'idle',
+      message: '正在解析本地文件...',
+      files,
+      detectedKind: null,
+      detail: null
+    };
+
+    try {
+      const csvFiles = files.filter(file => this.isCsvFile(file));
+      const imageFiles = files.filter(file => file.type.startsWith('image/'));
+      if (csvFiles.length && imageFiles.length) {
+        throw new Error('请不要混合上传 CSV 和图片；一次导入只对应一种数据集类型。');
+      }
+      if (csvFiles.length > 1) {
+        throw new Error('表格数据当前一次只支持上传 1 个 CSV 文件。');
+      }
+      if (!csvFiles.length && !imageFiles.length) {
+        throw new Error('仅支持 CSV 文件或少量图片文件。');
+      }
+      if (imageFiles.length > 24) {
+        throw new Error('图片导入演示最多选择 24 张；真实批量导入请走后端接口。');
+      }
+
+      const detail = csvFiles.length
+        ? await this.buildUploadedCsvDataset(csvFiles[0])
+        : await this.buildUploadedImageDataset(imageFiles);
+
+      this.datasetImportDraft = {
+        status: detail.hasLabels ? 'ready' : 'error',
+        message: detail.hasLabels ? '自定义数据已解析，可用于训练。' : '已解析文件，但缺少可训练标签。',
+        files,
+        detectedKind: detail.kind,
+        detail
+      };
+      this.trainingDatasetDetail = detail;
+      this.selectedTrainingDatasetId = 'custom-upload';
+      this.trainingDatasetError = detail.hasLabels ? '' : '当前导入数据缺少标签，训练前需要补充标签列或按类别命名图片。';
+    } catch (err) {
+      this.datasetImportDraft = {
+        status: 'error',
+        message: err instanceof Error ? err.message : '导入失败。',
+        files,
+        detectedKind: null,
+        detail: null
+      };
+      this.trainingDatasetError = this.datasetImportDraft.message;
+    }
+  }
+
   startTraining(): void {
+    if (!this.trainingDatasetDetail) {
+      this.trainingDatasetError = '请先选择或导入一个训练数据集。';
+      return;
+    }
+    if (!this.trainingDatasetDetail.hasLabels) {
+      this.trainingDatasetError = '监督训练需要标签；请导入包含 label/class/target 列的 CSV，或用“类别_序号.jpg”命名图片。';
+      return;
+    }
+    const splitError = this.datasetSplitError;
+    if (splitError) {
+      this.trainingDatasetError = splitError;
+      return;
+    }
+    const modelError = this.trainingModelIssues.find(issue => issue.level === 'error');
+    if (modelError) {
+      this.trainingDatasetError = modelError.message;
+      return;
+    }
+    this.trainingDatasetError = '';
     this.trainingSvc.configure(this.trainingConfig, this.layers);
     this.trainingSvc.start();
   }
   pauseTraining(): void  { this.trainingSvc.pause(); }
   stopTraining(): void   { this.trainingSvc.stop(); }
   resetTraining(): void  { this.trainingSvc.reset(); }
-  selectTask(id: string): void { this.selectedTaskId = id; }
+  selectTask(id: string): void {
+    this.selectedTaskId = id;
+    const task = this.presetTasks.find(t => t.id === id);
+    if (task?.dataset === 'MNIST') this.selectTrainingDataset('mnist-1000');
+    if (task?.dataset === 'CIFAR-10') this.selectTrainingDataset('cifar10-500');
+  }
 
   runExperiments(): void {
     const task = this.presetTasks.find(t => t.id === this.selectedTaskId) ?? this.presetTasks[0];
@@ -661,6 +942,39 @@ export class App implements OnInit, OnDestroy {
   // ── Helpers ───────────────────────────────────────────
   layerTypeLabel(t: LayerType): string { return SimEngine.layerTypeLabel(t); }
   cellColor(v: number): string { return SimEngine.cellColor(v); }
+  labelPercent(count: number): number { return Math.max(5, (count / this.trainingDatasetMaxLabelCount) * 100); }
+  pointSvgX(point: PointPreviewItem): number { return 12 + ((point.x + 1) / 2) * 176; }
+  pointSvgY(point: PointPreviewItem): number { return 108 - ((point.y + 1) / 2) * 96; }
+  formatDuration(seconds: number): string {
+    const safe = Math.max(0, Math.round(seconds));
+    const m = Math.floor(safe / 60);
+    const s = safe % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  datasetSplitPercent(kind: 'train' | 'val' | 'test'): number {
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return 0;
+    const ratio = kind === 'train' ? ds.trainRatio : kind === 'val' ? ds.valRatio : ds.testRatio;
+    return Math.round(ratio * 1000) / 10;
+  }
+
+  applyDatasetSplitPreset(train: number, val: number, test: number): void {
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return;
+    ds.trainRatio = train / 100;
+    ds.valRatio = val / 100;
+    ds.testRatio = test / 100;
+  }
+
+  onDatasetSplitInput(kind: 'train' | 'val' | 'test', rawValue: string | number): void {
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return;
+    const value = typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    const ratio = Number.isFinite(value) ? value / 100 : 0;
+    if (kind === 'train') ds.trainRatio = ratio;
+    if (kind === 'val') ds.valRatio = ratio;
+    if (kind === 'test') ds.testRatio = ratio;
+  }
 
   private normBars(vals: number[]): number[] {
     if (!vals.length) return [];
@@ -904,6 +1218,262 @@ export class App implements OnInit, OnDestroy {
       };
       img.src = url;
     });
+  }
+
+  private buildBuiltinTrainingDatasetDetail(option: TrainingDatasetOption): TrainingDatasetDetail {
+    const base = {
+      ...option,
+      hasLabels: true,
+      trainRatio: option.id === 'iris' ? 0.8 : 0.7,
+      valRatio: option.id === 'iris' ? 0 : 0.15,
+      testRatio: option.id === 'iris' ? 0.2 : 0.15,
+      labelDistribution: this.evenDistribution(option.labels, option.sampleCount),
+      warnings: []
+    };
+
+    if (option.id === 'mnist-1000') {
+      return {
+        ...base,
+        imagePreview: option.labels.slice(0, 8).map((label, i) => ({
+          name: `mnist_${label}_${i}.png`,
+          label,
+          url: this.svgThumb(label, '#111827', '#f8fafc')
+        }))
+      };
+    }
+
+    if (option.id === 'cifar10-500') {
+      return {
+        ...base,
+        imagePreview: option.labels.slice(0, 8).map((label, i) => ({
+          name: `${label}_${i}.png`,
+          label,
+          url: this.svgThumb(label.slice(0, 2).toUpperCase(), DATASET_COLORS[i % DATASET_COLORS.length], '#e0f2fe')
+        }))
+      };
+    }
+
+    if (option.id === 'iris') {
+      return {
+        ...base,
+        tablePreview: {
+          headers: ['sepal_length', 'sepal_width', 'petal_length', 'petal_width', 'label'],
+          rows: [
+            ['5.1', '3.5', '1.4', '0.2', 'setosa'],
+            ['6.4', '3.2', '4.5', '1.5', 'versicolor'],
+            ['6.3', '3.3', '6.0', '2.5', 'virginica'],
+            ['5.8', '2.7', '4.1', '1.0', 'versicolor']
+          ]
+        }
+      };
+    }
+
+    return {
+      ...base,
+      pointPreview: this.makePointPreview()
+    };
+  }
+
+  private async buildUploadedCsvDataset(file: File): Promise<TrainingDatasetDetail> {
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (lines.length < 2) {
+      throw new Error('CSV 至少需要表头和一行数据。');
+    }
+    const headers = this.parseCsvLine(lines[0]);
+    const rows = lines.slice(1).map(line => this.parseCsvLine(line)).filter(row => row.length > 0);
+    const labelIndex = this.detectLabelColumn(headers);
+    const hasLabels = labelIndex >= 0 && rows.some(row => !!row[labelIndex]?.trim());
+    const labelCounts = new Map<string, number>();
+    let missingValues = 0;
+
+    for (const row of rows) {
+      for (let i = 0; i < headers.length; i += 1) {
+        if ((row[i] ?? '').trim() === '') missingValues += 1;
+      }
+      if (hasLabels) {
+        const label = (row[labelIndex] ?? '').trim() || '未标注';
+        labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+      }
+    }
+
+    const labels = hasLabels ? [...labelCounts.keys()] : [];
+    const warnings: string[] = [];
+    if (!hasLabels) warnings.push('未检测到 label/class/target 标签列，监督训练会被阻止。');
+    if (missingValues > 0) warnings.push(`发现 ${missingValues} 个缺失值，后端训练前需要清洗或填补。`);
+    warnings.push(...this.imbalanceWarnings(labelCounts));
+
+    return {
+      id: `upload-${Date.now()}`,
+      name: file.name,
+      source: 'upload',
+      kind: 'table',
+      description: '本地 CSV 导入数据，当前仅在前端完成结构解析。',
+      sampleCount: rows.length,
+      classCount: labels.length,
+      inputShape: `${Math.max(0, headers.length - (hasLabels ? 1 : 0))} columns`,
+      recommendedSplit: '70% / 15% / 15%',
+      labels,
+      hasLabels,
+      trainRatio: 0.7,
+      valRatio: 0.15,
+      testRatio: 0.15,
+      labelDistribution: this.mapToDistribution(labelCounts),
+      tablePreview: { headers, rows: rows.slice(0, 6) },
+      warnings
+    };
+  }
+
+  private async buildUploadedImageDataset(files: File[]): Promise<TrainingDatasetDetail> {
+    const previewFiles = files.slice(0, 12);
+    const previews = await Promise.all(previewFiles.map(file => this.readImagePreview(file)));
+    const sizeSet = new Set(previews.map(item => `${item.width}x${item.height}`));
+    const labelCounts = new Map<string, number>();
+    for (const file of files) {
+      const label = this.labelFromImageName(file.name);
+      labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+    }
+    const labels = [...labelCounts.keys()].filter(label => label !== '未标注');
+    const hasLabels = labels.length > 0 && !labelCounts.has('未标注');
+    const warnings: string[] = [];
+    if (!hasLabels) warnings.push('图片文件名未形成完整标签，建议使用 “类别_序号.jpg” 命名。');
+    if (sizeSet.size > 1) warnings.push('检测到图片尺寸不一致，后端导入时需要统一 resize。');
+    warnings.push(...this.imbalanceWarnings(labelCounts));
+
+    return {
+      id: `upload-${Date.now()}`,
+      name: `图片导入 ${files.length} 张`,
+      source: 'upload',
+      kind: 'image',
+      description: '本地图片导入数据，文件名用于前端推断类别标签。',
+      sampleCount: files.length,
+      classCount: labels.length,
+      inputShape: sizeSet.size === 1 ? `${[...sizeSet][0]} x 3` : 'mixed image sizes',
+      recommendedSplit: '70% / 15% / 15%',
+      labels,
+      hasLabels,
+      trainRatio: 0.7,
+      valRatio: 0.15,
+      testRatio: 0.15,
+      labelDistribution: this.mapToDistribution(labelCounts),
+      imagePreview: previews.map(item => ({ name: item.name, label: item.label, url: item.url })),
+      warnings
+    };
+  }
+
+  private isCsvFile(file: File): boolean {
+    return file.type === 'text/csv'
+      || file.type === 'application/vnd.ms-excel'
+      || file.name.toLowerCase().endsWith('.csv');
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const cells: string[] = [];
+    let current = '';
+    let quoted = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (quoted && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (ch === ',' && !quoted) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  }
+
+  private detectLabelColumn(headers: string[]): number {
+    const names = headers.map(h => h.trim().toLowerCase());
+    const candidates = ['label', 'labels', 'class', 'category', 'target', 'y', '标签', '类别'];
+    const exact = names.findIndex(name => candidates.includes(name));
+    if (exact >= 0) return exact;
+    return names.findIndex(name => candidates.some(candidate => name.includes(candidate)));
+  }
+
+  private readImagePreview(file: File): Promise<ImagePreviewItem & { width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error(`读取图片失败：${file.name}`));
+      reader.onload = () => {
+        const url = typeof reader.result === 'string' ? reader.result : '';
+        if (!url) {
+          reject(new Error(`图片内容为空：${file.name}`));
+          return;
+        }
+        const img = new Image();
+        img.onerror = () => reject(new Error(`无法解析图片尺寸：${file.name}`));
+        img.onload = () => resolve({
+          name: file.name,
+          label: this.labelFromImageName(file.name),
+          url,
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        });
+        img.src = url;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private labelFromImageName(name: string): string {
+    const base = name.replace(/\.[^.]+$/, '');
+    const match = base.match(/^([A-Za-z0-9\u4e00-\u9fa5]+)[_-]/);
+    return match?.[1] ?? '未标注';
+  }
+
+  private evenDistribution(labels: string[], sampleCount: number): LabelDistributionItem[] {
+    const base = Math.floor(sampleCount / Math.max(1, labels.length));
+    const extra = sampleCount - base * labels.length;
+    return labels.map((label, i) => ({
+      label,
+      count: base + (i < extra ? 1 : 0),
+      color: DATASET_COLORS[i % DATASET_COLORS.length]
+    }));
+  }
+
+  private mapToDistribution(counts: Map<string, number>): LabelDistributionItem[] {
+    return [...counts.entries()].map(([label, count], i) => ({
+      label,
+      count,
+      color: DATASET_COLORS[i % DATASET_COLORS.length]
+    }));
+  }
+
+  private imbalanceWarnings(counts: Map<string, number>): string[] {
+    const values = [...counts.values()].filter(count => count > 0);
+    if (values.length < 2) return [];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    return max >= min * 3 ? ['类别数量差异较大，训练结果可能偏向多数类。'] : [];
+  }
+
+  private makePointPreview(): PointPreviewItem[] {
+    return Array.from({ length: 36 }, (_, i) => {
+      const label = i % 2 === 0 ? 'class A' : 'class B';
+      const ring = Math.floor(i / 2);
+      const angle = (ring * 0.72) + (i % 2) * 0.45;
+      const radius = i % 2 === 0 ? 0.32 + (ring % 5) * 0.045 : 0.66 + (ring % 4) * 0.035;
+      return {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        label,
+        color: i % 2 === 0 ? DATASET_COLORS[0] : DATASET_COLORS[3]
+      };
+    });
+  }
+
+  private svgThumb(text: string, fg: string, bg: string): string {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><rect width="80" height="80" rx="10" fill="${bg}"/><circle cx="40" cy="40" r="27" fill="${fg}" opacity=".13"/><text x="40" y="48" text-anchor="middle" font-family="Arial" font-size="24" font-weight="700" fill="${fg}">${text}</text></svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
   private defaultLayer(type: LayerType, id: number): NetworkLayer {
