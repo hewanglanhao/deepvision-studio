@@ -25,8 +25,8 @@ import {
 const MAX_IMAGE_SIDE = 640;
 /** 图片解码超时 ms */
 const IMAGE_DECODE_TIMEOUT = 5000;
-/** 像素网格按真实尺寸展示（不做前端缩略） */
-const MAX_PREVIEW_GRID_SIDE = Number.POSITIVE_INFINITY;
+/** DOM 像素网格只用于教学预览，避免大图生成海量节点。计算张量不受这个限制。 */
+const MAX_PREVIEW_GRID_SIDE = 56;
 
 export interface KernelPreset {
   label: string;
@@ -38,6 +38,15 @@ interface ChannelPreviewItem {
   width: number;
   height: number;
   values: number[];
+}
+
+interface LocalImageSample {
+  id: string;
+  name: string;
+  label: string;
+  category: string;
+  url: string;
+  source?: string;
 }
 
 export const KERNEL_PRESETS: KernelPreset[] = [
@@ -77,6 +86,12 @@ export class App implements OnInit, OnDestroy {
   recordError = '';
   recordSuccess = '';
   forwardRecords: ForwardRecordSummary[] = [];
+  imageViewer: { open: boolean; title: string; url: string; meta: string } = {
+    open: false,
+    title: '',
+    url: '',
+    meta: ''
+  };
 
   modelTemplates: ModelTemplate[] = SimEngine.templates();
   selectedTemplateId = 'cnn-classic';
@@ -85,16 +100,18 @@ export class App implements OnInit, OnDestroy {
   nextLayerId = 1;
   selectedLayerId = -1;
 
-  datasets: Record<string, DataSample[]> = {
-    MNIST: SimEngine.generateDataset(16, 'mnist'),
-    'CIFAR-10': SimEngine.generateDataset(16, 'cifar')
-  };
-  selectedDataset = 'MNIST';
+  datasets: Record<string, DataSample[]> = {};
+  selectedDataset = 'Animal';
   selectedSampleId = 1;
   uploadComputeProfile: 'fast' | 'balanced' | 'quality' | 'original' = 'balanced';
   uploadedImageUrl = '';
   uploadError = '';
+  localImageSamples: LocalImageSample[] = [];
+  selectedLocalImageId = '';
+  localImageError = '';
   private uploadedImageData: ImageData | null = null;
+  private localImageData: ImageData | null = null;
+  private localImagePreviewUrl = '';
   currentInputAsset: ForwardInputAsset | null = null;
 
   forwardResult: ForwardPassResult | null = null;
@@ -205,6 +222,8 @@ export class App implements OnInit, OnDestroy {
 
   private subs = new Subscription();
   private tensorPreviewCache = new WeakMap<ForwardTensor, { mode: 'rgb' | 'gray'; width: number; height: number; colors?: string[]; values?: number[] }>();
+  private tensorImagePreviewCache = new WeakMap<ForwardTensor, string>();
+  private channelImagePreviewCache = new WeakMap<ChannelPreviewItem, string>();
   private rgbColorsCache = new WeakMap<object, string[]>();
   private tensorChannelPreviewCache = new WeakMap<ForwardTensor, ChannelPreviewItem[]>();
   private forwardDebounceTimer: number | null = null;
@@ -220,7 +239,7 @@ export class App implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.applyTemplate();
-    this.selectDataset('MNIST');
+    this.loadLocalImageSamples();
     this.selectTrainingDataset(this.selectedTrainingDatasetId);
     this.subs.add(this.trainingSvc.state$.subscribe(s => {
       this.trainingStatus  = s.status;
@@ -268,6 +287,18 @@ export class App implements OnInit, OnDestroy {
   get outputLayer() { const l = this.layers.find(l => l.type === 'output'); return l?.type === 'output' ? l : undefined; }
   get datasetSamples() { return this.datasets[this.selectedDataset] ?? []; }
   get selectedSample() { return this.datasetSamples.find(s => s.id === this.selectedSampleId); }
+  get localDatasetNames(): string[] {
+    return [...new Set(this.localImageSamples.map(sample => sample.category))];
+  }
+  get activeLocalImageSamples(): LocalImageSample[] {
+    return this.localImageSamples.filter(sample => sample.category === this.selectedDataset);
+  }
+  get selectedLocalImageSample(): LocalImageSample | undefined {
+    return this.localImageSamples.find(sample => sample.id === this.selectedLocalImageId);
+  }
+  localDatasetSampleCount(dataset: string): number {
+    return this.localImageSamples.filter(sample => sample.category === dataset).length;
+  }
   get trainingDatasetReady(): boolean { return !!this.trainingDatasetDetail?.hasLabels; }
   get trainingDatasetMaxLabelCount(): number {
     return Math.max(1, ...(this.trainingDatasetDetail?.labelDistribution ?? []).map(i => i.count));
@@ -405,8 +436,9 @@ export class App implements OnInit, OnDestroy {
   get finalImageViz() {
     const t = this.forwardResult?.finalTensor;
     if (!t || t.shape.length !== 3) return null;
-    const [h, w, c] = t.shape as [number, number, number];
-    const srcValues = t.values;
+    const previewTensor = this.sampleTensorForPreview(t, MAX_PREVIEW_GRID_SIDE);
+    const [h, w, c] = previewTensor.shape as [number, number, number];
+    const srcValues = previewTensor.values;
     const channelPreviews = this.buildChannelPreviews(t, 4);
     if (c === 3 && (t.colorMode === 'rgb' || t.colorMode === undefined)) {
       const colors = Array.from({ length: h * w }, (_, i) => {
@@ -452,8 +484,21 @@ export class App implements OnInit, OnDestroy {
     if (!viz || viz.mode !== 'image' || (viz.channels ?? 1) !== 3) return [];
     const cached = this.rgbColorsCache.get(viz as unknown as object);
     if (cached) return cached;
+    const tensor = this.selectedForwardResult?.tensor;
+    if (tensor?.shape.length === 3) {
+      const previewTensor = this.sampleTensorForPreview(tensor, MAX_PREVIEW_GRID_SIDE);
+      const vals = previewTensor.values;
+      const [h, w] = previewTensor.shape as [number, number, number];
+      const n = h * w;
+      const colors = Array.from({ length: n }, (_, i) => {
+        const base = i * 3;
+        return `rgb(${Math.round((vals[base]??0)*255)},${Math.round((vals[base+1]??0)*255)},${Math.round((vals[base+2]??0)*255)})`;
+      });
+      this.rgbColorsCache.set(viz as unknown as object, colors);
+      return colors;
+    }
     const vals = viz.values;
-    const n = (viz.width ?? 1) * (viz.height ?? 1);
+    const n = Math.min((viz.width ?? 1) * (viz.height ?? 1), MAX_PREVIEW_GRID_SIDE * MAX_PREVIEW_GRID_SIDE);
     const colors = Array.from({ length: n }, (_, i) => {
       const base = i * 3;
       return `rgb(${Math.round((vals[base]??0)*255)},${Math.round((vals[base+1]??0)*255)},${Math.round((vals[base+2]??0)*255)})`;
@@ -474,6 +519,42 @@ export class App implements OnInit, OnDestroy {
     const t = this.currentInputAsset?.prepared.displayTensor;
     if (!t || t.shape.length !== 3) return null;
     return this.previewTensorForGrid(t);
+  }
+
+  get originalInputImageUrl(): string {
+    return this.currentInputAsset?.previewUrl
+      || this.tensorToImageDataUrl(this.currentInputAsset?.originalTensor ?? null);
+  }
+
+  get preparedInputImageUrl(): string {
+    return this.tensorToImageDataUrl(this.currentInputAsset?.prepared.displayTensor ?? null);
+  }
+
+  get selectedTensorImageUrl(): string {
+    const tensor = this.selectedForwardResult?.tensor ?? null;
+    return this.tensorToImageDataUrl(tensor, !(tensor?.shape.length === 3 && tensor.shape[2] === 3 && tensor.colorMode === 'rgb'));
+  }
+
+  get finalTensorImageUrl(): string {
+    const tensor = this.forwardResult?.finalTensor ?? null;
+    return this.tensorToImageDataUrl(tensor, !(tensor?.shape.length === 3 && tensor.shape[2] === 3 && tensor.colorMode === 'rgb'));
+  }
+
+  channelPreviewImageUrl(channel: ChannelPreviewItem): string {
+    const cached = this.channelImagePreviewCache.get(channel);
+    if (cached) return cached;
+    const url = this.grayValuesToImageDataUrl(channel.values, channel.width, channel.height);
+    this.channelImagePreviewCache.set(channel, url);
+    return url;
+  }
+
+  openImageViewer(title: string, url: string, meta = ''): void {
+    if (!url) return;
+    this.imageViewer = { open: true, title, url, meta };
+  }
+
+  closeImageViewer(): void {
+    this.imageViewer = { open: false, title: '', url: '', meta: '' };
   }
 
   get isRgbInput(): boolean { return (this.currentInputAsset?.originalChannels ?? 1) >= 3; }
@@ -850,15 +931,22 @@ export class App implements OnInit, OnDestroy {
   // ── Dataset / Input ───────────────────────────────────
   selectDataset(name: string): void {
     this.selectedDataset = name;
-    this.selectedSampleId = this.datasetSamples[0]?.id ?? 1;
-    this.uploadedImageUrl = ''; this.uploadedImageData = null; this.uploadError = '';
+    this.selectedSampleId = 1;
     this.showSamplePicker = false;
-    this.rebuildInputAsset(); this.runForward();
+    const firstLocal = this.activeLocalImageSamples[0];
+    if (firstLocal) {
+      this.chooseLocalImageSample(firstLocal);
+    } else {
+      this.clearLocalImageSelection();
+      this.rebuildInputAsset();
+      this.runForward();
+    }
   }
 
   chooseSample(id: number): void {
     this.selectedSampleId = id;
     this.uploadedImageUrl = ''; this.uploadedImageData = null; this.uploadError = '';
+    this.clearLocalImageSelection();
     this.showSamplePicker = false;
     this.rebuildInputAsset(); this.runForward();
   }
@@ -885,6 +973,7 @@ export class App implements OnInit, OnDestroy {
     }
 
     this.uploadError = '';
+    this.clearLocalImageSelection();
     const reader = new FileReader();
     reader.onerror = () => { this.uploadError = '文件读取失败，请重试'; };
     reader.onload = () => {
@@ -902,6 +991,24 @@ export class App implements OnInit, OnDestroy {
       });
     };
     reader.readAsDataURL(file);
+  }
+
+  async chooseLocalImageSample(sample: LocalImageSample): Promise<void> {
+    this.localImageError = '';
+    try {
+      const { imageData, previewUrl } = await this.decodeAndResizeImage(sample.url);
+      this.selectedLocalImageId = sample.id;
+      this.localImageData = imageData;
+      this.localImagePreviewUrl = previewUrl;
+      this.uploadedImageUrl = '';
+      this.uploadedImageData = null;
+      this.uploadError = '';
+      this.showSamplePicker = false;
+      this.rebuildInputAsset();
+      this.runForward();
+    } catch (err) {
+      this.localImageError = err instanceof Error ? err.message : '示例图片加载失败';
+    }
   }
 
   // ── Forward pass ──────────────────────────────────────
@@ -1041,7 +1148,6 @@ export class App implements OnInit, OnDestroy {
     const { imageData, previewUrl } = await this.decodeAndResizeImage(dataUrl);
     this.uploadedImageUrl = previewUrl;
     this.uploadedImageData = imageData;
-    this.applyUploadComputeProfile(imageData.width, imageData.height);
     this.rebuildInputAsset();
   }
 
@@ -1259,8 +1365,9 @@ export class App implements OnInit, OnDestroy {
   }
 
   onUploadComputeProfileChange(): void {
-    if (!this.uploadedImageData) return;
-    this.applyUploadComputeProfile(this.uploadedImageData.width, this.uploadedImageData.height);
+    const imageData = this.uploadedImageData ?? this.localImageData;
+    if (!imageData) return;
+    this.applyUploadComputeProfile(imageData.width, imageData.height);
     this.rebuildInputAsset();
     this.runForward();
   }
@@ -1302,12 +1409,48 @@ export class App implements OnInit, OnDestroy {
         id: 'upload', name: '上传图片', source: 'upload',
         imageData: this.uploadedImageData, preprocess: pre, previewUrl: this.uploadedImageUrl
       });
+    } else if (this.localImageData) {
+      const sample = this.localImageSamples.find(item => item.id === this.selectedLocalImageId);
+      this.currentInputAsset = SimEngine.createForwardInputAssetFromImageData({
+        id: sample?.id ?? 'local-sample',
+        name: sample?.name ?? '本地示例',
+        source: 'dataset',
+        imageData: this.localImageData,
+        preprocess: pre,
+        previewUrl: this.localImagePreviewUrl,
+        label: sample?.label
+      });
     } else {
       const s = this.selectedSample;
       if (!s) { this.currentInputAsset = null; return; }
       this.currentInputAsset = SimEngine.createForwardInputAssetFromSample(s, pre);
     }
     this.syncInputShape();
+  }
+
+  private async loadLocalImageSamples(): Promise<void> {
+    try {
+      const response = await fetch('a-mode-samples/manifest.json');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      this.localImageSamples = await response.json() as LocalImageSample[];
+      if (!this.localImageSamples.some(sample => sample.category === this.selectedDataset)) {
+        this.selectedDataset = this.localImageSamples[0]?.category ?? this.selectedDataset;
+      }
+      const first = this.activeLocalImageSamples[0] ?? this.localImageSamples[0];
+      if (first) {
+        this.selectedDataset = first.category;
+        await this.chooseLocalImageSample(first);
+      }
+    } catch {
+      this.localImageError = '本地示例图片清单加载失败';
+    }
+  }
+
+  private clearLocalImageSelection(): void {
+    this.selectedLocalImageId = '';
+    this.localImageData = null;
+    this.localImagePreviewUrl = '';
+    this.localImageError = '';
   }
 
   private syncInputShape(): void {
@@ -1365,8 +1508,9 @@ export class App implements OnInit, OnDestroy {
   private previewTensorForGrid(tensor: ForwardTensor): { mode: 'rgb' | 'gray'; width: number; height: number; colors?: string[]; values?: number[] } {
     const cached = this.tensorPreviewCache.get(tensor);
     if (cached) return cached;
-    const [h, w, c] = tensor.shape as [number, number, number];
-    const srcValues = tensor.values;
+    const previewTensor = this.sampleTensorForPreview(tensor, MAX_PREVIEW_GRID_SIDE);
+    const [h, w, c] = previewTensor.shape as [number, number, number];
+    const srcValues = previewTensor.values;
     const built = c === 3
       ? {
           mode: 'rgb' as const,
@@ -1385,6 +1529,57 @@ export class App implements OnInit, OnDestroy {
         };
     this.tensorPreviewCache.set(tensor, built);
     return built;
+  }
+
+  private tensorToImageDataUrl(tensor: ForwardTensor | null, normalize = false): string {
+    if (!tensor || tensor.shape.length !== 3) return '';
+    const cached = this.tensorImagePreviewCache.get(tensor);
+    if (cached && !normalize) return cached;
+    const [height, width, channels] = tensor.shape as [number, number, number];
+    const values = tensor.values;
+    const grayValues = channels === 1 || normalize
+      ? this.normalizeChannel(this.extractChannel(values, height, width, channels, 0))
+      : [];
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    const image = ctx.createImageData(width, height);
+    for (let i = 0; i < width * height; i += 1) {
+      const src = i * channels;
+      const dst = i * 4;
+      const r = channels >= 3 && !normalize ? values[src] ?? 0 : grayValues[i] ?? values[i] ?? 0;
+      const g = channels >= 3 && !normalize ? values[src + 1] ?? r : r;
+      const b = channels >= 3 && !normalize ? values[src + 2] ?? r : r;
+      image.data[dst] = Math.round(Math.max(0, Math.min(1, r)) * 255);
+      image.data[dst + 1] = Math.round(Math.max(0, Math.min(1, g)) * 255);
+      image.data[dst + 2] = Math.round(Math.max(0, Math.min(1, b)) * 255);
+      image.data[dst + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+    const url = canvas.toDataURL('image/png');
+    if (!normalize) this.tensorImagePreviewCache.set(tensor, url);
+    return url;
+  }
+
+  private grayValuesToImageDataUrl(values: number[], width: number, height: number): string {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    const image = ctx.createImageData(width, height);
+    for (let i = 0; i < width * height; i += 1) {
+      const value = Math.round(Math.max(0, Math.min(1, values[i] ?? 0)) * 255);
+      const dst = i * 4;
+      image.data[dst] = value;
+      image.data[dst + 1] = value;
+      image.data[dst + 2] = value;
+      image.data[dst + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+    return canvas.toDataURL('image/png');
   }
 
   private buildChannelPreviews(tensor: ForwardTensor, limit?: number): ChannelPreviewItem[] {

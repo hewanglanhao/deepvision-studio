@@ -68,36 +68,26 @@
   }
 
   @if (mode === 'forward') {
-    <div class="workspace">
+    <div class="workspace mode-workspace">
       <!-- 左侧面板 -->
       <aside class="side-panel">
         <div class="pane">
           <div class="pane-title">输入来源</div>
-          <div class="ds-tabs">
-            <button class="ds-tab" [class.active]="selectedDataset==='MNIST'" (click)="selectDataset('MNIST')">MNIST</button>
-            <button class="ds-tab" [class.active]="selectedDataset==='CIFAR-10'" (click)="selectDataset('CIFAR-10')">CIFAR-10</button>
-          </div>
-          <div style="margin-top:8px;display:grid;gap:5px">
-            <button (click)="toggleSamplePicker()">浏览样本</button>
-            @if (selectedSample) {
-              <div class="info-chip">样本 #{{ selectedSample.id }} · 标签：<strong style="color:var(--accent)">{{ selectedSample.label }}</strong></div>
+          <div class="dataset-collection-list">
+            @for (dataset of localDatasetNames; track dataset) {
+              <button class="dataset-collection-card" [class.active]="selectedDataset===dataset" (click)="selectDataset(dataset)">
+                <span class="dataset-collection-name">{{ dataset }}</span>
+                <span class="dataset-collection-meta">{{ localDatasetSampleCount(dataset) }} samples</span>
+              </button>
             }
           </div>
-          <div style="margin-top:8px">
-            <label>上传图片
-              <input type="file" accept="image/*" (change)="onImageUpload($event)" />
-            </label>
-            <label>上传计算档位
-              <select [(ngModel)]="uploadComputeProfile" (ngModelChange)="onUploadComputeProfileChange()">
-                <option value="fast">极速（最长边约 112）</option>
-                <option value="balanced">平衡（最长边约 160）</option>
-                <option value="quality">高质量（最长边约 256）</option>
-                <option value="original">原图（可能卡顿）</option>
-              </select>
-            </label>
-            <div class="muted" style="margin-top:4px">说明：上传计算档位决定“真实计算尺寸”；下方像素网格是显示缩略图，不代表真实计算尺寸。</div>
-            @if (uploadError) {
-              <div class="error-box" style="margin-top:5px">⚠ {{ uploadError }}</div>
+          <div style="margin-top:8px;display:grid;gap:5px">
+            <button (click)="toggleSamplePicker()" [disabled]="!activeLocalImageSamples.length">浏览样本</button>
+            @if (selectedLocalImageSample; as sample) {
+              <div class="info-chip">当前样本：<strong style="color:var(--accent)">{{ sample.name }}</strong> · {{ sample.label }}</div>
+            }
+            @if (localImageError) {
+              <div class="error-box" style="margin-top:6px">{{ localImageError }}</div>
             }
           </div>
         </div>
@@ -112,34 +102,16 @@
               <div class="info-row"><span class="info-k">颜色</span><span class="info-v">{{ currentInputAsset.originalColorMode }}</span></div>
               <div class="info-row"><span class="info-k">实际计算尺寸</span><span class="info-v">{{ currentInputAsset.prepared.tensor.shape[1] }} × {{ currentInputAsset.prepared.tensor.shape[0] }} × {{ currentInputAsset.prepared.tensor.shape[2] }}</span></div>
             </div>
-            <!-- 原始预览：RGB 或灰度 -->
-            @if (originalInputPreview; as orig) {
+            @if (originalInputImageUrl) {
               <div style="margin-top:8px">
-                <div class="section-title" style="margin-bottom:3px">原始图像显示缩略 · {{ orig.width }}×{{ orig.height }}</div>
-                @if (orig.mode === 'rgb') {
-                  <div class="pixel-grid" [style.--w]="orig.width">
-                    @for (c of orig.colors; track $index) { <span [style.background]="c"></span> }
-                  </div>
-                } @else {
-                  <div class="pixel-grid" [style.--w]="orig.width">
-                    @for (px of orig.values; track $index) { <span [style.background]="cellColor(px)"></span> }
-                  </div>
-                }
+                <div class="section-title" style="margin-bottom:3px">原始图像预览 · {{ currentInputAsset.originalWidth }}×{{ currentInputAsset.originalHeight }}</div>
+                <img class="input-image-preview zoomable-image" [src]="originalInputImageUrl" alt="原始输入图像" (click)="openImageViewer('原始输入图像', originalInputImageUrl, currentInputAsset.originalWidth + '×' + currentInputAsset.originalHeight)" />
               </div>
             }
-            <!-- 预处理后预览 -->
-            @if (preparedInputPreview; as prep) {
+            @if (preparedInputImageUrl) {
               <div style="margin-top:8px">
-                <div class="section-title" style="margin-bottom:3px">预处理后显示缩略 · {{ prep.width }}×{{ prep.height }}</div>
-                @if (prep.mode === 'rgb') {
-                  <div class="pixel-grid" [style.--w]="prep.width">
-                    @for (c of prep.colors; track $index) { <span [style.background]="c"></span> }
-                  </div>
-                } @else {
-                  <div class="pixel-grid" [style.--w]="prep.width">
-                    @for (px of prep.values; track $index) { <span [style.background]="cellColor(px)"></span> }
-                  </div>
-                }
+                <div class="section-title" style="margin-bottom:3px">预处理后预览 · {{ currentInputAsset.prepared.tensor.shape[1] }}×{{ currentInputAsset.prepared.tensor.shape[0] }}</div>
+                <img class="input-image-preview zoomable-image" [src]="preparedInputImageUrl" alt="预处理后输入图像" (click)="openImageViewer('预处理后输入图像', preparedInputImageUrl, currentInputAsset.prepared.tensor.shape[1] + '×' + currentInputAsset.prepared.tensor.shape[0] + '×' + currentInputAsset.prepared.tensor.shape[2])" />
                 @if (currentInputAsset.prepared.notes.length) {
                   <div class="muted" style="margin-top:3px">{{ currentInputAsset.prepared.notes.join(' · ') }}</div>
                 }
@@ -431,25 +403,14 @@
           <div class="pane">
             <div class="pane-title">可视化输出</div>
             @if (res.visualization.mode === 'image') {
-              <!-- RGB 主图 -->
-              @if (selectedIsRgb) {
-                <div class="pixel-grid" [style.--w]="res.visualization.width ?? 1">
-                  @for (c of selectedRgbColors; track $index) { <span [style.background]="c"></span> }
-                </div>
-              } @else {
-                <div class="pixel-grid" [style.--w]="res.visualization.width ?? 1">
-                  @for (px of res.visualization.values; track $index) { <span [style.background]="cellColor(px)"></span> }
-                </div>
-              }
+              <img class="tensor-image-preview zoomable-image" [src]="selectedTensorImageUrl" [alt]="res.layerName + ' output'" (click)="openImageViewer(res.layerName + ' 输出', selectedTensorImageUrl, res.outputShapeLabel)" />
               @if (selectedChannelPreviews.length > 1) {
                 <div class="section-title" style="margin:6px 0 3px">特征图（展示前 {{ selectedChannelPreviews.length }} / 共 {{ selectedChannelCount }}）</div>
                 <div class="channels-grid">
                   @for (ch of selectedChannelPreviews; track ch.channel) {
                     <div class="channel-card">
                       <div class="channel-label">ch {{ ch.channel }}</div>
-                      <div class="pixel-grid" [style.--w]="ch.width">
-                        @for (px of ch.values; track $index) { <span [style.background]="cellColor(px)"></span> }
-                      </div>
+                      <img class="channel-image-preview zoomable-image" [src]="channelPreviewImageUrl(ch)" [alt]="'channel ' + ch.channel" (click)="openImageViewer('通道 ' + ch.channel, channelPreviewImageUrl(ch), ch.width + '×' + ch.height)" />
                     </div>
                   }
                 </div>
@@ -497,24 +458,14 @@
             @if (finalTensorMode === 'image') {
               <div class="pane-title">最终输出（图像张量）</div>
               @if (finalImageViz; as fv) {
-                @if (fv.mode === 'rgb') {
-                  <div class="pixel-grid" [style.--w]="fv.width">
-                    @for (c of fv.colors; track $index) { <span [style.background]="c"></span> }
-                  </div>
-                } @else {
-                  <div class="pixel-grid" [style.--w]="fv.width">
-                    @for (px of fv.values; track $index) { <span [style.background]="cellColor(px)"></span> }
-                  </div>
-                }
+                <img class="tensor-image-preview zoomable-image" [src]="finalTensorImageUrl" alt="最终输出图像" (click)="openImageViewer('最终输出图像', finalTensorImageUrl, fv.width + '×' + fv.height + '×' + fv.channels)" />
                 @if (fv.channelPreviews.length > 1) {
                   <div class="section-title compact-title">输出特征图通道（展示前 {{ fv.channelPreviews.length }} / 共 {{ finalChannelCount }}）</div>
                   <div class="channels-grid">
                     @for (ch of fv.channelPreviews; track ch.channel) {
                       <div class="channel-card">
                         <div class="channel-label">ch {{ ch.channel }}</div>
-                        <div class="pixel-grid" [style.--w]="ch.width">
-                          @for (px of ch.values; track $index) { <span [style.background]="cellColor(px)"></span> }
-                        </div>
+                        <img class="channel-image-preview zoomable-image" [src]="channelPreviewImageUrl(ch)" [alt]="'channel ' + ch.channel" (click)="openImageViewer('输出通道 ' + ch.channel, channelPreviewImageUrl(ch), ch.width + '×' + ch.height)" />
                       </div>
                     }
                   </div>
@@ -586,9 +537,7 @@
             @for (ch of channelModalPreviews; track ch.channel) {
               <div class="channel-card">
                 <div class="channel-label">ch {{ ch.channel }}</div>
-                <div class="pixel-grid" [style.--w]="ch.width">
-                  @for (px of ch.values; track $index) { <span [style.background]="cellColor(px)"></span> }
-                </div>
+                <img class="channel-image-preview zoomable-image" [src]="channelPreviewImageUrl(ch)" [alt]="'channel ' + ch.channel" (click)="openImageViewer('通道 ' + ch.channel, channelPreviewImageUrl(ch), ch.width + '×' + ch.height)" />
               </div>
             }
           </div>
@@ -600,7 +549,7 @@
 
   <!-- 模式 B -->
   @if (mode === 'training') {
-    <div class="workspace">
+    <div class="workspace mode-workspace">
       <aside class="side-panel">
         <div class="pane">
           <div class="pane-title">训练数据</div>
@@ -797,17 +746,18 @@
     <div class="sample-picker-mask" (click)="closeSamplePicker()"></div>
     <div class="sample-picker">
       <div class="picker-header">
-        <span class="picker-title">选择输入样本</span>
+        <span class="picker-title">选择 {{ selectedDataset }} 样本</span>
         <button class="btn-ghost" (click)="closeSamplePicker()">✕ 关闭</button>
       </div>
       <div class="sample-grid">
-        @for (s of datasetSamples; track s.id) {
-          <div class="sample-tile" [class.active]="s.id===selectedSampleId" (click)="chooseSample(s.id)">
-            <div class="pixel-grid" [style.--w]="s.width">
-              @for (px of s.previewPixels; track $index) { <span [style.background]="cellColor(px)"></span> }
-            </div>
-            <small>#{{ s.id }} · {{ s.label }}</small>
+        @for (sample of activeLocalImageSamples; track sample.id) {
+          <div class="sample-tile local-image-tile" [class.active]="sample.id===selectedLocalImageId" (click)="chooseLocalImageSample(sample)">
+            <img class="zoomable-image" [src]="sample.url" [alt]="sample.name" (click)="openImageViewer(sample.name, sample.url, sample.label); $event.stopPropagation()" />
+            <small>{{ sample.name }} · {{ sample.label }}</small>
           </div>
+        }
+        @if (!activeLocalImageSamples.length) {
+          <div class="muted">当前集合暂无样本。</div>
         }
       </div>
     </div>
@@ -891,7 +841,7 @@
         @for (record of forwardRecords; track record.id) {
           <div class="record-item">
             @if (recordImageUrl(record)) {
-              <img class="record-thumb" [src]="recordImageUrl(record)" [alt]="record.name" />
+              <img class="record-thumb zoomable-image" [src]="recordImageUrl(record)" [alt]="record.name" (click)="openImageViewer(record.name, recordImageUrl(record), record.datasetName); $event.stopPropagation()" />
             } @else {
               <div class="record-thumb empty">A</div>
             }
@@ -911,6 +861,25 @@
         }
       </div>
     </aside>
+  }
+
+  @if (imageViewer.open) {
+    <div class="image-viewer-mask" (click)="closeImageViewer()">
+      <div class="image-viewer-card" (click)="$event.stopPropagation()">
+        <div class="image-viewer-head">
+          <div>
+            <div class="modal-title">{{ imageViewer.title }}</div>
+            @if (imageViewer.meta) {
+              <div class="muted">{{ imageViewer.meta }}</div>
+            }
+          </div>
+          <button class="btn-ghost btn-sm" (click)="closeImageViewer()">关闭</button>
+        </div>
+        <div class="image-viewer-body">
+          <img [src]="imageViewer.url" [alt]="imageViewer.title" />
+        </div>
+      </div>
+    </div>
   }
 
   <app-help-manual [open]="showHelp" (closed)="showHelp=false" />
