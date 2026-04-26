@@ -19,12 +19,27 @@
           自动计算
         </label>
         <button class="btn-sm" (click)="triggerForwardCompute()" [disabled]="forwardBusy">开始计算</button>
+        <button class="btn-sm btn-primary" (click)="openSaveRecordModal()" [disabled]="!canSaveForwardRecord">保存记录</button>
+        <button class="btn-sm" (click)="toggleRecordDrawer()">历史记录</button>
       }
       <span class="meta-pill">{{ layerCount }} 层</span>
       <span class="meta-pill">{{ parameterCount | number }} 参数</span>
+      @if (authUser) {
+        <span class="meta-pill">{{ authUser.displayName }}</span>
+        <button class="btn-ghost btn-sm" (click)="logout()">退出</button>
+      } @else {
+        <button class="btn-sm" (click)="openAuthModal('login')">登录</button>
+        <button class="btn-primary btn-sm" (click)="openAuthModal('register')">注册</button>
+      }
       <button class="icon-btn" (click)="showHelp=true">?</button>
     </div>
   </header>
+
+  @if (recordError || recordSuccess) {
+    <div [class]="recordError ? 'global-error-banner' : 'global-success-banner'">
+      <span>{{ recordError || recordSuccess }}</span>
+    </div>
+  }
 
   @if (mode === 'forward' && globalErrorMessages.length) {
     <div class="global-error-banner">
@@ -796,6 +811,106 @@
         }
       </div>
     </div>
+  }
+
+  @if (showAuthModal) {
+    <div class="modal-mask" (click)="closeAuthModal()">
+      <div class="modal-card auth-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">{{ authTitle }}</div>
+          <button class="btn-ghost btn-sm" (click)="closeAuthModal()">关闭</button>
+        </div>
+        <div class="modal-body">
+          <div class="auth-switch">
+            <button [class.active]="authMode==='login'" (click)="authMode='login'; authError=''">登录</button>
+            <button [class.active]="authMode==='register'" (click)="authMode='register'; authError=''">注册</button>
+          </div>
+          <label>用户名
+            <input [(ngModel)]="authDraft.username" autocomplete="username" placeholder="3-32 位字母/数字/下划线" />
+          </label>
+          @if (authMode === 'register') {
+            <label>显示名称
+              <input [(ngModel)]="authDraft.displayName" autocomplete="nickname" placeholder="可选" />
+            </label>
+          }
+          <label>密码
+            <input type="password" [(ngModel)]="authDraft.password" autocomplete="current-password" placeholder="至少 6 位" />
+          </label>
+          @if (authError) {
+            <div class="error-box">{{ authError }}</div>
+          }
+          <div class="btn-row modal-actions">
+            <button class="btn-primary" (click)="submitAuth()" [disabled]="authBusy">{{ authBusy ? '处理中...' : authTitle }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showSaveRecordModal) {
+    <div class="modal-mask" (click)="closeSaveRecordModal()">
+      <div class="modal-card auth-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">保存 A 模式记录</div>
+          <button class="btn-ghost btn-sm" (click)="closeSaveRecordModal()">关闭</button>
+        </div>
+        <div class="modal-body">
+          <label>记录名称
+            <input [(ngModel)]="recordNameDraft" maxlength="120" />
+          </label>
+          <div class="record-meta-line">
+            <span>{{ selectedDataset }}</span>
+            <span>{{ layerCount }} 层</span>
+            <span>{{ parameterCount | number }} 参数</span>
+          </div>
+          @if (recordError) {
+            <div class="error-box">{{ recordError }}</div>
+          }
+          <div class="btn-row modal-actions">
+            <button class="btn-primary" (click)="saveForwardRecord()" [disabled]="recordBusy">{{ recordBusy ? '保存中...' : '保存' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showRecordDrawer) {
+    <div class="record-drawer-mask" (click)="showRecordDrawer=false"></div>
+    <aside class="record-drawer">
+      <div class="record-drawer-head">
+        <div>
+          <div class="pane-title">A 模式历史记录</div>
+          <div class="muted">{{ forwardRecords.length }} 条已保存记录</div>
+        </div>
+        <button class="btn-ghost btn-sm" (click)="showRecordDrawer=false">关闭</button>
+      </div>
+      <div class="record-list">
+        @if (recordBusy && !forwardRecords.length) {
+          <div class="muted">正在读取...</div>
+        }
+        @for (record of forwardRecords; track record.id) {
+          <div class="record-item">
+            @if (recordImageUrl(record)) {
+              <img class="record-thumb" [src]="recordImageUrl(record)" [alt]="record.name" />
+            } @else {
+              <div class="record-thumb empty">A</div>
+            }
+            <div class="record-main">
+              <div class="record-title">{{ record.name }}</div>
+              <div class="record-sub">{{ record.datasetName }} · {{ record.layerCount }} 层 · {{ record.parameterCount | number }} 参数</div>
+              <div class="record-time">{{ record.createdAt | date:'yyyy-MM-dd HH:mm' }}</div>
+              <div class="btn-row">
+                <button class="btn-sm btn-primary" (click)="restoreForwardRecord(record.id)" [disabled]="recordBusy">回溯</button>
+                <button class="btn-sm btn-danger" (click)="deleteForwardRecord(record.id)" [disabled]="recordBusy">删除</button>
+              </div>
+            </div>
+          </div>
+        }
+        @if (!recordBusy && !forwardRecords.length) {
+          <div class="muted">还没有保存过 A 模式记录。</div>
+        }
+      </div>
+    </aside>
   }
 
   <app-help-manual [open]="showHelp" (closed)="showHelp=false" />

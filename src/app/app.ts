@@ -4,6 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { HelpManualComponent } from './components/help-manual.component';
 import { NetworkOverviewComponent } from './components/network-overview.component';
+import { AuthUser } from './models/auth.models';
+import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from './models/forward-record.models';
+import { AuthService } from './services/auth.service';
+import { ForwardRecordService } from './services/forward-record.service';
 import { ForwardBackendService } from './services/forward-backend.service';
 import { TrainingLog, TrainingRuntimeService } from './services/training-runtime.service';
 import { SimEngine } from './sim-engine';
@@ -59,6 +63,20 @@ export class App implements OnInit, OnDestroy {
   mode: AppMode = 'forward';
   showHelp = false;
   showSamplePicker = false;
+  authUser: AuthUser | null = null;
+  showAuthModal = false;
+  authMode: 'login' | 'register' = 'login';
+  authDraft = { username: '', password: '', displayName: '' };
+  authBusy = false;
+  authError = '';
+
+  showSaveRecordModal = false;
+  showRecordDrawer = false;
+  recordNameDraft = '';
+  recordBusy = false;
+  recordError = '';
+  recordSuccess = '';
+  forwardRecords: ForwardRecordSummary[] = [];
 
   modelTemplates: ModelTemplate[] = SimEngine.templates();
   selectedTemplateId = 'cnn-classic';
@@ -195,7 +213,9 @@ export class App implements OnInit, OnDestroy {
 
   constructor(
     private trainingSvc: TrainingRuntimeService,
-    private forwardBackend: ForwardBackendService
+    private forwardBackend: ForwardBackendService,
+    private authSvc: AuthService,
+    private forwardRecordSvc: ForwardRecordService
   ) {}
 
   ngOnInit(): void {
@@ -218,6 +238,13 @@ export class App implements OnInit, OnDestroy {
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
+    this.subs.add(this.authSvc.user$.subscribe(user => {
+      this.authUser = user;
+      if (user && this.showRecordDrawer) {
+        this.loadForwardRecords();
+      }
+    }));
+    this.authSvc.restoreSession();
   }
 
   ngOnDestroy(): void {
@@ -522,6 +549,166 @@ export class App implements OnInit, OnDestroy {
   fieldErrorText(layerId: number, field: string): string { return this.fieldIssueMap[layerId]?.[field]?.[0] ?? ''; }
   get globalErrorMessages(): string[] { return this.forwardResult?.errors ?? []; }
 
+  get authTitle(): string { return this.authMode === 'login' ? '登录' : '注册'; }
+  get canSaveForwardRecord(): boolean {
+    return this.mode === 'forward' && !!this.forwardResult && !this.forwardBusy && !this.pendingForwardChanges;
+  }
+
+  openAuthModal(mode: 'login' | 'register' = 'login'): void {
+    this.authMode = mode;
+    this.authError = '';
+    this.authDraft = { username: '', password: '', displayName: '' };
+    this.showAuthModal = true;
+  }
+
+  closeAuthModal(): void {
+    if (this.authBusy) return;
+    this.showAuthModal = false;
+    this.authError = '';
+  }
+
+  async submitAuth(): Promise<void> {
+    if (this.authBusy) return;
+    this.authBusy = true;
+    this.authError = '';
+    try {
+      if (this.authMode === 'login') {
+        await this.authSvc.login(this.authDraft.username, this.authDraft.password);
+      } else {
+        await this.authSvc.register(this.authDraft.username, this.authDraft.password, this.authDraft.displayName);
+      }
+      this.showAuthModal = false;
+      this.recordSuccess = `${this.authTitle}成功`;
+    } catch (err) {
+      this.authError = err instanceof Error ? err.message : '认证请求失败';
+    } finally {
+      this.authBusy = false;
+    }
+  }
+
+  logout(): void {
+    this.authSvc.logout();
+    this.forwardRecords = [];
+    this.showRecordDrawer = false;
+    this.recordSuccess = '已退出登录';
+  }
+
+  openSaveRecordModal(): void {
+    this.recordError = '';
+    this.recordSuccess = '';
+    if (!this.authUser) {
+      this.openAuthModal('login');
+      this.recordError = '请先登录后再保存 A 模式记录';
+      return;
+    }
+    if (!this.canSaveForwardRecord) {
+      this.recordError = '请先手动点击“开始计算”，完成后再保存记录';
+      return;
+    }
+    const now = new Date();
+    this.recordNameDraft = `A模式记录 ${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+    this.showSaveRecordModal = true;
+  }
+
+  closeSaveRecordModal(): void {
+    if (this.recordBusy) return;
+    this.showSaveRecordModal = false;
+    this.recordError = '';
+  }
+
+  async saveForwardRecord(): Promise<void> {
+    if (!this.authUser || !this.canSaveForwardRecord || this.recordBusy) return;
+    const name = this.recordNameDraft.trim();
+    if (!name) {
+      this.recordError = '请给这次记录命名';
+      return;
+    }
+
+    this.recordBusy = true;
+    this.recordError = '';
+    try {
+      const record = await this.forwardRecordSvc.create({
+        name,
+        templateId: this.selectedTemplateId,
+        datasetName: this.selectedDataset,
+        layerCount: this.layerCount,
+        parameterCount: this.parameterCount,
+        previewImageDataUrl: this.currentInputPreviewDataUrl(),
+        snapshot: this.buildForwardRecordSnapshot()
+      });
+      this.showSaveRecordModal = false;
+      this.recordSuccess = `已保存：${record.name}`;
+      await this.loadForwardRecords();
+      this.showRecordDrawer = true;
+    } catch (err) {
+      this.recordError = err instanceof Error ? err.message : '保存记录失败';
+    } finally {
+      this.recordBusy = false;
+    }
+  }
+
+  async toggleRecordDrawer(): Promise<void> {
+    this.recordError = '';
+    this.recordSuccess = '';
+    if (!this.authUser) {
+      this.openAuthModal('login');
+      this.recordError = '请先登录后再查看历史记录';
+      return;
+    }
+    this.showRecordDrawer = !this.showRecordDrawer;
+    if (this.showRecordDrawer) {
+      await this.loadForwardRecords();
+    }
+  }
+
+  async loadForwardRecords(): Promise<void> {
+    if (!this.authUser) return;
+    this.recordBusy = true;
+    this.recordError = '';
+    try {
+      this.forwardRecords = await this.forwardRecordSvc.list();
+    } catch (err) {
+      this.recordError = err instanceof Error ? err.message : '读取历史记录失败';
+    } finally {
+      this.recordBusy = false;
+    }
+  }
+
+  async restoreForwardRecord(recordId: number): Promise<void> {
+    if (this.recordBusy) return;
+    this.recordBusy = true;
+    this.recordError = '';
+    try {
+      const detail = await this.forwardRecordSvc.detail(recordId);
+      await this.applyForwardRecord(detail);
+      this.recordSuccess = `已回溯：${detail.name}`;
+      this.showRecordDrawer = false;
+    } catch (err) {
+      this.recordError = err instanceof Error ? err.message : '回溯记录失败';
+    } finally {
+      this.recordBusy = false;
+    }
+  }
+
+  async deleteForwardRecord(recordId: number): Promise<void> {
+    if (this.recordBusy) return;
+    this.recordBusy = true;
+    this.recordError = '';
+    try {
+      await this.forwardRecordSvc.delete(recordId);
+      this.forwardRecords = this.forwardRecords.filter(record => record.id !== recordId);
+      this.recordSuccess = '记录已删除';
+    } catch (err) {
+      this.recordError = err instanceof Error ? err.message : '删除记录失败';
+    } finally {
+      this.recordBusy = false;
+    }
+  }
+
+  recordImageUrl(record: ForwardRecordSummary): string {
+    return this.forwardRecordSvc.imageUrl(record.imagePath);
+  }
+
   openSelectedChannelsModal(): void {
     const tensor = this.selectedForwardResult?.tensor;
     if (!tensor || tensor.shape.length !== 3) return;
@@ -796,6 +983,96 @@ export class App implements OnInit, OnDestroy {
     if (!hasSelected && result.layerResults.length) {
       this.selectedLayerId = result.layerResults[0].layerId;
     }
+  }
+
+  private buildForwardRecordSnapshot(): ForwardRecordSnapshot {
+    return {
+      selectedTemplateId: this.selectedTemplateId,
+      selectedDataset: this.selectedDataset,
+      selectedSampleId: this.selectedSampleId,
+      selectedLayerId: this.selectedLayerId,
+      uploadComputeProfile: this.uploadComputeProfile,
+      uploadedImageUrl: this.uploadedImageUrl ? 'stored-on-spring-backend' : '',
+      layers: structuredClone(this.layers),
+      connections: structuredClone(this.connections),
+      forwardResult: this.forwardResult ? structuredClone(this.forwardResult) : null
+    };
+  }
+
+  private async applyForwardRecord(detail: ForwardRecordDetail): Promise<void> {
+    const snapshot = detail.snapshot;
+    this.mode = 'forward';
+    this.selectedTemplateId = snapshot.selectedTemplateId;
+    this.selectedDataset = snapshot.selectedDataset;
+    this.selectedSampleId = snapshot.selectedSampleId;
+    this.selectedLayerId = snapshot.selectedLayerId;
+    this.uploadComputeProfile = snapshot.uploadComputeProfile;
+    this.layers = structuredClone(snapshot.layers);
+    this.connections = structuredClone(snapshot.connections);
+    this.nextLayerId = Math.max(0, ...this.layers.map(layer => layer.id)) + 1;
+    this.forwardResult = snapshot.forwardResult ? structuredClone(snapshot.forwardResult) : null;
+    this.forwardLayerShapeMap = this.forwardResult?.layerShapeMap ?? {};
+    this.forwardBackendError = '';
+    this.pendingForwardChanges = false;
+    this.showSamplePicker = false;
+
+    const savedImageUrl = this.forwardRecordSvc.imageUrl(detail.imagePath);
+    if (savedImageUrl) {
+      await this.restoreUploadedImageFromUrl(savedImageUrl);
+    } else {
+      this.uploadedImageUrl = '';
+      this.uploadedImageData = null;
+      this.rebuildInputAsset();
+    }
+  }
+
+  private async restoreUploadedImageFromUrl(imageUrl: string): Promise<void> {
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error('记录图片读取失败');
+    }
+    const blob = await response.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('记录图片解析失败'));
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.readAsDataURL(blob);
+    });
+    const { imageData, previewUrl } = await this.decodeAndResizeImage(dataUrl);
+    this.uploadedImageUrl = previewUrl;
+    this.uploadedImageData = imageData;
+    this.applyUploadComputeProfile(imageData.width, imageData.height);
+    this.rebuildInputAsset();
+  }
+
+  private currentInputPreviewDataUrl(): string | null {
+    if (this.uploadedImageUrl) {
+      return this.uploadedImageUrl;
+    }
+    const tensor = this.currentInputAsset?.prepared.displayTensor ?? this.currentInputAsset?.originalTensor;
+    if (!tensor || tensor.shape.length !== 3) {
+      return null;
+    }
+    const [height, width, channels] = tensor.shape as [number, number, number];
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const image = ctx.createImageData(width, height);
+    for (let i = 0; i < width * height; i += 1) {
+      const src = i * channels;
+      const dst = i * 4;
+      const r = channels >= 3 ? tensor.values[src] ?? 0 : tensor.values[i] ?? 0;
+      const g = channels >= 3 ? tensor.values[src + 1] ?? r : r;
+      const b = channels >= 3 ? tensor.values[src + 2] ?? r : r;
+      image.data[dst] = Math.round(Math.max(0, Math.min(1, r)) * 255);
+      image.data[dst + 1] = Math.round(Math.max(0, Math.min(1, g)) * 255);
+      image.data[dst + 2] = Math.round(Math.max(0, Math.min(1, b)) * 255);
+      image.data[dst + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+    return canvas.toDataURL('image/png');
   }
 
   // ── Training ──────────────────────────────────────────

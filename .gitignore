@@ -40,6 +40,11 @@ __screenshots__/
 __pycache__/
 *.pyc
 
+# Spring backend local state
+spring-backend/target/
+spring-backend/data/
+spring-backend/uploads/
+
 # System files
 .DS_Store
 Thumbs.db
