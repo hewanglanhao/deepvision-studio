@@ -40,7 +40,7 @@ interface BackendTrainingStartResponse {
 }
 
 interface BackendMetricMessage {
-  type: 'metric';
+  type: 'metric' | 'control' | 'error';
   jobId: string;
   step: number;
   epoch: number;
@@ -58,6 +58,8 @@ interface BackendMetricMessage {
   weightMean: number;
   weightStd: number;
   gradientStatus: 'stable' | 'vanishing' | 'exploding';
+  status?: 'running' | 'paused' | 'stopped' | 'completed';
+  message?: string;
 }
 
 interface BackendControlResponse {
@@ -265,6 +267,18 @@ export class TrainingRuntimeService implements OnDestroy {
       message = JSON.parse(payload) as BackendMetricMessage;
     } catch {
       this.log('warn', '收到无法解析的训练指标。');
+      return;
+    }
+    if (message.type === 'error') {
+      const text = message.message || 'Python training worker failed.';
+      this.patchState({ status: 'stopped', message: text });
+      this.log('error', text);
+      this.closeSocket();
+      return;
+    }
+    if (message.type === 'control') {
+      this.patchState({ status: message.status ?? this.state$.value.status, message: message.message ?? 'Training status changed.' });
+      this.log('info', message.message ?? 'Training status changed.');
       return;
     }
     if (message.type !== 'metric') return;

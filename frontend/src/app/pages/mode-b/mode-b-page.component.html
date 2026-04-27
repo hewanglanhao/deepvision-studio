@@ -544,7 +544,7 @@
 
   <!-- 模式 B -->
   @if (mode === 'training') {
-    <div class="workspace mode-workspace">
+    <div class="workspace mode-workspace training-mode-workspace">
       <aside class="side-panel">
         <div class="pane">
           <div class="pane-title">训练数据</div>
@@ -597,29 +597,6 @@
           </div>
         </div>
 
-        <div class="pane">
-          <div class="pane-title">训练超参数</div>
-          <div class="row-2">
-            <label>批大小 <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>
-            <label>训练轮数 <input type="number" min="1" [(ngModel)]="trainingConfig.totalEpochs" /></label>
-          </div>
-          <label>学习率 <input type="number" step="0.0001" [(ngModel)]="trainingConfig.learningRate" /></label>
-          <label>优化器
-            <select [(ngModel)]="trainingConfig.optimizer">
-              <option value="Adam">Adam</option><option value="AdamW">AdamW</option><option value="SGD">SGD</option><option value="RMSProp">RMSProp</option>
-            </select>
-          </label>
-          <label>学习率调度
-            <select [(ngModel)]="trainingConfig.scheduler">
-              <option value="none">不调度</option><option value="step">阶梯衰减</option><option value="cosine">余弦退火</option>
-            </select>
-          </label>
-          <label>损失函数
-            <select [(ngModel)]="trainingConfig.lossFunction">
-              <option value="cross_entropy">交叉熵</option><option value="mse">MSE</option><option value="bce">二元交叉熵</option>
-            </select>
-          </label>
-        </div>
       </aside>
 
       <main class="training-center">
@@ -639,7 +616,7 @@
           <button (click)="stopTraining()">⏹ 停止</button>
           <button class="btn-ghost" (click)="resetTraining()">↺ 重置</button>
         </div>
-        <div class="mock-banner">Spring Boot 后端模式：训练任务由后端创建，指标通过 WebSocket 实时推送。当前后端训练实现为教学指标模拟，不执行真实深度学习计算。</div>
+        <div class="mock-banner">Spring Boot + Python 训练模式：后端按当前网络结构启动 PyTorch 训练，指标通过 WebSocket 实时推送。</div>
 
         @if (trainingDatasetDetail; as ds) {
           <div class="dataset-board">
@@ -687,6 +664,30 @@
               </div>
             </div>
 
+            <div class="training-hyperparams-panel">
+              <div class="section-title">训练超参数</div>
+              <div class="training-hyperparams-grid">
+                <label>批大小 <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>
+                <label>训练轮数 <input type="number" min="1" [(ngModel)]="trainingConfig.totalEpochs" /></label>
+                <label>学习率 <input type="number" step="0.0001" [(ngModel)]="trainingConfig.learningRate" /></label>
+                <label>优化器
+                  <select [(ngModel)]="trainingConfig.optimizer">
+                    <option value="Adam">Adam</option><option value="AdamW">AdamW</option><option value="SGD">SGD</option><option value="RMSProp">RMSProp</option>
+                  </select>
+                </label>
+                <label>学习率调度
+                  <select [(ngModel)]="trainingConfig.scheduler">
+                    <option value="none">不调度</option><option value="step">阶梯衰减</option><option value="cosine">余弦退火</option>
+                  </select>
+                </label>
+                <label>损失函数
+                  <select [(ngModel)]="trainingConfig.lossFunction">
+                    <option value="cross_entropy">交叉熵</option><option value="mse">MSE</option><option value="bce">二元交叉熵</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
             <div class="dataset-lower">
               <div>
                 <div class="section-title" style="margin-bottom:6px">标签分布</div>
@@ -723,6 +724,17 @@
           <div class="status-card"><div class="status-card-label">进度</div><div class="status-card-value">{{ trainingProgressPercent | number:'1.0-0' }}%</div></div>
         </div>
 
+        <div class="training-inline-panels">
+          <div class="chart-wrap training-log-card">
+            <div class="chart-label">训练日志 <span class="muted">[Backend]</span></div>
+            <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
+          </div>
+          <div class="chart-wrap training-note-card">
+            <div class="chart-label">反向传播说明 <span class="muted">（教学占位）</span></div>
+            <div class="warn-box">当前后端已提供训练指标、梯度范数和权重分布近似数据。<br>逐层反向传播计算图、梯度热力图和真实权重更新尚未实现。</div>
+          </div>
+        </div>
+
         <div class="charts-area">
           <div class="chart-wrap"><div class="chart-label" style="color:var(--red)">损失曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="lossPolyline" fill="none" stroke="#dc2626" stroke-width="2"/><polyline [attr.points]="valLossPolyline" fill="none" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#dc2626">— 训练损失</span><span style="color:#d97706">- - 验证损失</span></div></div>
           <div class="chart-wrap"><div class="chart-label" style="color:var(--accent)">准确率曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="accPolyline" fill="none" stroke="#2563eb" stroke-width="2"/><polyline [attr.points]="valPolyline" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#2563eb">— 训练集</span><span style="color:#059669">- - 验证集</span></div></div>
@@ -733,14 +745,6 @@
           <div style="grid-column:1/-1"><div class="section-title" style="margin-bottom:6px">实验对比 <span class="muted">（前端辅助模拟）</span></div>@for (exp of experimentResults; track exp.name) { <div class="exp-row"><span class="exp-name">{{ exp.name }}</span><div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="exp.finalAccuracy*100"></div></div><span class="exp-acc">{{ (exp.finalAccuracy*100).toFixed(1) }}%</span></div> }<button style="margin-top:5px;font-size:12px" (click)="runExperiments()">运行实验对比</button></div>
         </div>
       </main>
-
-      <aside class="side-panel right">
-        <div class="pane" style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0">
-          <div class="pane-title">训练日志 <span class="muted">[Backend]</span></div>
-          <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
-        </div>
-        <div class="pane"><div class="pane-title">反向传播说明 <span class="muted">（教学占位）</span></div><div class="warn-box" style="font-size:12px;line-height:1.6">当前后端已提供训练指标、梯度范数和权重分布近似数据。<br>逐层反向传播计算图、梯度热力图和真实权重更新尚未实现。</div></div>
-      </aside>
     </div>
   }
 

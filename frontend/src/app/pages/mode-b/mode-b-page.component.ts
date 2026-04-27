@@ -188,6 +188,18 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       labels: ['airplane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
     },
     {
+      id: 'cifar10-5000',
+      name: 'CIFAR-10 5000 张',
+      source: 'builtin',
+      kind: 'image',
+      description: '从 CIFAR-10 全量数据中按类别均衡抽取 5000 张图片。',
+      sampleCount: 5000,
+      classCount: 10,
+      inputShape: '32 x 32 x 3',
+      recommendedSplit: '70% / 15% / 15%',
+      labels: ['airplane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    },
+    {
       id: 'iris',
       name: '鸢尾花数据集',
       source: 'builtin',
@@ -1371,7 +1383,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.selectedTaskId = id;
     const task = this.presetTasks.find(t => t.id === id);
     if (task?.dataset === 'MNIST') void this.selectTrainingDataset('mnist-1000');
-    if (task?.dataset === 'CIFAR-10') void this.selectTrainingDataset('cifar10-500');
+    if (task?.dataset === 'CIFAR-10') void this.selectTrainingDataset('cifar10-5000');
   }
 
   runExperiments(): void {
@@ -1777,7 +1789,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       };
     }
 
-    if (option.id === 'cifar10-500') {
+    if (option.id === 'cifar10-500' || option.id === 'cifar10-5000') {
       return {
         ...base,
         imagePreview: option.labels.slice(0, 8).map((label, i) => ({

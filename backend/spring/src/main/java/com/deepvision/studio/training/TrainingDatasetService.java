@@ -280,6 +280,14 @@ public class TrainingDatasetService {
         "32 x 32 x 3",
         List.of("airplane", "car", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck")
     ));
+    datasets.put("cifar10-5000", builtinImage(
+        "cifar10-5000",
+        "CIFAR-10 5000 张",
+        "从 CIFAR-10 全量数据中按类别均衡抽取 5000 张图片，适合课堂快速训练演示。",
+        5000,
+        "32 x 32 x 3",
+        List.of("airplane", "car", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck")
+    ));
 
     List<String> irisLabels = List.of("setosa", "versicolor", "virginica");
     datasets.put("iris", new TrainingDatasetDetail(

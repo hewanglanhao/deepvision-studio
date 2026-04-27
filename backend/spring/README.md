@@ -32,6 +32,8 @@ $env:DEEPVISION_UPLOAD_ROOT="./uploads"
 $env:DEEPVISION_DATASET_ROOT="./datasets"
 $env:DEEPVISION_JWT_EXPIRATION_MINUTES="10080"
 $env:DEEPVISION_TRAINING_STREAM_BASE_URL="ws://127.0.0.1:8080"
+$env:DEEPVISION_TRAINING_PYTHON="C:/Users/lizihan/miniconda3/envs/dl-platform/python.exe"
+$env:DEEPVISION_TRAINING_WORKER_SCRIPT="../python-training/training_worker.py"
 ```
 
 ## 启动

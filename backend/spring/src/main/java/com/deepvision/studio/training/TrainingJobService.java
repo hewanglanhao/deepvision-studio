@@ -11,11 +11,16 @@ import com.deepvision.studio.training.TrainingDtos.TrainingStartResponse;
 import com.deepvision.studio.training.TrainingDtos.TrainingStatusResponse;
 import com.deepvision.studio.training.TrainingDtos.WeightHistogramResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
-import java.time.Duration;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -26,10 +31,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
@@ -41,19 +44,31 @@ public class TrainingJobService {
 
   private final TrainingDatasetService datasetService;
   private final ObjectMapper objectMapper;
-  private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
+  private final ExecutorService executor = Executors.newCachedThreadPool();
   private final Map<String, TrainingJob> jobs = new ConcurrentHashMap<>();
   private final Map<String, CopyOnWriteArraySet<WebSocketSession>> sessions = new ConcurrentHashMap<>();
   private final String streamBaseUrl;
+  private final Path datasetRoot;
+  private final Path jobRoot;
+  private final Path workerScript;
+  private final String pythonExecutable;
 
   public TrainingJobService(
       TrainingDatasetService datasetService,
       ObjectMapper objectMapper,
-      @Value("${deepvision.training.stream-base-url:ws://127.0.0.1:8080}") String streamBaseUrl
+      @Value("${deepvision.training.stream-base-url:ws://127.0.0.1:8080}") String streamBaseUrl,
+      @Value("${deepvision.datasets.root}") String datasetRoot,
+      @Value("${deepvision.training.jobs-root:./training-jobs}") String jobRoot,
+      @Value("${deepvision.training.python-executable:python}") String pythonExecutable,
+      @Value("${deepvision.training.worker-script:../python-training/training_worker.py}") String workerScript
   ) {
     this.datasetService = datasetService;
     this.objectMapper = objectMapper;
     this.streamBaseUrl = trimTrailingSlash(streamBaseUrl);
+    this.datasetRoot = Path.of(datasetRoot).toAbsolutePath().normalize();
+    this.jobRoot = Path.of(jobRoot).toAbsolutePath().normalize();
+    this.pythonExecutable = pythonExecutable;
+    this.workerScript = Path.of(workerScript).toAbsolutePath().normalize();
   }
 
   public TrainingStartResponse start(StartTrainingRequest request) {
@@ -70,27 +85,14 @@ public class TrainingJobService {
     int totalBatches = Math.max(1, (int) Math.ceil(trainSamples / batchSize));
 
     String jobId = nextJobId();
-    TrainingJob job = new TrainingJob(
-        jobId,
-        request.datasetId(),
-        "running",
-        totalEpochs,
-        totalBatches,
-        batchSize,
-        config.learningRate() == null || config.learningRate() <= 0 ? 0.001 : config.learningRate(),
-        config.lrDecay() == null || config.lrDecay() <= 0 ? 0.9 : config.lrDecay(),
-        config.scheduler() == null ? "none" : config.scheduler(),
-        request.split().val() > 0,
-        Instant.now()
-    );
+    TrainingJob job = new TrainingJob(jobId, request, totalEpochs, totalBatches);
     jobs.put(jobId, job);
-    ScheduledFuture<?> future = executor.scheduleAtFixedRate(() -> tick(jobId), 400, 550, TimeUnit.MILLISECONDS);
-    job.setFuture(future);
+    startPythonWorker(job);
     return new TrainingStartResponse(
         jobId,
         job.status(),
-        job.totalEpochs(),
-        job.totalBatches(),
+        totalEpochs,
+        totalBatches,
         streamBaseUrl + "/api/training/stream?jobId=" + jobId
     );
   }
@@ -115,47 +117,40 @@ public class TrainingJobService {
 
   public TrainingControlResponse pause(String jobId) {
     TrainingJob job = getJob(jobId);
-    synchronized (job) {
-      if ("running".equals(job.status())) {
-        job.setStatus("paused");
-      }
-      return new TrainingControlResponse(jobId, job.status(), "Training paused.");
-    }
+    writeControl(job, "paused");
+    job.setStatus("paused");
+    return new TrainingControlResponse(jobId, job.status(), "Training paused.");
   }
 
   public TrainingControlResponse resume(String jobId) {
     TrainingJob job = getJob(jobId);
-    synchronized (job) {
-      if ("paused".equals(job.status())) {
-        job.setStatus("running");
-      }
-      return new TrainingControlResponse(jobId, job.status(), "Training resumed.");
+    writeControl(job, "running");
+    if ("paused".equals(job.status())) {
+      job.setStatus("running");
     }
+    return new TrainingControlResponse(jobId, job.status(), "Training resumed.");
   }
 
   public TrainingControlResponse stop(String jobId) {
     TrainingJob job = getJob(jobId);
-    synchronized (job) {
-      job.cancelFuture();
-      job.setStatus("stopped");
-      return new TrainingControlResponse(jobId, job.status(), "Training stopped.");
-    }
+    writeControl(job, "stopped");
+    job.destroyProcess();
+    job.setStatus("stopped");
+    return new TrainingControlResponse(jobId, job.status(), "Training stopped.");
   }
 
   public TrainingControlResponse reset(String jobId) {
     TrainingJob job = getJob(jobId);
-    synchronized (job) {
-      job.cancelFuture();
-      job.reset();
-      ScheduledFuture<?> future = executor.scheduleAtFixedRate(() -> tick(jobId), 400, 550, TimeUnit.MILLISECONDS);
-      job.setFuture(future);
-      return new TrainingControlResponse(jobId, job.status(), "Training reset.");
-    }
+    writeControl(job, "stopped");
+    job.destroyProcess();
+    job.reset();
+    startPythonWorker(job);
+    return new TrainingControlResponse(jobId, job.status(), "Training reset.");
   }
 
   public TrainingControlResponse save(String jobId) {
     TrainingJob job = getJob(jobId);
-    return new TrainingControlResponse(jobId, job.status(), "Training saved.");
+    return new TrainingControlResponse(jobId, job.status(), "Training metadata saved. Model checkpoint export is not implemented yet.");
   }
 
   public void addSession(String jobId, WebSocketSession session) {
@@ -173,32 +168,104 @@ public class TrainingJobService {
 
   @PreDestroy
   void shutdown() {
-    jobs.values().forEach(TrainingJob::cancelFuture);
+    jobs.values().forEach(TrainingJob::destroyProcess);
     executor.shutdownNow();
   }
 
-  private void tick(String jobId) {
-    TrainingJob job = jobs.get(jobId);
-    if (job == null) {
+  private void startPythonWorker(TrainingJob job) {
+    try {
+      Files.createDirectories(jobRoot);
+      Files.createDirectories(job.directory());
+      job.writeRequest();
+      writeControl(job, "running");
+      Process process = new ProcessBuilder(
+          pythonExecutable,
+          "-B",
+          workerScript.toString(),
+          "--request",
+          job.requestFile().toString()
+      )
+          .directory(workerScript.getParent().toFile())
+          .redirectErrorStream(true)
+          .start();
+      job.setProcess(process);
+      job.setStatus("running");
+      executor.submit(() -> readWorkerOutput(job));
+      executor.submit(() -> waitForWorkerExit(job));
+    } catch (IOException ex) {
+      job.setStatus("stopped");
+      throw new IllegalArgumentException("Failed to start Python training worker: " + ex.getMessage());
+    }
+  }
+
+  private void readWorkerOutput(TrainingJob job) {
+    Process process = job.process();
+    if (process == null) {
       return;
     }
-    TrainingMetricMessage metric;
-    synchronized (job) {
-      if (!"running".equals(job.status())) {
-        return;
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        handleWorkerLine(job, line.trim());
       }
-      if (job.epoch() >= job.totalEpochs()) {
-        job.setStatus("completed");
-        job.cancelFuture();
-        return;
-      }
-      metric = job.nextMetric();
-      if (job.epoch() >= job.totalEpochs()) {
-        job.setStatus("completed");
-        job.cancelFuture();
+    } catch (IOException ex) {
+      if (!"stopped".equals(job.status())) {
+        job.setStatus("stopped");
       }
     }
-    broadcast(jobId, metric);
+  }
+
+  private void handleWorkerLine(TrainingJob job, String line) {
+    if (line.isBlank()) {
+      return;
+    }
+    JsonNode node;
+    try {
+      node = objectMapper.readTree(line);
+    } catch (JsonProcessingException ex) {
+      return;
+    }
+    String type = node.path("type").asText("");
+    if ("metric".equals(type)) {
+      try {
+        TrainingMetricMessage metric = objectMapper.treeToValue(node, TrainingMetricMessage.class);
+        job.setLatestMetric(metric);
+        if (metric.epoch() >= metric.totalEpochs()) {
+          job.setStatus("completed");
+        } else if (!"paused".equals(job.status())) {
+          job.setStatus("running");
+        }
+        broadcast(job.jobId(), metric);
+      } catch (JsonProcessingException ignored) {
+        // Ignore malformed metric rows from the worker.
+      }
+    } else if ("control".equals(type)) {
+      String status = node.path("status").asText(job.status());
+      job.setStatus(status);
+    } else if ("error".equals(type)) {
+      job.setStatus("stopped");
+      broadcastRaw(job.jobId(), line);
+    }
+  }
+
+  private void waitForWorkerExit(TrainingJob job) {
+    Process process = job.process();
+    if (process == null) {
+      return;
+    }
+    try {
+      int exitCode = process.waitFor();
+      if (exitCode == 0 && "running".equals(job.status())) {
+        job.setStatus("completed");
+      } else if (exitCode != 0 && !"stopped".equals(job.status())) {
+        job.setStatus("stopped");
+      }
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      if (!"stopped".equals(job.status())) {
+        job.setStatus("stopped");
+      }
+    }
   }
 
   private void broadcast(String jobId, TrainingMetricMessage metric) {
@@ -225,6 +292,24 @@ public class TrainingJobService {
     }
   }
 
+  private void broadcastRaw(String jobId, String payload) {
+    CopyOnWriteArraySet<WebSocketSession> jobSessions = sessions.get(jobId);
+    if (jobSessions == null || jobSessions.isEmpty()) {
+      return;
+    }
+    for (WebSocketSession session : jobSessions) {
+      if (!session.isOpen()) {
+        jobSessions.remove(session);
+        continue;
+      }
+      try {
+        session.sendMessage(new TextMessage(payload));
+      } catch (IOException ex) {
+        jobSessions.remove(session);
+      }
+    }
+  }
+
   private void send(WebSocketSession session, TrainingMetricMessage metric) {
     if (!session.isOpen()) {
       return;
@@ -233,6 +318,14 @@ public class TrainingJobService {
       session.sendMessage(new TextMessage(objectMapper.writeValueAsString(metric)));
     } catch (IOException ex) {
       removeSession(session);
+    }
+  }
+
+  private void writeControl(TrainingJob job, String command) {
+    try {
+      Files.writeString(job.controlFile(), objectMapper.writeValueAsString(Map.of("command", command)), StandardCharsets.UTF_8);
+    } catch (IOException ex) {
+      throw new IllegalArgumentException("Failed to update training control file.");
     }
   }
 
@@ -286,174 +379,124 @@ public class TrainingJobService {
     return null;
   }
 
-  private static final class TrainingJob {
+  private final class TrainingJob {
     private final String jobId;
-    private final String datasetId;
-    private String status;
+    private final StartTrainingRequest request;
     private final int totalEpochs;
     private final int totalBatches;
-    private final int batchSize;
-    private final double initialLearningRate;
-    private final double lrDecay;
-    private final String scheduler;
-    private final boolean hasValidation;
-    private Instant startedAt;
-    private int epoch;
-    private int batch;
-    private TrainingMetricMessage latestMetric;
-    private ScheduledFuture<?> future;
+    private final Path directory;
+    private final Path requestFile;
+    private final Path controlFile;
+    private final Instant startedAt = Instant.now();
+    private volatile String status = "running";
+    private volatile TrainingMetricMessage latestMetric;
+    private volatile Process process;
 
-    private TrainingJob(
-        String jobId,
-        String datasetId,
-        String status,
-        int totalEpochs,
-        int totalBatches,
-        int batchSize,
-        double initialLearningRate,
-        double lrDecay,
-        String scheduler,
-        boolean hasValidation,
-        Instant startedAt
-    ) {
+    private TrainingJob(String jobId, StartTrainingRequest request, int totalEpochs, int totalBatches) {
       this.jobId = jobId;
-      this.datasetId = datasetId;
-      this.status = status;
+      this.request = request;
       this.totalEpochs = totalEpochs;
       this.totalBatches = totalBatches;
-      this.batchSize = batchSize;
-      this.initialLearningRate = initialLearningRate;
-      this.lrDecay = lrDecay;
-      this.scheduler = scheduler;
-      this.hasValidation = hasValidation;
-      this.startedAt = startedAt;
+      this.directory = jobRoot.resolve(jobId).normalize();
+      this.requestFile = directory.resolve("request.json");
+      this.controlFile = directory.resolve("control.json");
     }
 
-    synchronized TrainingMetricMessage nextMetric() {
-      epoch += 1;
-      batch = totalBatches;
-      double progress = epoch / (double) totalEpochs;
-      double curve = 1 - Math.exp(-3.2 * progress);
-      double oscillation = Math.sin(epoch * 0.9) * 0.015;
-      double loss = Math.max(0.05, 1.75 * Math.exp(-2.7 * progress) + 0.05 + oscillation);
-      double accuracy = Math.min(0.995, 0.18 + 0.78 * curve - Math.abs(oscillation));
-      Double valLoss = hasValidation ? Math.max(0.06, loss + 0.05 + Math.sin(epoch * 0.55) * 0.018) : null;
-      Double valAccuracy = hasValidation ? Math.max(0, Math.min(0.99, accuracy - 0.035 + Math.cos(epoch * 0.4) * 0.012)) : null;
-      double lr = currentLearningRate(epoch);
-      long elapsed = Duration.between(startedAt, Instant.now()).toSeconds();
-      long eta = epoch == 0 ? 0 : Math.max(0, Math.round(elapsed * (totalEpochs - epoch) / (double) epoch));
-      double gradientNorm = Math.max(0.015, 1.05 * Math.exp(-1.9 * progress) + Math.abs(Math.sin(epoch * 0.7)) * 0.08);
-      String gradientStatus = gradientNorm < 0.04 ? "vanishing" : gradientNorm > 2.5 ? "exploding" : "stable";
-      double weightMean = Math.sin(epoch * 0.35 + batchSize * 0.001) * 0.012;
-      double weightStd = Math.max(0.035, 0.18 - progress * 0.07 + Math.cos(epoch * 0.3) * 0.008);
-      latestMetric = new TrainingMetricMessage(
-          "metric",
-          jobId,
-          epoch,
-          epoch,
-          batch,
-          totalEpochs,
-          totalBatches,
-          round(loss),
-          roundNullable(valLoss),
-          round(accuracy),
-          roundNullable(valAccuracy),
-          lr,
-          elapsed,
-          eta,
-          round(gradientNorm),
-          round(weightMean),
-          round(weightStd),
-          gradientStatus
+    private void writeRequest() throws IOException {
+      Map<String, Object> payload = Map.of(
+          "jobId", jobId,
+          "datasetRoot", datasetRoot.toString(),
+          "controlFile", controlFile.toString(),
+          "datasetId", request.datasetId(),
+          "split", request.split(),
+          "layers", request.layers() == null ? List.of() : request.layers(),
+          "connections", request.connections() == null ? List.of() : request.connections(),
+          "config", request.config()
       );
-      return latestMetric;
+      Files.writeString(requestFile, objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8);
     }
 
-    synchronized TrainingStatusResponse toStatus() {
+    private TrainingStatusResponse toStatus() {
       TrainingMetricMessage metric = latestMetric;
-      long elapsed = Duration.between(startedAt, Instant.now()).toSeconds();
-      long eta = metric == null ? 0 : metric.etaSeconds();
       return new TrainingStatusResponse(
           jobId,
           status,
-          epoch,
-          batch,
+          metric == null ? 0 : metric.epoch(),
+          metric == null ? 0 : metric.batch(),
           totalEpochs,
-          totalBatches,
+          metric == null ? totalBatches : metric.totalBatches(),
           metric == null ? 1.7 : metric.loss(),
-          metric == null ? (hasValidation ? 1.78 : null) : metric.valLoss(),
+          metric == null ? 1.78 : metric.valLoss(),
           metric == null ? 0.2 : metric.accuracy(),
-          metric == null ? (hasValidation ? 0.18 : null) : metric.valAccuracy(),
-          elapsed,
-          eta
+          metric == null ? 0.18 : metric.valAccuracy(),
+          metric == null ? Math.max(0, java.time.Duration.between(startedAt, Instant.now()).toSeconds()) : metric.elapsedSeconds(),
+          metric == null ? 0 : metric.etaSeconds()
       );
     }
 
-    synchronized void reset() {
-      status = "running";
-      startedAt = Instant.now();
-      epoch = 0;
-      batch = 0;
+    private void reset() {
       latestMetric = null;
+      status = "running";
     }
 
-    synchronized void setFuture(ScheduledFuture<?> future) {
-      this.future = future;
-    }
-
-    synchronized void cancelFuture() {
-      if (future != null) {
-        future.cancel(false);
-        future = null;
+    private void destroyProcess() {
+      Process current = process;
+      if (current != null && current.isAlive()) {
+        current.destroy();
+        try {
+          if (!current.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
+            current.destroyForcibly();
+          }
+        } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+          current.destroyForcibly();
+        }
       }
+      process = null;
     }
 
-    synchronized String status() {
+    private String jobId() {
+      return jobId;
+    }
+
+    private String status() {
       return status;
     }
 
-    synchronized void setStatus(String status) {
+    private void setStatus(String status) {
       this.status = status;
     }
 
-    int totalEpochs() {
-      return totalEpochs;
+    private int epoch() {
+      return latestMetric == null ? 0 : latestMetric.epoch();
     }
 
-    int totalBatches() {
-      return totalBatches;
-    }
-
-    synchronized int epoch() {
-      return epoch;
-    }
-
-    synchronized TrainingMetricMessage latestMetric() {
+    private TrainingMetricMessage latestMetric() {
       return latestMetric;
     }
 
-    @SuppressWarnings("unused")
-    String datasetId() {
-      return datasetId;
+    private void setLatestMetric(TrainingMetricMessage latestMetric) {
+      this.latestMetric = latestMetric;
     }
 
-    private double currentLearningRate(int currentEpoch) {
-      if ("step".equalsIgnoreCase(scheduler)) {
-        int steps = Math.max(0, currentEpoch / 5);
-        return round(initialLearningRate * Math.pow(lrDecay, steps));
-      }
-      if ("exp".equalsIgnoreCase(scheduler) || "exponential".equalsIgnoreCase(scheduler)) {
-        return round(initialLearningRate * Math.pow(lrDecay, Math.max(0, currentEpoch - 1)));
-      }
-      return round(initialLearningRate);
+    private Path directory() {
+      return directory;
     }
 
-    private double round(double value) {
-      return Math.round(value * 10000.0) / 10000.0;
+    private Path requestFile() {
+      return requestFile;
     }
 
-    private Double roundNullable(Double value) {
-      return value == null ? null : round(value);
+    private Path controlFile() {
+      return controlFile;
+    }
+
+    private Process process() {
+      return process;
+    }
+
+    private void setProcess(Process process) {
+      this.process = process;
     }
   }
 }

@@ -46,10 +46,12 @@ backend/spring/.m2/
 backend/spring/data/
 backend/spring/datasets/
 backend/spring/logs/
+backend/spring/training-jobs/
 backend/spring/uploads/
 
 # Python forward backend local state
 backend/python-forward/.venv/
+backend/python-training/.venv/
 
 # System files
 .DS_Store

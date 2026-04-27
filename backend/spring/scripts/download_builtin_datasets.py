@@ -49,6 +49,7 @@ def main() -> int:
 
     download_mnist()
     download_cifar10()
+    create_cifar10_5000_subset()
     download_iris()
     generate_points()
 
@@ -123,6 +124,41 @@ def download_cifar10() -> None:
         "layout": "images/{label}/*.png",
     })
     print("CIFAR-10 full dataset ready.")
+
+
+def create_cifar10_5000_subset() -> None:
+    source = DATA_ROOT / "cifar10-500" / "images"
+    target = DATA_ROOT / "cifar10-5000"
+    target_images = target / "images"
+    labels = ["airplane", "car", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+    if count_files(target_images, "*.png") >= 5000:
+        print("CIFAR-10 5000 subset already exists; skipping.")
+        return
+    if not source.exists():
+        raise FileNotFoundError("Full CIFAR-10 images are required before creating cifar10-5000.")
+
+    reset_dir(target_images)
+    copied = 0
+    for label in labels:
+        source_label_dir = source / label
+        target_label_dir = target_images / label
+        target_label_dir.mkdir(parents=True, exist_ok=True)
+        images = sorted(source_label_dir.glob("*.png"))[:500]
+        if len(images) < 500:
+            raise ValueError(f"Not enough CIFAR-10 images for class {label}: {len(images)}")
+        for index, image in enumerate(images):
+            shutil.copy2(image, target_label_dir / f"cifar10_5000_{label}_{index:04d}.png")
+            copied += 1
+
+    write_metadata(target, {
+        "id": "cifar10-5000",
+        "sourceDataset": "cifar10-500",
+        "sampleCount": copied,
+        "labels": labels,
+        "layout": "images/{label}/*.png",
+        "subsetRule": "first 500 images per class from full CIFAR-10 materialization",
+    })
+    print("CIFAR-10 5000 subset ready.")
 
 
 def download_iris() -> None:
