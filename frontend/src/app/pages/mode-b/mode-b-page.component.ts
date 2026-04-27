@@ -11,6 +11,7 @@ import { AuthService } from '../../services/auth.service';
 import { ForwardRecordService } from '../../services/forward-record.service';
 import { ForwardBackendService } from '../../services/forward-backend.service';
 import { TrainingLog, TrainingRuntimeService } from '../../services/training-runtime.service';
+import { TrainingDatasetApiService } from '../../services/training-dataset-api.service';
 import { SimEngine } from '../../sim-engine';
 import {
   AppMode, Connection, DataSample, DatasetImportDraft, ExperimentResult,
@@ -140,6 +141,8 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   trainingWeightStd = 0.16;
   trainingElapsedSeconds = 0;
   trainingEtaSeconds = 0;
+  trainingCurrentBatchValue = 0;
+  trainingTotalBatchesValue = 0;
   trainingHistory: MetricPoint[] = [];
   trainingLogs: TrainingLog[] = [];
 
@@ -159,7 +162,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     { id: 'regression',      name: '回归任务（占位）', type: 'regression',   dataset: 'Custom',   description: '回归任务（待后端支持）' }
   ];
 
-  readonly builtinTrainingDatasets: TrainingDatasetOption[] = [
+  builtinTrainingDatasets: TrainingDatasetOption[] = [
     {
       id: 'mnist-1000',
       name: 'MNIST 1000 张',
@@ -213,6 +216,8 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   selectedTrainingDatasetId = 'mnist-1000';
   trainingDatasetDetail: TrainingDatasetDetail | null = null;
   trainingDatasetError = '';
+  trainingDatasetLoading = false;
+  trainingBackendNotice = '正在连接 Spring Boot 后端...';
   datasetImportDraft: DatasetImportDraft = {
     status: 'idle',
     message: '尚未导入自定义数据。',
@@ -235,6 +240,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private trainingSvc: TrainingRuntimeService,
+    private trainingDatasetApi: TrainingDatasetApiService,
     private forwardBackend: ForwardBackendService,
     private authSvc: AuthService,
     private forwardRecordSvc: ForwardRecordService
@@ -249,7 +255,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       }
     }));
     this.loadLocalImageSamples();
-    this.selectTrainingDataset(this.selectedTrainingDatasetId);
+    void this.loadTrainingDatasets();
     this.subs.add(this.trainingSvc.state$.subscribe(s => {
       this.trainingStatus  = s.status;
       this.trainingEpoch   = s.currentEpoch;
@@ -263,6 +269,8 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       this.trainingWeightStd = s.latestWeightStd;
       this.trainingElapsedSeconds = s.elapsedSeconds;
       this.trainingEtaSeconds = s.etaSeconds;
+      this.trainingCurrentBatchValue = s.currentBatch ?? 0;
+      this.trainingTotalBatchesValue = s.totalBatches ?? 0;
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
@@ -281,7 +289,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       window.clearTimeout(this.forwardDebounceTimer);
       this.forwardDebounceTimer = null;
     }
-    this.trainingSvc.pause();
+    void this.trainingSvc.pause();
   }
 
   // ── Getters ──────────────────────────────────────────
@@ -572,12 +580,14 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get lrPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'lr'); }
   get gradientPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'gradientNorm'); }
   get trainingTotalBatches(): number {
+    if (this.trainingTotalBatchesValue > 0) return this.trainingTotalBatchesValue;
     const ds = this.trainingDatasetDetail;
     if (!ds) return 0;
     const trainSamples = Math.max(1, Math.round(ds.sampleCount * ds.trainRatio));
     return Math.max(1, Math.ceil(trainSamples / Math.max(1, this.trainingConfig.batchSize)));
   }
   get trainingCurrentBatch(): number {
+    if (this.trainingCurrentBatchValue > 0) return this.trainingCurrentBatchValue;
     if (this.trainingStatus === 'idle' || this.trainingEpoch === 0) return 0;
     return this.trainingTotalBatches;
   }
@@ -822,7 +832,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   // ── Mode ─────────────────────────────────────────────
   setMode(m: AppMode): void {
     this.mode = m;
-    if (m === 'forward') { this.trainingSvc.pause(); this.runForward(); }
+    if (m === 'forward') { void this.trainingSvc.pause(); this.runForward(); }
   }
 
   // ── Template ─────────────────────────────────────────
@@ -1200,7 +1210,23 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   // ── Training ──────────────────────────────────────────
-  selectTrainingDataset(id: string): void {
+  async loadTrainingDatasets(): Promise<void> {
+    this.trainingDatasetLoading = true;
+    this.trainingBackendNotice = '正在从 Spring Boot 后端加载内置数据集...';
+    try {
+      this.builtinTrainingDatasets = await this.trainingDatasetApi.listBuiltinDatasets();
+      this.trainingBackendNotice = '已连接 Spring Boot 后端。';
+      await this.selectTrainingDataset(this.selectedTrainingDatasetId);
+    } catch (err) {
+      this.trainingBackendNotice = '后端数据集接口暂不可用，已使用前端兜底数据。';
+      this.trainingDatasetError = err instanceof Error ? err.message : '加载后端数据集失败。';
+      this.selectTrainingDatasetLocal(this.selectedTrainingDatasetId);
+    } finally {
+      this.trainingDatasetLoading = false;
+    }
+  }
+
+  async selectTrainingDataset(id: string): Promise<void> {
     if (id === 'custom-upload') {
       this.useImportedTrainingDataset();
       return;
@@ -1208,8 +1234,25 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     const option = this.builtinTrainingDatasets.find(d => d.id === id);
     if (!option) return;
     this.selectedTrainingDatasetId = option.id;
+    this.trainingDatasetLoading = true;
+    try {
+      this.trainingDatasetDetail = await this.trainingDatasetApi.getDatasetDetail(option.id);
+      this.trainingDatasetError = '';
+      this.trainingBackendNotice = '数据集详情来自 Spring Boot 后端。';
+    } catch (err) {
+      this.trainingDatasetDetail = this.buildBuiltinTrainingDatasetDetail(option);
+      this.trainingDatasetError = err instanceof Error ? err.message : '后端详情加载失败，已使用前端兜底数据。';
+      this.trainingBackendNotice = '后端详情接口暂不可用，当前详情为前端兜底。';
+    } finally {
+      this.trainingDatasetLoading = false;
+    }
+  }
+
+  private selectTrainingDatasetLocal(id: string): void {
+    const option = this.builtinTrainingDatasets.find(d => d.id === id);
+    if (!option) return;
+    this.selectedTrainingDatasetId = option.id;
     this.trainingDatasetDetail = this.buildBuiltinTrainingDatasetDetail(option);
-    this.trainingDatasetError = '';
   }
 
   useImportedTrainingDataset(): void {
@@ -1228,7 +1271,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       detail: null
     };
     if (this.selectedTrainingDatasetId === 'custom-upload') {
-      this.selectTrainingDataset('mnist-1000');
+      void this.selectTrainingDataset('mnist-1000');
     }
   }
 
@@ -1258,17 +1301,12 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       if (!csvFiles.length && !imageFiles.length) {
         throw new Error('仅支持 CSV 文件或少量图片文件。');
       }
-      if (imageFiles.length > 24) {
-        throw new Error('图片导入演示最多选择 24 张；真实批量导入请走后端接口。');
-      }
-
-      const detail = csvFiles.length
-        ? await this.buildUploadedCsvDataset(csvFiles[0])
-        : await this.buildUploadedImageDataset(imageFiles);
+      const imported = await this.trainingDatasetApi.importDataset(files);
+      const detail = imported.detail;
 
       this.datasetImportDraft = {
         status: detail.hasLabels ? 'ready' : 'error',
-        message: detail.hasLabels ? '自定义数据已解析，可用于训练。' : '已解析文件，但缺少可训练标签。',
+        message: detail.hasLabels ? '后端已导入自定义数据，可用于训练。' : '后端已解析文件，但缺少可训练标签。',
         files,
         detectedKind: detail.kind,
         detail
@@ -1288,7 +1326,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  startTraining(): void {
+  async startTraining(): Promise<void> {
     if (!this.trainingDatasetDetail) {
       this.trainingDatasetError = '请先选择或导入一个训练数据集。';
       return;
@@ -1308,17 +1346,32 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       return;
     }
     this.trainingDatasetError = '';
-    this.trainingSvc.configure(this.trainingConfig, this.layers);
-    this.trainingSvc.start();
+    try {
+      await this.trainingSvc.startBackend({
+        datasetId: this.trainingDatasetDetail.id,
+        split: {
+          train: this.trainingDatasetDetail.trainRatio,
+          val: this.trainingDatasetDetail.valRatio,
+          test: this.trainingDatasetDetail.testRatio
+        },
+        layers: this.layers,
+        connections: this.connections,
+        config: this.trainingConfig
+      });
+      this.trainingBackendNotice = '训练任务由 Spring Boot 后端运行，指标通过 WebSocket 推送。';
+    } catch (err) {
+      this.trainingDatasetError = err instanceof Error ? err.message : '启动后端训练失败。';
+    }
   }
-  pauseTraining(): void  { this.trainingSvc.pause(); }
-  stopTraining(): void   { this.trainingSvc.stop(); }
-  resetTraining(): void  { this.trainingSvc.reset(); }
+  pauseTraining(): void  { void this.trainingSvc.pause(); }
+  resumeTraining(): void { void this.trainingSvc.resume(); }
+  stopTraining(): void   { void this.trainingSvc.stop(); }
+  resetTraining(): void  { void this.trainingSvc.reset(); }
   selectTask(id: string): void {
     this.selectedTaskId = id;
     const task = this.presetTasks.find(t => t.id === id);
-    if (task?.dataset === 'MNIST') this.selectTrainingDataset('mnist-1000');
-    if (task?.dataset === 'CIFAR-10') this.selectTrainingDataset('cifar10-500');
+    if (task?.dataset === 'MNIST') void this.selectTrainingDataset('mnist-1000');
+    if (task?.dataset === 'CIFAR-10') void this.selectTrainingDataset('cifar10-500');
   }
 
   runExperiments(): void {

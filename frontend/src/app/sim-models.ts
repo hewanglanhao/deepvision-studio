@@ -240,7 +240,7 @@ export interface ForwardInputAsset {
 }
 
 export interface TrainingState {
-  status: 'idle' | 'running' | 'paused' | 'stopped';
+  status: 'idle' | 'running' | 'paused' | 'stopped' | 'completed';
   currentEpoch: number;
   currentLr: number;
   latestLoss: number;
@@ -252,6 +252,8 @@ export interface TrainingState {
   latestWeightStd: number;
   elapsedSeconds: number;
   etaSeconds: number;
+  currentBatch?: number;
+  totalBatches?: number;
 }
 
 export interface ForwardModeState {

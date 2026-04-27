@@ -548,8 +548,11 @@
       <aside class="side-panel">
         <div class="pane">
           <div class="pane-title">训练数据</div>
+          <div [class]="trainingDatasetError && trainingBackendNotice.includes('暂不可用') ? 'warn-box' : 'success-box'" style="margin-bottom:8px">
+            {{ trainingBackendNotice }}
+          </div>
           <label>内置数据集
-            <select [ngModel]="selectedTrainingDatasetId" (ngModelChange)="selectTrainingDataset($event)">
+            <select [ngModel]="selectedTrainingDatasetId" (ngModelChange)="selectTrainingDataset($event)" [disabled]="trainingDatasetLoading">
               @for (ds of builtinTrainingDatasets; track ds.id) {
                 <option [value]="ds.id">{{ ds.name }}</option>
               }
@@ -565,9 +568,9 @@
             }
           </div>
           <label style="margin-top:8px">自定义导入
-            <input type="file" multiple accept=".csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" />
+            <input type="file" multiple accept=".csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" [disabled]="trainingDatasetLoading" />
           </label>
-          <div class="muted">支持 1 个 CSV，或少量按“类别_序号.jpg”命名的图片文件。</div>
+          <div class="muted">通过 Spring Boot 导入：支持 1 个 CSV，或按“类别_序号.jpg”命名的图片文件。</div>
           @if (datasetImportDraft.status !== 'idle') {
             <div [class]="datasetImportDraft.status === 'ready' ? 'success-box' : 'warn-box'" style="margin-top:6px">
               {{ datasetImportDraft.message }}
@@ -621,18 +624,22 @@
 
       <main class="training-center">
         <div class="train-control-bar">
-          <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : '已停止' }}</div>
+          <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : trainingStatus === 'completed' ? '已完成' : '已停止' }}</div>
           <span class="muted">轮次 {{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</span>
           <span class="muted">LR: {{ trainingLr | number:'1.5-5' }}</span>
           @if (!trainingDatasetReady) { <span class="warn-inline">需要带标签的数据集</span> }
           @else if (datasetSplitError) { <span class="warn-inline">划分比例无效</span> }
           <div style="flex:1"></div>
-          <button class="btn-primary" (click)="startTraining()" [disabled]="trainingStatus==='running' || !trainingDatasetReady || !!datasetSplitError">▶ 开始</button>
-          <button (click)="pauseTraining()">⏸ 暂停</button>
+          <button class="btn-primary" (click)="startTraining()" [disabled]="trainingStatus==='running' || trainingDatasetLoading || !trainingDatasetReady || !!datasetSplitError">▶ 开始</button>
+          @if (trainingStatus === 'paused') {
+            <button (click)="resumeTraining()">▶ 继续</button>
+          } @else {
+            <button (click)="pauseTraining()" [disabled]="trainingStatus!=='running'">⏸ 暂停</button>
+          }
           <button (click)="stopTraining()">⏹ 停止</button>
           <button class="btn-ghost" (click)="resetTraining()">↺ 重置</button>
         </div>
-        <div class="mock-banner">⚠ 当前为前端演示模式（Mock Training）— 训练曲线由数学公式模拟，非真实训练。</div>
+        <div class="mock-banner">Spring Boot 后端模式：训练任务由后端创建，指标通过 WebSocket 实时推送。当前后端训练实现为教学指标模拟，不执行真实深度学习计算。</div>
 
         @if (trainingDatasetDetail; as ds) {
           <div class="dataset-board">
@@ -723,16 +730,16 @@
           <div class="chart-wrap"><div class="chart-label" [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">梯度大小变化</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="gradientPolyline" fill="none" stroke="#059669" stroke-width="2"/></svg><div class="chart-legend"><span>Norm: {{ trainingGradientNorm | number:'1.4-4' }}</span><span [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">{{ gradientAlert }}</span></div></div>
           <div class="chart-wrap parameter-panel"><div class="chart-label">权重分布直方图</div><div class="weight-histogram">@for (bin of weightHistogramBins; track bin.label) { <div class="weight-bin" [style.height.%]="(bin.value / maxWeightBin) * 100" [title]="bin.label"></div> }</div><div class="chart-legend"><span>Mean {{ trainingWeightMean | number:'1.3-3' }}</span><span>Std {{ trainingWeightStd | number:'1.3-3' }}</span></div></div>
           <div class="chart-wrap parameter-panel"><div class="chart-label">当前训练状态</div><div class="runtime-list"><div><span>Epoch</span><strong>{{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</strong></div><div><span>Batch</span><strong>{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</strong></div><div><span>Loss</span><strong>{{ trainingLoss | number:'1.4-4' }}</strong></div><div><span>Accuracy</span><strong>{{ (trainingAcc*100) | number:'1.1-1' }}%</strong></div><div><span>Elapsed</span><strong>{{ formatDuration(trainingElapsedSeconds) }}</strong></div><div><span>ETA</span><strong>{{ formatDuration(trainingEtaSeconds) }}</strong></div></div></div>
-          <div style="grid-column:1/-1"><div class="section-title" style="margin-bottom:6px">实验对比 <span class="muted">（Mock）</span></div>@for (exp of experimentResults; track exp.name) { <div class="exp-row"><span class="exp-name">{{ exp.name }}</span><div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="exp.finalAccuracy*100"></div></div><span class="exp-acc">{{ (exp.finalAccuracy*100).toFixed(1) }}%</span></div> }<button style="margin-top:5px;font-size:12px" (click)="runExperiments()">运行实验对比</button></div>
+          <div style="grid-column:1/-1"><div class="section-title" style="margin-bottom:6px">实验对比 <span class="muted">（前端辅助模拟）</span></div>@for (exp of experimentResults; track exp.name) { <div class="exp-row"><span class="exp-name">{{ exp.name }}</span><div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="exp.finalAccuracy*100"></div></div><span class="exp-acc">{{ (exp.finalAccuracy*100).toFixed(1) }}%</span></div> }<button style="margin-top:5px;font-size:12px" (click)="runExperiments()">运行实验对比</button></div>
         </div>
       </main>
 
       <aside class="side-panel right">
         <div class="pane" style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0">
-          <div class="pane-title">训练日志 <span class="muted">[Mock]</span></div>
+          <div class="pane-title">训练日志 <span class="muted">[Backend]</span></div>
           <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
         </div>
-        <div class="pane"><div class="pane-title">反向传播说明 <span class="muted">（教学占位）</span></div><div class="warn-box" style="font-size:12px;line-height:1.6">反向传播可视化将在接入后端后实现。<br>当前为前端 Mock 训练模式。</div></div>
+        <div class="pane"><div class="pane-title">反向传播说明 <span class="muted">（教学占位）</span></div><div class="warn-box" style="font-size:12px;line-height:1.6">当前后端已提供训练指标、梯度范数和权重分布近似数据。<br>逐层反向传播计算图、梯度热力图和真实权重更新尚未实现。</div></div>
       </aside>
     </div>
   }

@@ -31,7 +31,7 @@ export class ApiClientService {
       let message = `HTTP ${response.status}`;
       try {
         const body = await response.json();
-        message = body?.error ?? message;
+        message = body?.message ?? body?.error ?? message;
       } catch {
         message = await response.text() || message;
       }
@@ -44,4 +44,3 @@ export class ApiClientService {
     return response.json() as Promise<T>;
   }
 }
-

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { TrainingDatasetDetail, TrainingDatasetOption } from '../sim-models';
+import { ApiClientService } from './api-client.service';
 
 export interface DatasetImportResponse {
   datasetId: string;
@@ -8,15 +9,17 @@ export interface DatasetImportResponse {
 
 @Injectable({ providedIn: 'root' })
 export class TrainingDatasetApiService {
-  private readonly baseUrl = 'http://127.0.0.1:5000/api/training/datasets';
+  private readonly basePath = '/api/training/datasets';
+
+  constructor(private api: ApiClientService) {}
 
   async listBuiltinDatasets(signal?: AbortSignal): Promise<TrainingDatasetOption[]> {
-    const response = await fetch(`${this.baseUrl}/builtin`, { signal });
+    const response = await fetch(`${this.api.baseUrl}${this.basePath}/builtin`, { signal });
     return this.readJson<TrainingDatasetOption[]>(response);
   }
 
   async getDatasetDetail(datasetId: string, signal?: AbortSignal): Promise<TrainingDatasetDetail> {
-    const response = await fetch(`${this.baseUrl}/${encodeURIComponent(datasetId)}`, { signal });
+    const response = await fetch(`${this.api.baseUrl}${this.basePath}/${encodeURIComponent(datasetId)}`, { signal });
     return this.readJson<TrainingDatasetDetail>(response);
   }
 
@@ -26,7 +29,7 @@ export class TrainingDatasetApiService {
       form.append('files', file, file.name);
     }
 
-    const response = await fetch(`${this.baseUrl}/imports`, {
+    const response = await fetch(`${this.api.baseUrl}${this.basePath}/imports`, {
       method: 'POST',
       body: form,
       signal

@@ -24,6 +24,8 @@ deepvision:
     expiration-minutes: ${DEEPVISION_JWT_EXPIRATION_MINUTES:10080}
   uploads:
     root: ${DEEPVISION_UPLOAD_ROOT:./uploads}
+  datasets:
+    root: ${DEEPVISION_DATASET_ROOT:./datasets}
   forward:
     base-url: ${DEEPVISION_FORWARD_BASE_URL:http://127.0.0.1:5000}
     connect-timeout-seconds: ${DEEPVISION_FORWARD_CONNECT_TIMEOUT_SECONDS:5}
