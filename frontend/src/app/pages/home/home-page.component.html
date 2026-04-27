@@ -1,0 +1,49 @@
+<div class="portal-shell">
+  <header class="portal-topbar">
+    <a class="brand" routerLink="/">
+      <span class="brand-logo">D</span>
+      <span>
+        <strong>DeepVision Studio</strong>
+        <small>深度学习可视化仿真平台</small>
+      </span>
+    </a>
+    <nav>
+      <a routerLink="/mode-a">模式 A</a>
+      <a routerLink="/mode-b">模式 B</a>
+      <a routerLink="/mode-c">模式 C</a>
+      <a routerLink="/mode-d">模式 D</a>
+      <a routerLink="/login">登录</a>
+      <a class="primary-link" routerLink="/register">注册</a>
+    </nav>
+  </header>
+
+  <main class="portal-main">
+    <section class="hero-band">
+      <div class="hero-copy">
+        <p class="eyebrow">Teaching Platform</p>
+        <h1>深度学习演示平台</h1>
+        <p>
+          统一入口管理 A/B/C/D 端，前端按页面、功能和服务分层组织，便于后续继续扩展。
+        </p>
+      </div>
+      <div class="hero-panel" aria-label="平台状态">
+        <div><span>当前模块</span><strong>2</strong></div>
+        <div><span>扩展槽位</span><strong>2</strong></div>
+        <div><span>路由模式</span><strong>已启用</strong></div>
+      </div>
+    </section>
+
+    <section class="entry-grid" aria-label="功能入口">
+      @for (entry of entries; track entry.title) {
+        <a class="entry-card" [routerLink]="entry.route" [class.disabled]="entry.status === '规划中'">
+          <div class="entry-head">
+            <span>{{ entry.title }}</span>
+            <em>{{ entry.status }}</em>
+          </div>
+          <h2>{{ entry.label }}</h2>
+          <p>{{ entry.description }}</p>
+        </a>
+      }
+    </section>
+  </main>
+</div>

@@ -1,0 +1,886 @@
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand-wrap" routerLink="/">
+      <div class="brand-logo">D</div>
+      <div>
+        <div class="brand-name">DeepVision Studio</div>
+        <div class="brand-sub">深度学习可视化仿真平台</div>
+      </div>
+    </a>
+    <!-- 拨动开关式模式切换 -->
+    <div class="mode-toggle">
+      <a class="mode-tab" routerLink="/mode-a" routerLinkActive="active">模式 A · 前向传播</a>
+      <a class="mode-tab" routerLink="/mode-b" routerLinkActive="active">模式 B · 训练工作台</a>
+    </div>
+    <div class="topbar-right">
+      @if (mode === 'forward') {
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:0">
+          <input type="checkbox" [(ngModel)]="autoForwardCompute" (ngModelChange)="onAutoForwardComputeToggle()" />
+          自动计算
+        </label>
+        <button class="btn-sm" (click)="triggerForwardCompute()" [disabled]="forwardBusy">开始计算</button>
+        <button class="btn-sm btn-primary" (click)="openSaveRecordModal()" [disabled]="!canSaveForwardRecord">保存记录</button>
+        <button class="btn-sm" (click)="toggleRecordDrawer()">历史记录</button>
+      }
+      <span class="meta-pill">{{ layerCount }} 层</span>
+      <span class="meta-pill">{{ parameterCount | number }} 参数</span>
+      @if (authUser) {
+        <span class="meta-pill">{{ authUser.displayName }}</span>
+        <button class="btn-ghost btn-sm" (click)="logout()">退出</button>
+      } @else {
+        <a class="btn-link btn-sm" routerLink="/login">登录</a>
+        <a class="btn-link btn-primary btn-sm" routerLink="/register">注册</a>
+      }
+      <button class="icon-btn" (click)="showHelp=true">?</button>
+    </div>
+  </header>
+
+  @if (recordError || recordSuccess) {
+    <div [class]="recordError ? 'global-error-banner' : 'global-success-banner'">
+      <span>{{ recordError || recordSuccess }}</span>
+    </div>
+  }
+
+  @if (mode === 'forward' && globalErrorMessages.length) {
+    <div class="global-error-banner">
+      <strong>配置错误：</strong>
+      @for (msg of globalErrorMessages; track $index) {
+        <span class="err-item">{{ msg }}</span>
+      }
+    </div>
+  }
+
+  @if (mode === 'forward' && (forwardBusy || forwardBackendError || pendingForwardChanges)) {
+    <div class="global-error-banner" style="background:#eff6ff;border-bottom-color:#bfdbfe;color:#1d4ed8">
+      @if (forwardBusy) {
+        <span>后端计算中...</span>
+      }
+      @if (forwardBackendError) {
+        <span>{{ forwardBackendError }}</span>
+      }
+      @if (pendingForwardChanges && !forwardBusy) {
+        <span>参数已变更，等待开始计算。</span>
+      }
+      @if (forwardStatusMessage) {
+        <span>{{ forwardStatusMessage }}</span>
+      }
+    </div>
+  }
+
+  @if (mode === 'forward') {
+    <div class="workspace mode-workspace">
+      <!-- 左侧面板 -->
+      <aside class="side-panel">
+        <div class="pane">
+          <div class="pane-title">输入来源</div>
+          <div class="dataset-collection-list">
+            @for (dataset of localDatasetNames; track dataset) {
+              <button class="dataset-collection-card" [class.active]="selectedDataset===dataset" (click)="selectDataset(dataset)">
+                <span class="dataset-collection-name">{{ dataset }}</span>
+                <span class="dataset-collection-meta">{{ localDatasetSampleCount(dataset) }} samples</span>
+              </button>
+            }
+          </div>
+          <div style="margin-top:8px;display:grid;gap:5px">
+            <button (click)="toggleSamplePicker()" [disabled]="!activeLocalImageSamples.length">浏览样本</button>
+            @if (selectedLocalImageSample; as sample) {
+              <div class="info-chip">当前样本：<strong style="color:var(--accent)">{{ sample.name }}</strong> · {{ sample.label }}</div>
+            }
+            @if (localImageError) {
+              <div class="error-box" style="margin-top:6px">{{ localImageError }}</div>
+            }
+          </div>
+        </div>
+
+        @if (currentInputAsset) {
+          <div class="pane">
+            <div class="pane-title">输入信息</div>
+            <div class="info-grid">
+              <div class="info-row"><span class="info-k">宽度</span><span class="info-v">{{ currentInputAsset.originalWidth }}px</span></div>
+              <div class="info-row"><span class="info-k">高度</span><span class="info-v">{{ currentInputAsset.originalHeight }}px</span></div>
+              <div class="info-row"><span class="info-k">通道</span><span class="info-v">{{ currentInputAsset.originalChannels }}</span></div>
+              <div class="info-row"><span class="info-k">颜色</span><span class="info-v">{{ currentInputAsset.originalColorMode }}</span></div>
+              <div class="info-row"><span class="info-k">实际计算尺寸</span><span class="info-v">{{ currentInputAsset.prepared.tensor.shape[1] }} × {{ currentInputAsset.prepared.tensor.shape[0] }} × {{ currentInputAsset.prepared.tensor.shape[2] }}</span></div>
+            </div>
+            @if (originalInputImageUrl) {
+              <div style="margin-top:8px">
+                <div class="section-title" style="margin-bottom:3px">原始图像预览 · {{ currentInputAsset.originalWidth }}×{{ currentInputAsset.originalHeight }}</div>
+                <img class="input-image-preview zoomable-image" [src]="originalInputImageUrl" alt="原始输入图像" (click)="openImageViewer('原始输入图像', originalInputImageUrl, currentInputAsset.originalWidth + '×' + currentInputAsset.originalHeight)" />
+              </div>
+            }
+            @if (preparedInputImageUrl) {
+              <div style="margin-top:8px">
+                <div class="section-title" style="margin-bottom:3px">预处理后预览 · {{ currentInputAsset.prepared.tensor.shape[1] }}×{{ currentInputAsset.prepared.tensor.shape[0] }}</div>
+                <img class="input-image-preview zoomable-image" [src]="preparedInputImageUrl" alt="预处理后输入图像" (click)="openImageViewer('预处理后输入图像', preparedInputImageUrl, currentInputAsset.prepared.tensor.shape[1] + '×' + currentInputAsset.prepared.tensor.shape[0] + '×' + currentInputAsset.prepared.tensor.shape[2])" />
+                @if (currentInputAsset.prepared.notes.length) {
+                  <div class="muted" style="margin-top:3px">{{ currentInputAsset.prepared.notes.join(' · ') }}</div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <div class="pane">
+          <div class="pane-title">网络模板</div>
+          <label>选择模板
+            <select [(ngModel)]="selectedTemplateId" (change)="applyTemplate()">
+              @for (t of modelTemplates; track t.id) { <option [value]="t.id">{{ t.name }}</option> }
+            </select>
+          </label>
+          @if (selectedTemplate) { <div class="muted">{{ selectedTemplate.description }}</div> }
+        </div>
+      </aside>
+
+      <!-- 中间：网络主画布 -->
+      <main class="center-panel">
+        <div class="canvas-container">
+          <div class="canvas-header">
+            <span class="canvas-title">网络结构</span>
+            <div class="palette">
+              @for (type of layerPalette; track type) {
+                <button class="palette-chip"
+                  draggable="true"
+                  (dragstart)="networkGraph.setDragNew(type)"
+                  (click)="addLayer(type)">+ {{ layerTypeLabel(type) }}</button>
+              }
+            </div>
+            <div class="btn-row" style="margin-left:auto">
+              <button class="btn-danger btn-sm" (click)="removeSelectedLayer()">删除选中</button>
+            </div>
+          </div>
+
+          <app-network-overview #networkGraph
+            [layers]="layers"
+            [selectedLayerId]="selectedLayerId"
+            [shapeHints]="forwardLayerShapeMap"
+            [errorLayerIds]="errorLayerIdList"
+            (layerSelected)="onLayerPicked($event)"
+            (layersReordered)="onLayersReordered($event)"
+            (newLayerDropped)="onNewLayerDropped($event)"
+          />
+
+          @if (forwardResult?.shapePath?.length) {
+            <div class="shape-trail-bar">
+              @for (step of forwardResult!.shapePath; track $index) {
+                <span class="shape-tag">{{ step }}</span>
+                @if ($index < forwardResult!.shapePath.length - 1) {
+                  <span class="shape-arrow">→</span>
+                }
+              }
+            </div>
+          }
+        </div>
+
+        <!-- 层参数编辑器 -->
+        @if (selectedLayer; as layer) {
+          <div class="layer-editor-bar">
+            <div class="editor-header">
+              <span class="layer-type-badge">{{ layerTypeLabel(layer.type) }}</span>
+              <span class="editor-title">{{ layer.name }}</span>
+              @if (hasLayerError(layer.id)) {
+                <span class="error-box" style="padding:2px 8px;font-size:11px;margin-left:auto">
+                  ⚠ {{ layerErrors[layer.id]?.[0] }}
+                </span>
+              }
+            </div>
+            <div class="editor-fields">
+              <label>名称 <input [(ngModel)]="layer.name" (ngModelChange)="onLayerConfigChange()" /></label>
+
+              @if (layer.type === 'input') {
+                <div class="row-3">
+                  @if (!uploadedImageUrl) {
+                    <label>缩放模式
+                      <select [(ngModel)]="layer.params.preprocessing.resizeMode" (ngModelChange)="onLayerConfigChange()">
+                        <option value="none">不缩放</option><option value="fit">自适应</option>
+                      </select>
+                    </label>
+                  } @else {
+                    <label>缩放模式
+                      <input value="上传图片时由“上传计算档位”决定" disabled />
+                    </label>
+                  }
+                  <label>颜色模式
+                    <select [(ngModel)]="layer.params.preprocessing.colorMode" (ngModelChange)="onLayerConfigChange()">
+                      @for (m of inputColorModeOptions; track m.value) {
+                        <option [value]="m.value">{{ m.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>归一化
+                    <select [(ngModel)]="layer.params.preprocessing.normalize" (ngModelChange)="onLayerConfigChange()">
+                      <option value="none">不归一化</option><option value="zero-one">[0,1]</option>
+                    </select>
+                  </label>
+                </div>
+                @if (!uploadedImageUrl && layer.params.preprocessing.resizeMode === 'fit') {
+                  <div class="row-2">
+                    <label>目标宽 <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetWidth" (ngModelChange)="onLayerConfigChange()" /></label>
+                    <label>目标高 <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetHeight" (ngModelChange)="onLayerConfigChange()" /></label>
+                  </div>
+                }
+                <div class="checkbox-row">
+                  <input type="checkbox" [(ngModel)]="layer.params.preprocessing.invert" (ngModelChange)="onLayerConfigChange()" />
+                  像素值取反
+                </div>
+              }
+
+              @if (layer.type === 'conv2d') {
+                <div class="row-3">
+                  <label>输出通道
+                    <input type="number" min="1" [(ngModel)]="layer.params.outChannels" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'outChannels')" />
+                    @if (hasFieldError(layer.id, 'outChannels')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'outChannels') }}</div>
+                    }
+                  </label>
+                  <label>核大小
+                    <input type="number" min="1" max="9" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onKernelSizeChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
+                    @if (hasFieldError(layer.id, 'kernelSize')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div>
+                    }
+                  </label>
+                  <label>激活函数
+                    <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                      <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row-2">
+                  <label>步长
+                    <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'stride')" />
+                    @if (hasFieldError(layer.id, 'stride')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div>
+                    }
+                  </label>
+                  <label>填充
+                    <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'padding')" />
+                    @if (hasFieldError(layer.id, 'padding')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'padding') }}</div>
+                    }
+                  </label>
+                </div>
+                <div class="row-2" [class.row-1]="!showConvInChannelSelector">
+                  <label>编辑输出通道
+                    <select [(ngModel)]="selectedKernelOutChannel" (ngModelChange)="onKernelChannelChange()">
+                      @for (oc of convOutChannelIndices; track oc) {
+                        <option [ngValue]="oc">Out {{ oc }}</option>
+                      }
+                    </select>
+                  </label>
+                  @if (showConvInChannelSelector) {
+                    <label>输入通道切片
+                      <select [(ngModel)]="selectedKernelInChannel" (ngModelChange)="onKernelChannelChange()">
+                        @for (ic of convInChannelIndices; track ic) {
+                          <option [ngValue]="ic">In {{ ic }}</option>
+                        }
+                      </select>
+                    </label>
+                  }
+                </div>
+                @if (!showConvInChannelSelector) {
+                  <div class="muted" style="margin-bottom:6px">当前输入是单通道，卷积核仅存在 In 0 切片。</div>
+                }
+                <div class="kernel-presets">
+                  <div class="section-title" style="margin-bottom:4px">经典卷积核预设</div>
+                  <div class="preset-chips">
+                    @for (p of kernelPresets; track p.label) {
+                      <button class="preset-chip" (click)="applyKernelPreset(p)">{{ p.label }}</button>
+                    }
+                  </div>
+                </div>
+                <div class="kernel-wrap">
+                  <div class="section-title" style="margin-bottom:3px">卷积核矩阵（Out {{ selectedKernelOutChannel }} · In {{ selectedKernelInChannel }}）</div>
+                  <div class="kernel-grid" [style.--size]="layer.params.kernelSize">
+                    @for (row of editableKernelMatrix; track $index; let r = $index) {
+                      @for (cell of row; track $index; let c = $index) {
+                        <input type="number" step="0.1" [ngModel]="cell" (ngModelChange)="onKernelCellInput(r, c, $event)" />
+                      }
+                    }
+                  </div>
+                </div>
+              }
+
+              @if (layer.type === 'pool2d') {
+                <div class="row-3">
+                  <label>池化方式
+                    <select [(ngModel)]="layer.params.mode" (ngModelChange)="onLayerConfigChange()">
+                      <option value="max">最大池化</option><option value="avg">平均池化</option>
+                    </select>
+                  </label>
+                  <label>核大小
+                    <input type="number" min="1" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
+                    @if (hasFieldError(layer.id, 'kernelSize')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div>
+                    }
+                  </label>
+                  <label>步长
+                    <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'stride')" />
+                    @if (hasFieldError(layer.id, 'stride')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div>
+                    }
+                  </label>
+                </div>
+              }
+
+              @if (layer.type === 'dense') {
+                <div class="row-2">
+                  <label>神经元数
+                    <input type="number" min="1" [(ngModel)]="layer.params.units" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'units')" />
+                    @if (hasFieldError(layer.id, 'units')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'units') }}</div>
+                    }
+                  </label>
+                  <label>激活函数
+                    <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                      <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
+                    </select>
+                  </label>
+                </div>
+              }
+
+              @if (layer.type === 'output') {
+                <div class="row-2">
+                  <label>输出类别数
+                    <input type="number" min="1" [(ngModel)]="layer.params.units" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'units')" />
+                    @if (hasFieldError(layer.id, 'units')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'units') }}</div>
+                    }
+                  </label>
+                  <label>激活函数
+                    <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                      <option value="none">无</option><option value="softmax">Softmax</option><option value="sigmoid">Sigmoid</option>
+                    </select>
+                  </label>
+                </div>
+              }
+
+              @if (layer.type === 'activation') {
+                <label>激活类型
+                  <select [(ngModel)]="layer.params.activationType" (ngModelChange)="onLayerConfigChange()">
+                    <option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option><option value="softmax">Softmax</option>
+                  </select>
+                </label>
+              }
+
+              @if (layer.type === 'dropout') {
+                <label>Dropout 比率
+                  <input type="number" step="0.05" min="0" max="0.95" [(ngModel)]="layer.params.rate" (ngModelChange)="onLayerConfigChange()"
+                    [class.field-error]="hasFieldError(layer.id, 'rate')" />
+                  @if (hasFieldError(layer.id, 'rate')) {
+                    <div class="field-error-msg">{{ fieldErrorText(layer.id, 'rate') }}</div>
+                  }
+                </label>
+              }
+            </div>
+          </div>
+        }
+      </main>
+
+      <!-- 右侧：层检查器 -->
+      <aside class="side-panel right">
+        @if (selectedForwardResult; as res) {
+          <div class="pane">
+            <div class="pane-title">层检查器</div>
+            <div class="editor-header" style="margin-bottom:6px">
+              <span class="layer-type-badge">{{ res.layerType }}</span>
+              <span style="font-size:13px;font-weight:600">{{ res.layerName }}</span>
+            </div>
+            <div class="shape-path">
+              <span class="shape-tag">{{ res.inputShapeLabel }}</span>
+              <span class="shape-arrow">→</span>
+              <span class="shape-tag" style="border-color:#bbf7d0;background:#f0fdf4;color:var(--green)">{{ res.outputShapeLabel }}</span>
+            </div>
+            <div class="muted" style="margin-top:5px">{{ res.transitionNote }}</div>
+          </div>
+
+          <div class="pane">
+            <div class="pane-title">可视化输出</div>
+            @if (res.visualization.mode === 'image') {
+              <img class="tensor-image-preview zoomable-image" [src]="selectedTensorImageUrl" [alt]="res.layerName + ' output'" (click)="openImageViewer(res.layerName + ' 输出', selectedTensorImageUrl, res.outputShapeLabel)" />
+              @if (selectedChannelPreviews.length > 1) {
+                <div class="section-title" style="margin:6px 0 3px">特征图（展示前 {{ selectedChannelPreviews.length }} / 共 {{ selectedChannelCount }}）</div>
+                <div class="channels-grid">
+                  @for (ch of selectedChannelPreviews; track ch.channel) {
+                    <div class="channel-card">
+                      <div class="channel-label">ch {{ ch.channel }}</div>
+                      <img class="channel-image-preview zoomable-image" [src]="channelPreviewImageUrl(ch)" [alt]="'channel ' + ch.channel" (click)="openImageViewer('通道 ' + ch.channel, channelPreviewImageUrl(ch), ch.width + '×' + ch.height)" />
+                    </div>
+                  }
+                </div>
+                @if (selectedChannelCount > selectedChannelPreviews.length) {
+                  <div class="btn-row" style="margin-top:6px">
+                    <button class="btn-sm" (click)="openSelectedChannelsModal()">查看全部通道</button>
+                  </div>
+                }
+              }
+            } @else if (res.visualization.mode === 'vector') {
+              <div class="muted">向量输出已简化为数值列表展示，避免误导性柱状图。</div>
+            } @else {
+              <div class="muted">当前层暂无可视化输出。</div>
+            }
+          </div>
+
+          <div class="pane">
+            <div class="pane-title">张量统计</div>
+            <div class="stat-row">
+              <div class="stat-cell"><div class="stat-label">最小值</div><div class="stat-value">{{ res.stats.min.toFixed(3) }}</div></div>
+              <div class="stat-cell"><div class="stat-label">最大值</div><div class="stat-value">{{ res.stats.max.toFixed(3) }}</div></div>
+              <div class="stat-cell"><div class="stat-label">均值</div><div class="stat-value">{{ res.stats.mean.toFixed(3) }}</div></div>
+              <div class="stat-cell"><div class="stat-label">非零率</div><div class="stat-value">{{ (res.stats.nonZeroRatio*100).toFixed(0) }}%</div></div>
+            </div>
+          </div>
+
+          @if (res.paramsSummary.length) {
+            <div class="pane">
+              <div class="pane-title">层参数</div>
+              @for (p of res.paramsSummary; track $index) {
+                <div class="muted" style="font-family:monospace;font-size:11px;padding:1px 0">{{ p }}</div>
+              }
+            </div>
+          }
+        } @else {
+          <div class="pane">
+            <div class="pane-title">层检查器</div>
+            <div class="muted">点击网络图中的层卡片查看详情。</div>
+          </div>
+        }
+
+        <!-- 最终输出：图像型 or 向量型 -->
+        @if (forwardResult?.finalTensor) {
+          <div class="pane">
+            @if (finalTensorMode === 'image') {
+              <div class="pane-title">最终输出（图像张量）</div>
+              @if (finalImageViz; as fv) {
+                <img class="tensor-image-preview zoomable-image" [src]="finalTensorImageUrl" alt="最终输出图像" (click)="openImageViewer('最终输出图像', finalTensorImageUrl, fv.width + '×' + fv.height + '×' + fv.channels)" />
+                @if (fv.channelPreviews.length > 1) {
+                  <div class="section-title compact-title">输出特征图通道（展示前 {{ fv.channelPreviews.length }} / 共 {{ finalChannelCount }}）</div>
+                  <div class="channels-grid">
+                    @for (ch of fv.channelPreviews; track ch.channel) {
+                      <div class="channel-card">
+                        <div class="channel-label">ch {{ ch.channel }}</div>
+                        <img class="channel-image-preview zoomable-image" [src]="channelPreviewImageUrl(ch)" [alt]="'channel ' + ch.channel" (click)="openImageViewer('输出通道 ' + ch.channel, channelPreviewImageUrl(ch), ch.width + '×' + ch.height)" />
+                      </div>
+                    }
+                  </div>
+                  @if (finalChannelCount > fv.channelPreviews.length) {
+                    <div class="btn-row" style="margin-top:6px">
+                      <button class="btn-sm" (click)="openFinalChannelsModal()">查看全部通道</button>
+                    </div>
+                  }
+                }
+                <div class="muted" style="margin-top:4px">{{ fv.width }}×{{ fv.height }}×{{ fv.channels }}</div>
+              }
+            } @else if (finalTensorMode === 'vector') {
+              <div class="pane-title">输出分布（Top-K）</div>
+              <div class="topk-list topk-compact">
+                @for (item of forwardResult!.finalTopK; track item.index) {
+                  <div class="topk-item">
+                    <span class="topk-rank">#{{ $index + 1 }}</span>
+                    <span class="topk-label">{{ item.label ?? '类别 ' + item.index }}</span>
+                    <div class="topk-bar-wrap"><div class="topk-bar" [style.width.%]="item.value * 100"></div></div>
+                    <span class="topk-val">{{ item.value.toFixed(4) }}</span>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="muted">最终层暂无可视化输出。</div>
+            }
+          </div>
+        }
+
+        @if (forwardResult?.errors?.length) {
+          <div class="pane">
+            <div class="error-box">
+              @for (e of forwardResult!.errors; track $index) { <div>{{ e }}</div> }
+            </div>
+          </div>
+        }
+      </aside>
+    </div>
+  }
+
+  @if (forwardBusy) {
+    <div class="modal-mask">
+      <div class="modal-card" style="max-width:420px">
+        <div class="modal-header">
+          <div class="modal-title">后端计算中</div>
+        </div>
+        <div class="modal-body">
+          <p>正在执行前向传播，请稍候...</p>
+          @if (forwardStatusMessage) {
+            <p>{{ forwardStatusMessage }}</p>
+          }
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn-danger" (click)="cancelForwardCompute()">取消计算</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showChannelModal) {
+    <div class="modal-mask" (click)="closeChannelModal()">
+      <div class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">{{ channelModalTitle }}</div>
+          <button class="btn-ghost" (click)="closeChannelModal()">关闭</button>
+        </div>
+        <div class="modal-body">
+          <div class="channels-grid channel-modal-grid">
+            @for (ch of channelModalPreviews; track ch.channel) {
+              <div class="channel-card">
+                <div class="channel-label">ch {{ ch.channel }}</div>
+                <img class="channel-image-preview zoomable-image" [src]="channelPreviewImageUrl(ch)" [alt]="'channel ' + ch.channel" (click)="openImageViewer('通道 ' + ch.channel, channelPreviewImageUrl(ch), ch.width + '×' + ch.height)" />
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+
+  <!-- 模式 B -->
+  @if (mode === 'training') {
+    <div class="workspace mode-workspace">
+      <aside class="side-panel">
+        <div class="pane">
+          <div class="pane-title">训练数据</div>
+          <label>内置数据集
+            <select [ngModel]="selectedTrainingDatasetId" (ngModelChange)="selectTrainingDataset($event)">
+              @for (ds of builtinTrainingDatasets; track ds.id) {
+                <option [value]="ds.id">{{ ds.name }}</option>
+              }
+              @if (datasetImportDraft.detail) { <option value="custom-upload">自定义导入数据</option> }
+            </select>
+          </label>
+          <div class="dataset-option-list">
+            @for (ds of builtinTrainingDatasets; track ds.id) {
+              <button class="dataset-option" [class.active]="selectedTrainingDatasetId===ds.id" (click)="selectTrainingDataset(ds.id)">
+                <span class="dataset-option-name">{{ ds.name }}</span>
+                <span class="dataset-option-meta">{{ ds.sampleCount }} 样本 · {{ ds.classCount }} 类 · {{ ds.kind }}</span>
+              </button>
+            }
+          </div>
+          <label style="margin-top:8px">自定义导入
+            <input type="file" multiple accept=".csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" />
+          </label>
+          <div class="muted">支持 1 个 CSV，或少量按“类别_序号.jpg”命名的图片文件。</div>
+          @if (datasetImportDraft.status !== 'idle') {
+            <div [class]="datasetImportDraft.status === 'ready' ? 'success-box' : 'warn-box'" style="margin-top:6px">
+              {{ datasetImportDraft.message }}
+              @if (datasetImportDraft.detail && selectedTrainingDatasetId !== 'custom-upload') {
+                <div class="btn-row" style="margin-top:6px">
+                  <button class="btn-sm" (click)="useImportedTrainingDataset()">使用导入数据</button>
+                  <button class="btn-ghost btn-sm" (click)="clearImportedTrainingDataset()">清除</button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="pane">
+          <div class="pane-title">预设任务</div>
+          <div class="task-list">
+            @for (task of presetTasks; track task.id) {
+              <div class="task-item" [class.active]="selectedTaskId===task.id" (click)="selectTask(task.id)">
+                <div class="task-name">{{ task.name }}</div>
+                <div class="task-desc">{{ task.description }}</div>
+                <span class="task-tag">{{ task.type }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="pane">
+          <div class="pane-title">训练超参数</div>
+          <div class="row-2">
+            <label>批大小 <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>
+            <label>训练轮数 <input type="number" min="1" [(ngModel)]="trainingConfig.totalEpochs" /></label>
+          </div>
+          <label>学习率 <input type="number" step="0.0001" [(ngModel)]="trainingConfig.learningRate" /></label>
+          <label>优化器
+            <select [(ngModel)]="trainingConfig.optimizer">
+              <option value="Adam">Adam</option><option value="AdamW">AdamW</option><option value="SGD">SGD</option><option value="RMSProp">RMSProp</option>
+            </select>
+          </label>
+          <label>学习率调度
+            <select [(ngModel)]="trainingConfig.scheduler">
+              <option value="none">不调度</option><option value="step">阶梯衰减</option><option value="cosine">余弦退火</option>
+            </select>
+          </label>
+          <label>损失函数
+            <select [(ngModel)]="trainingConfig.lossFunction">
+              <option value="cross_entropy">交叉熵</option><option value="mse">MSE</option><option value="bce">二元交叉熵</option>
+            </select>
+          </label>
+        </div>
+      </aside>
+
+      <main class="training-center">
+        <div class="train-control-bar">
+          <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : '已停止' }}</div>
+          <span class="muted">轮次 {{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</span>
+          <span class="muted">LR: {{ trainingLr | number:'1.5-5' }}</span>
+          @if (!trainingDatasetReady) { <span class="warn-inline">需要带标签的数据集</span> }
+          @else if (datasetSplitError) { <span class="warn-inline">划分比例无效</span> }
+          <div style="flex:1"></div>
+          <button class="btn-primary" (click)="startTraining()" [disabled]="trainingStatus==='running' || !trainingDatasetReady || !!datasetSplitError">▶ 开始</button>
+          <button (click)="pauseTraining()">⏸ 暂停</button>
+          <button (click)="stopTraining()">⏹ 停止</button>
+          <button class="btn-ghost" (click)="resetTraining()">↺ 重置</button>
+        </div>
+        <div class="mock-banner">⚠ 当前为前端演示模式（Mock Training）— 训练曲线由数学公式模拟，非真实训练。</div>
+
+        @if (trainingDatasetDetail; as ds) {
+          <div class="dataset-board">
+            <div class="dataset-board-head">
+              <div><div class="dataset-title">{{ ds.name }}</div><div class="dataset-desc">{{ ds.description }}</div></div>
+              <span [class]="ds.hasLabels ? 'dataset-state ok' : 'dataset-state warn'">{{ ds.hasLabels ? '标签可用' : '缺少标签' }}</span>
+            </div>
+            <div class="dataset-stat-grid">
+              <div class="dataset-stat"><span>样本数量</span><strong>{{ ds.sampleCount }}</strong></div>
+              <div class="dataset-stat"><span>类别数量</span><strong>{{ ds.classCount }}</strong></div>
+              <div class="dataset-stat"><span>输入维度</span><strong>{{ ds.inputShape }}</strong></div>
+              <div class="dataset-stat"><span>划分比例</span><strong>{{ (ds.trainRatio*100) | number:'1.0-0' }} / {{ (ds.valRatio*100) | number:'1.0-0' }} / {{ (ds.testRatio*100) | number:'1.0-0' }}</strong></div>
+            </div>
+            <div class="split-track"><div class="split-train" [style.width.%]="ds.trainRatio*100"></div><div class="split-val" [style.width.%]="ds.valRatio*100"></div><div class="split-test" [style.width.%]="ds.testRatio*100"></div></div>
+            <div class="split-editor">
+              <div class="split-editor-head"><span class="section-title">数据划分</span><span [class]="datasetSplitError ? 'split-total error' : 'split-total'">合计 {{ datasetSplitSumPercent }}%</span></div>
+              <div class="split-presets"><button class="btn-sm" (click)="applyDatasetSplitPreset(70,15,15)">70 / 15 / 15</button><button class="btn-sm" (click)="applyDatasetSplitPreset(80,10,10)">80 / 10 / 10</button><button class="btn-sm" (click)="applyDatasetSplitPreset(80,20,0)">80 / 20 / 0</button></div>
+              <div class="split-input-grid">
+                <label>训练集 %<input type="number" min="1" max="100" step="1" [ngModel]="datasetSplitPercent('train')" (ngModelChange)="onDatasetSplitInput('train', $event)" /></label>
+                <label>验证集 %<input type="number" min="0" max="100" step="1" [ngModel]="datasetSplitPercent('val')" (ngModelChange)="onDatasetSplitInput('val', $event)" /></label>
+                <label>测试集 %<input type="number" min="0" max="100" step="1" [ngModel]="datasetSplitPercent('test')" (ngModelChange)="onDatasetSplitInput('test', $event)" /></label>
+              </div>
+              @if (datasetSplitError; as splitError) { <div class="field-error-msg">{{ splitError }}</div> }
+            </div>
+
+            <div class="training-network-editor">
+              <div class="training-network-head">
+                <div><div class="section-title">网络结构编辑器</div><div class="muted">{{ layerCount }} 层 · {{ parameterCount | number }} 参数</div></div>
+                <label class="network-template-select">模型模板
+                  <select [(ngModel)]="selectedTemplateId" (change)="applyTemplate()">
+                    @for (t of modelTemplates; track t.id) { <option [value]="t.id">{{ t.name }}</option> }
+                  </select>
+                </label>
+              </div>
+              <div class="training-network-tools">
+                @for (type of layerPalette; track type) {
+                  <button class="palette-chip" draggable="true" (dragstart)="trainingNetworkGraph.setDragNew(type)" (click)="addLayer(type)">+ {{ layerTypeLabel(type) }}</button>
+                }
+                <button class="btn-danger btn-sm" (click)="removeSelectedLayer()">删除选中</button>
+              </div>
+              <app-network-overview #trainingNetworkGraph [layers]="layers" [selectedLayerId]="selectedLayerId" [shapeHints]="{}" [errorLayerIds]="[]" (layerSelected)="onLayerPicked($event)" (layersReordered)="onLayersReordered($event)" (newLayerDropped)="onNewLayerDropped($event)" />
+              <div class="training-network-foot">
+                @if (selectedLayer; as layer) { <div class="network-selected-layer"><span class="layer-type-badge">{{ layerTypeLabel(layer.type) }}</span><span>{{ layer.name }}</span></div> }
+                <div class="model-check-list">@for (issue of trainingModelIssues; track issue.message) { <span [class]="'model-check ' + issue.level">{{ issue.message }}</span> }</div>
+              </div>
+            </div>
+
+            <div class="dataset-lower">
+              <div>
+                <div class="section-title" style="margin-bottom:6px">标签分布</div>
+                <div class="label-dist-list">
+                  @for (item of ds.labelDistribution; track item.label) {
+                    <div class="label-dist-row"><span class="label-dot" [style.background]="item.color"></span><span class="label-name">{{ item.label }}</span><div class="label-bar-wrap"><div class="label-bar" [style.background]="item.color" [style.width.%]="labelPercent(item.count)"></div></div><span class="label-count">{{ item.count }}</span></div>
+                  }
+                  @if (!ds.labelDistribution.length) { <div class="muted">暂无标签分布。</div> }
+                </div>
+                @if (ds.warnings.length || trainingDatasetError) { <div class="warn-box" style="margin-top:8px">@if (trainingDatasetError) { <div>{{ trainingDatasetError }}</div> } @for (warning of ds.warnings; track warning) { <div>{{ warning }}</div> }</div> }
+              </div>
+              <div>
+                <div class="section-title" style="margin-bottom:6px">数据预览</div>
+                @if (ds.imagePreview?.length) {
+                  <div class="image-preview-grid">@for (img of ds.imagePreview; track img.name) { <div class="image-preview-card"><img [src]="img.url" [alt]="img.label" /><span>{{ img.label }}</span></div> }</div>
+                } @else if (ds.tablePreview; as table) {
+                  <div class="table-preview-wrap"><table class="table-preview"><thead><tr>@for (h of table.headers; track h) { <th>{{ h }}</th> }</tr></thead><tbody>@for (row of table.rows; track $index) { <tr>@for (cell of row; track $index) { <td>{{ cell || '-' }}</td> }</tr> }</tbody></table></div>
+                } @else if (ds.pointPreview?.length) {
+                  <svg class="point-preview" viewBox="0 0 200 120" preserveAspectRatio="none"><line x1="12" y1="60" x2="188" y2="60" stroke="#e2e8f0" /><line x1="100" y1="12" x2="100" y2="108" stroke="#e2e8f0" />@for (p of ds.pointPreview; track $index) { <circle [attr.cx]="pointSvgX(p)" [attr.cy]="pointSvgY(p)" r="3.5" [attr.fill]="p.color" opacity="0.88" /> }</svg>
+                } @else { <div class="muted">暂无预览数据。</div> }
+              </div>
+            </div>
+          </div>
+        }
+
+        <div class="status-grid train-visual-status">
+          <div class="status-card"><div class="status-card-label">训练损失</div><div class="status-card-value" style="color:var(--red)">{{ trainingLoss | number:'1.4-4' }}</div></div>
+          <div class="status-card"><div class="status-card-label">验证损失</div><div class="status-card-value" style="color:var(--yellow)">{{ trainingValLoss | number:'1.4-4' }}</div></div>
+          <div class="status-card"><div class="status-card-label">训练准确率</div><div class="status-card-value" style="color:var(--accent)">{{ (trainingAcc*100) | number:'1.1-1' }}%</div></div>
+          <div class="status-card"><div class="status-card-label">验证准确率</div><div class="status-card-value" style="color:var(--green)">{{ (trainingValAcc*100) | number:'1.1-1' }}%</div></div>
+          <div class="status-card"><div class="status-card-label">当前 Batch</div><div class="status-card-value">{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div></div>
+          <div class="status-card"><div class="status-card-label">训练耗时</div><div class="status-card-value">{{ formatDuration(trainingElapsedSeconds) }}</div></div>
+          <div class="status-card"><div class="status-card-label">预计剩余</div><div class="status-card-value">{{ formatDuration(trainingEtaSeconds) }}</div></div>
+          <div class="status-card"><div class="status-card-label">进度</div><div class="status-card-value">{{ trainingProgressPercent | number:'1.0-0' }}%</div></div>
+        </div>
+
+        <div class="charts-area">
+          <div class="chart-wrap"><div class="chart-label" style="color:var(--red)">损失曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="lossPolyline" fill="none" stroke="#dc2626" stroke-width="2"/><polyline [attr.points]="valLossPolyline" fill="none" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#dc2626">— 训练损失</span><span style="color:#d97706">- - 验证损失</span></div></div>
+          <div class="chart-wrap"><div class="chart-label" style="color:var(--accent)">准确率曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="accPolyline" fill="none" stroke="#2563eb" stroke-width="2"/><polyline [attr.points]="valPolyline" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#2563eb">— 训练集</span><span style="color:#059669">- - 验证集</span></div></div>
+          <div class="chart-wrap"><div class="chart-label" style="color:var(--accent2)">学习率变化</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="lrPolyline" fill="none" stroke="#0ea5e9" stroke-width="2"/></svg><div class="chart-legend"><span>当前 LR: {{ trainingLr | number:'1.5-5' }}</span></div></div>
+          <div class="chart-wrap"><div class="chart-label" [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">梯度大小变化</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="gradientPolyline" fill="none" stroke="#059669" stroke-width="2"/></svg><div class="chart-legend"><span>Norm: {{ trainingGradientNorm | number:'1.4-4' }}</span><span [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">{{ gradientAlert }}</span></div></div>
+          <div class="chart-wrap parameter-panel"><div class="chart-label">权重分布直方图</div><div class="weight-histogram">@for (bin of weightHistogramBins; track bin.label) { <div class="weight-bin" [style.height.%]="(bin.value / maxWeightBin) * 100" [title]="bin.label"></div> }</div><div class="chart-legend"><span>Mean {{ trainingWeightMean | number:'1.3-3' }}</span><span>Std {{ trainingWeightStd | number:'1.3-3' }}</span></div></div>
+          <div class="chart-wrap parameter-panel"><div class="chart-label">当前训练状态</div><div class="runtime-list"><div><span>Epoch</span><strong>{{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</strong></div><div><span>Batch</span><strong>{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</strong></div><div><span>Loss</span><strong>{{ trainingLoss | number:'1.4-4' }}</strong></div><div><span>Accuracy</span><strong>{{ (trainingAcc*100) | number:'1.1-1' }}%</strong></div><div><span>Elapsed</span><strong>{{ formatDuration(trainingElapsedSeconds) }}</strong></div><div><span>ETA</span><strong>{{ formatDuration(trainingEtaSeconds) }}</strong></div></div></div>
+          <div style="grid-column:1/-1"><div class="section-title" style="margin-bottom:6px">实验对比 <span class="muted">（Mock）</span></div>@for (exp of experimentResults; track exp.name) { <div class="exp-row"><span class="exp-name">{{ exp.name }}</span><div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="exp.finalAccuracy*100"></div></div><span class="exp-acc">{{ (exp.finalAccuracy*100).toFixed(1) }}%</span></div> }<button style="margin-top:5px;font-size:12px" (click)="runExperiments()">运行实验对比</button></div>
+        </div>
+      </main>
+
+      <aside class="side-panel right">
+        <div class="pane" style="flex:1;display:flex;flex-direction:column;gap:6px;min-height:0">
+          <div class="pane-title">训练日志 <span class="muted">[Mock]</span></div>
+          <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
+        </div>
+        <div class="pane"><div class="pane-title">反向传播说明 <span class="muted">（教学占位）</span></div><div class="warn-box" style="font-size:12px;line-height:1.6">反向传播可视化将在接入后端后实现。<br>当前为前端 Mock 训练模式。</div></div>
+      </aside>
+    </div>
+  }
+
+  @if (showSamplePicker) {
+    <div class="sample-picker-mask" (click)="closeSamplePicker()"></div>
+    <div class="sample-picker">
+      <div class="picker-header">
+        <span class="picker-title">选择 {{ selectedDataset }} 样本</span>
+        <button class="btn-ghost" (click)="closeSamplePicker()">✕ 关闭</button>
+      </div>
+      <div class="sample-grid">
+        @for (sample of activeLocalImageSamples; track sample.id) {
+          <div class="sample-tile local-image-tile" [class.active]="sample.id===selectedLocalImageId" (click)="chooseLocalImageSample(sample)">
+            <img class="zoomable-image" [src]="sample.url" [alt]="sample.name" (click)="openImageViewer(sample.name, sample.url, sample.label); $event.stopPropagation()" />
+            <small>{{ sample.name }} · {{ sample.label }}</small>
+          </div>
+        }
+        @if (!activeLocalImageSamples.length) {
+          <div class="muted">当前集合暂无样本。</div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (showAuthModal) {
+    <div class="modal-mask" (click)="closeAuthModal()">
+      <div class="modal-card auth-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">{{ authTitle }}</div>
+          <button class="btn-ghost btn-sm" (click)="closeAuthModal()">关闭</button>
+        </div>
+        <div class="modal-body">
+          <div class="auth-switch">
+            <button [class.active]="authMode==='login'" (click)="authMode='login'; authError=''">登录</button>
+            <button [class.active]="authMode==='register'" (click)="authMode='register'; authError=''">注册</button>
+          </div>
+          <label>用户名
+            <input [(ngModel)]="authDraft.username" autocomplete="username" placeholder="3-32 位字母/数字/下划线" />
+          </label>
+          @if (authMode === 'register') {
+            <label>显示名称
+              <input [(ngModel)]="authDraft.displayName" autocomplete="nickname" placeholder="可选" />
+            </label>
+          }
+          <label>密码
+            <input type="password" [(ngModel)]="authDraft.password" autocomplete="current-password" placeholder="至少 6 位" />
+          </label>
+          @if (authError) {
+            <div class="error-box">{{ authError }}</div>
+          }
+          <div class="btn-row modal-actions">
+            <button class="btn-primary" (click)="submitAuth()" [disabled]="authBusy">{{ authBusy ? '处理中...' : authTitle }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showSaveRecordModal) {
+    <div class="modal-mask" (click)="closeSaveRecordModal()">
+      <div class="modal-card auth-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">保存 A 模式记录</div>
+          <button class="btn-ghost btn-sm" (click)="closeSaveRecordModal()">关闭</button>
+        </div>
+        <div class="modal-body">
+          <label>记录名称
+            <input [(ngModel)]="recordNameDraft" maxlength="120" />
+          </label>
+          <div class="record-meta-line">
+            <span>{{ selectedDataset }}</span>
+            <span>{{ layerCount }} 层</span>
+            <span>{{ parameterCount | number }} 参数</span>
+          </div>
+          @if (recordError) {
+            <div class="error-box">{{ recordError }}</div>
+          }
+          <div class="btn-row modal-actions">
+            <button class="btn-primary" (click)="saveForwardRecord()" [disabled]="recordBusy">{{ recordBusy ? '保存中...' : '保存' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showRecordDrawer) {
+    <div class="record-drawer-mask" (click)="showRecordDrawer=false"></div>
+    <aside class="record-drawer">
+      <div class="record-drawer-head">
+        <div>
+          <div class="pane-title">A 模式历史记录</div>
+          <div class="muted">{{ forwardRecords.length }} 条已保存记录</div>
+        </div>
+        <button class="btn-ghost btn-sm" (click)="showRecordDrawer=false">关闭</button>
+      </div>
+      <div class="record-list">
+        @if (recordBusy && !forwardRecords.length) {
+          <div class="muted">正在读取...</div>
+        }
+        @for (record of forwardRecords; track record.id) {
+          <div class="record-item">
+            @if (recordImageUrl(record)) {
+              <img class="record-thumb zoomable-image" [src]="recordImageUrl(record)" [alt]="record.name" (click)="openImageViewer(record.name, recordImageUrl(record), record.datasetName); $event.stopPropagation()" />
+            } @else {
+              <div class="record-thumb empty">A</div>
+            }
+            <div class="record-main">
+              <div class="record-title">{{ record.name }}</div>
+              <div class="record-sub">{{ record.datasetName }} · {{ record.layerCount }} 层 · {{ record.parameterCount | number }} 参数</div>
+              <div class="record-time">{{ record.createdAt | date:'yyyy-MM-dd HH:mm' }}</div>
+              <div class="btn-row">
+                <button class="btn-sm btn-primary" (click)="restoreForwardRecord(record.id)" [disabled]="recordBusy">回溯</button>
+                <button class="btn-sm btn-danger" (click)="deleteForwardRecord(record.id)" [disabled]="recordBusy">删除</button>
+              </div>
+            </div>
+          </div>
+        }
+        @if (!recordBusy && !forwardRecords.length) {
+          <div class="muted">还没有保存过 A 模式记录。</div>
+        }
+      </div>
+    </aside>
+  }
+
+  @if (imageViewer.open) {
+    <div class="image-viewer-mask" (click)="closeImageViewer()">
+      <div class="image-viewer-card" (click)="$event.stopPropagation()">
+        <div class="image-viewer-head">
+          <div>
+            <div class="modal-title">{{ imageViewer.title }}</div>
+            @if (imageViewer.meta) {
+              <div class="muted">{{ imageViewer.meta }}</div>
+            }
+          </div>
+          <button class="btn-ghost btn-sm" (click)="closeImageViewer()">关闭</button>
+        </div>
+        <div class="image-viewer-body">
+          <img [src]="imageViewer.url" [alt]="imageViewer.title" />
+        </div>
+      </div>
+    </div>
+  }
+
+  <app-help-manual [open]="showHelp" (closed)="showHelp=false" />
+</div>

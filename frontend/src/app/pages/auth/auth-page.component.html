@@ -1,0 +1,83 @@
+<div class="auth-shell">
+  <header class="auth-topbar">
+    <a class="brand" routerLink="/">
+      <span class="brand-logo">D</span>
+      <span>
+        <strong>DeepVision Studio</strong>
+        <small>账号中心</small>
+      </span>
+    </a>
+    <nav>
+      <a routerLink="/">首页</a>
+      <a routerLink="/mode-a">模式 A</a>
+      <a routerLink="/mode-b">模式 B</a>
+    </nav>
+  </header>
+
+  <main class="auth-main">
+    <section class="auth-card">
+      <div class="auth-head">
+        <p>Account</p>
+        <h1>{{ title }}</h1>
+      </div>
+
+      @if (user) {
+        <div class="signed-box">
+          <span>当前已登录</span>
+          <strong>{{ user.displayName || user.username }}</strong>
+          <button type="button" (click)="logout()">退出当前账号</button>
+        </div>
+      }
+
+      <div class="mode-switch" aria-label="账号操作">
+        <a routerLink="/login" routerLinkActive="active">登录</a>
+        <a routerLink="/register" routerLinkActive="active">注册</a>
+      </div>
+
+      <form (ngSubmit)="submit()">
+        <label>
+          用户名
+          <input
+            name="username"
+            [(ngModel)]="draft.username"
+            autocomplete="username"
+            placeholder="3-32 位字母/数字/下划线"
+            required
+          />
+        </label>
+
+        @if (mode === 'register') {
+          <label>
+            昵称
+            <input
+              name="displayName"
+              [(ngModel)]="draft.displayName"
+              autocomplete="nickname"
+              placeholder="可选"
+            />
+          </label>
+        }
+
+        <label>
+          密码
+          <input
+            type="password"
+            name="password"
+            [(ngModel)]="draft.password"
+            [autocomplete]="mode === 'login' ? 'current-password' : 'new-password'"
+            placeholder="至少 6 位"
+            required
+          />
+        </label>
+
+        @if (error) {
+          <div class="error-box">{{ error }}</div>
+        }
+
+        <button class="submit-btn" type="submit" [disabled]="busy">
+          {{ busy ? '提交中...' : submitText }}
+        </button>
+      </form>
+    </section>
+  </main>
+</div>
