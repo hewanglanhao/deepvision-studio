@@ -383,6 +383,13 @@
 .model-check.ok { color: var(--green); background: #ecfdf5; border-color: #bbf7d0; }
 .model-check.warn { color: var(--yellow); background: #fffbeb; border-color: #fde68a; }
 .model-check.error { color: var(--red); background: #fef2f2; border-color: #fca5a5; }
+.training-layer-editor { min-height: 0; max-height: none; margin-top: 10px; }
+.training-layer-editor .editor-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.training-layer-editor label { margin-bottom: 0; }
 .training-hyperparams-panel { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin-bottom: 10px; }
 .training-hyperparams-panel .section-title { margin-bottom: 8px; }
 .training-hyperparams-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 8px; }

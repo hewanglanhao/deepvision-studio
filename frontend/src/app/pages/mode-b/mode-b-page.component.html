@@ -607,7 +607,7 @@
           @if (!trainingDatasetReady) { <span class="warn-inline">需要带标签的数据集</span> }
           @else if (datasetSplitError) { <span class="warn-inline">划分比例无效</span> }
           <div style="flex:1"></div>
-          <button class="btn-primary" (click)="startTraining()" [disabled]="trainingStatus==='running' || trainingDatasetLoading || !trainingDatasetReady || !!datasetSplitError">▶ 开始</button>
+          <button class="btn-primary" (click)="startTraining()" [disabled]="trainingStatus==='running' || trainingDatasetLoading || !trainingDatasetReady || !!datasetSplitError || hasTrainingModelError">▶ 开始</button>
           @if (trainingStatus === 'paused') {
             <button (click)="resumeTraining()">▶ 继续</button>
           } @else {
@@ -657,11 +657,141 @@
                 }
                 <button class="btn-danger btn-sm" (click)="removeSelectedLayer()">删除选中</button>
               </div>
-              <app-network-overview #trainingNetworkGraph [layers]="layers" [selectedLayerId]="selectedLayerId" [shapeHints]="{}" [errorLayerIds]="[]" (layerSelected)="onLayerPicked($event)" (layersReordered)="onLayersReordered($event)" (newLayerDropped)="onNewLayerDropped($event)" />
+              <app-network-overview #trainingNetworkGraph [layers]="layers" [selectedLayerId]="selectedLayerId" [shapeHints]="trainingLayerShapeMap" [errorLayerIds]="errorLayerIdList" (layerSelected)="onLayerPicked($event)" (layersReordered)="onLayersReordered($event)" (newLayerDropped)="onNewLayerDropped($event)" />
               <div class="training-network-foot">
                 @if (selectedLayer; as layer) { <div class="network-selected-layer"><span class="layer-type-badge">{{ layerTypeLabel(layer.type) }}</span><span>{{ layer.name }}</span></div> }
                 <div class="model-check-list">@for (issue of trainingModelIssues; track issue.message) { <span [class]="'model-check ' + issue.level">{{ issue.message }}</span> }</div>
               </div>
+              @if (selectedLayer; as layer) {
+                <div class="layer-editor-bar training-layer-editor">
+                  <div class="editor-header">
+                    <span class="layer-type-badge">{{ layerTypeLabel(layer.type) }}</span>
+                    <span class="editor-title">{{ layer.name }}</span>
+                    @if (hasLayerError(layer.id)) {
+                      <span class="error-box" style="padding:2px 8px;font-size:11px;margin-left:auto">
+                        ⚠ {{ layerErrors[layer.id]?.[0] }}
+                      </span>
+                    }
+                  </div>
+                  <div class="editor-fields">
+                    <label>名称 <input [(ngModel)]="layer.name" (ngModelChange)="onLayerConfigChange()" /></label>
+
+                    @if (layer.type === 'input') {
+                      <div class="row-3">
+                        <label>输入宽度
+                          <input type="number" min="1" [(ngModel)]="layer.params.width" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'width')" />
+                          @if (hasFieldError(layer.id, 'width')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'width') }}</div> }
+                        </label>
+                        <label>输入高度
+                          <input type="number" min="1" [(ngModel)]="layer.params.height" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'height')" />
+                          @if (hasFieldError(layer.id, 'height')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'height') }}</div> }
+                        </label>
+                        <label>输入通道
+                          <input type="number" min="1" [(ngModel)]="layer.params.channels" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'channels')" />
+                          @if (hasFieldError(layer.id, 'channels')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'channels') }}</div> }
+                        </label>
+                      </div>
+                    }
+
+                    @if (layer.type === 'conv2d') {
+                      <div class="row-3">
+                        <label>输出通道
+                          <input type="number" min="1" [(ngModel)]="layer.params.outChannels" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'outChannels')" />
+                          @if (hasFieldError(layer.id, 'outChannels')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'outChannels') }}</div> }
+                        </label>
+                        <label>核大小
+                          <input type="number" min="1" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onKernelSizeChange()" [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
+                          @if (hasFieldError(layer.id, 'kernelSize')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div> }
+                        </label>
+                        <label>激活函数
+                          <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                            <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div class="row-3">
+                        <label>步长
+                          <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'stride')" />
+                          @if (hasFieldError(layer.id, 'stride')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div> }
+                        </label>
+                        <label>填充
+                          <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'padding')" />
+                          @if (hasFieldError(layer.id, 'padding')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'padding') }}</div> }
+                        </label>
+                        <label>膨胀率
+                          <input type="number" min="1" [(ngModel)]="layer.params.dilation" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'dilation')" />
+                          @if (hasFieldError(layer.id, 'dilation')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'dilation') }}</div> }
+                        </label>
+                      </div>
+                    }
+
+                    @if (layer.type === 'pool2d') {
+                      <div class="row-3">
+                        <label>池化方式
+                          <select [(ngModel)]="layer.params.mode" (ngModelChange)="onLayerConfigChange()">
+                            <option value="max">最大池化</option><option value="avg">平均池化</option>
+                          </select>
+                        </label>
+                        <label>核大小
+                          <input type="number" min="1" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
+                          @if (hasFieldError(layer.id, 'kernelSize')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div> }
+                        </label>
+                        <label>步长
+                          <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'stride')" />
+                          @if (hasFieldError(layer.id, 'stride')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div> }
+                        </label>
+                      </div>
+                      <label>填充
+                        <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'padding')" />
+                        @if (hasFieldError(layer.id, 'padding')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'padding') }}</div> }
+                      </label>
+                    }
+
+                    @if (layer.type === 'dense') {
+                      <div class="row-2">
+                        <label>神经元数
+                          <input type="number" min="1" [(ngModel)]="layer.params.units" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'units')" />
+                          @if (hasFieldError(layer.id, 'units')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'units') }}</div> }
+                        </label>
+                        <label>激活函数
+                          <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                            <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
+                          </select>
+                        </label>
+                      </div>
+                    }
+
+                    @if (layer.type === 'output') {
+                      <div class="row-2">
+                        <label>输出类别数
+                          <input type="number" min="1" [(ngModel)]="layer.params.units" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'units')" />
+                          @if (hasFieldError(layer.id, 'units')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'units') }}</div> }
+                        </label>
+                        <label>激活函数
+                          <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                            <option value="none">无</option><option value="softmax">Softmax</option><option value="sigmoid">Sigmoid</option>
+                          </select>
+                        </label>
+                      </div>
+                    }
+
+                    @if (layer.type === 'activation') {
+                      <label>激活类型
+                        <select [(ngModel)]="layer.params.activationType" (ngModelChange)="onLayerConfigChange()">
+                          <option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option><option value="softmax">Softmax</option>
+                        </select>
+                      </label>
+                    }
+
+                    @if (layer.type === 'dropout') {
+                      <label>Dropout 比率
+                        <input type="number" step="0.05" min="0" max="0.95" [(ngModel)]="layer.params.rate" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'rate')" />
+                        @if (hasFieldError(layer.id, 'rate')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'rate') }}</div> }
+                      </label>
+                    }
+                  </div>
+                </div>
+              }
             </div>
 
             <div class="training-hyperparams-panel">

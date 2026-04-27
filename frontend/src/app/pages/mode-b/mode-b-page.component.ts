@@ -19,7 +19,7 @@ import {
   ForwardInputAsset, ForwardLayerResult, ForwardPassResult,
   ForwardTensor, ImagePreviewItem, InputLayer, LabelDistributionItem, LayerType,
   LayerValidationIssue, MetricPoint, ModelTemplate, NetworkLayer, PointPreviewItem,
-  PresetTask, TablePreview, TrainingConfig, TrainingDatasetDetail, TrainingDatasetKind,
+  PresetTask, TablePreview, TensorShape, TrainingConfig, TrainingDatasetDetail, TrainingDatasetKind,
   TrainingDatasetOption
 } from '../../sim-models';
 
@@ -347,6 +347,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (Math.abs(ds.trainRatio + ds.valRatio + ds.testRatio - 1) > 0.001) return '训练集、验证集、测试集比例总和必须等于 100%。';
     return '';
   }
+  get hasTrainingModelError(): boolean {
+    return this.trainingModelIssues.some(issue => issue.level === 'error');
+  }
   get trainingModelIssues(): Array<{ level: 'ok' | 'warn' | 'error'; message: string }> {
     const issues: Array<{ level: 'ok' | 'warn' | 'error'; message: string }> = [];
     const ds = this.trainingDatasetDetail;
@@ -380,7 +383,22 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       issues.push({ level: 'error', message: '网络至少需要一个可训练层。' });
     }
 
+    for (const issue of this.trainingValidationIssues) {
+      issues.push({
+        level: issue.severity === 'error' ? 'error' : 'warn',
+        message: `${issue.layerName}: ${issue.message}`
+      });
+    }
+
     return issues.length ? issues : [{ level: 'ok', message: '当前网络结构可用于训练配置。' }];
+  }
+
+  get trainingValidationIssues(): LayerValidationIssue[] {
+    return this.analyzeTrainingNetwork().issues;
+  }
+
+  get trainingLayerShapeMap(): Record<number, string> {
+    return this.analyzeTrainingNetwork().shapeMap;
   }
 
   get selectedForwardResult(): ForwardLayerResult | null {
@@ -624,7 +642,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return Math.max(1e-6, ...this.weightHistogramBins.map(bin => bin.value));
   }
 
-  get validationIssues(): LayerValidationIssue[] { return this.forwardResult?.validationIssues ?? []; }
+  get validationIssues(): LayerValidationIssue[] {
+    return this.mode === 'training' ? this.trainingValidationIssues : (this.forwardResult?.validationIssues ?? []);
+  }
 
   get fieldIssueMap(): Record<number, Record<string, string[]>> {
     const map: Record<number, Record<string, string[]>> = {};
@@ -638,10 +658,12 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
 
   get errorLayerIdList(): number[] {
     const ids = new Set(this.validationIssues.filter(i => i.severity === 'error').map(i => i.layerId));
-    for (const err of this.forwardResult?.errors ?? []) {
-      const layerName = err.split(':')[0]?.trim();
-      const layer = this.layers.find(l => l.name === layerName);
-      if (layer) ids.add(layer.id);
+    if (this.mode !== 'training') {
+      for (const err of this.forwardResult?.errors ?? []) {
+        const layerName = err.split(':')[0]?.trim();
+        const layer = this.layers.find(l => l.name === layerName);
+        if (layer) ids.add(layer.id);
+      }
     }
     return [...ids];
   }
@@ -1432,6 +1454,137 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (kind === 'train') ds.trainRatio = ratio;
     if (kind === 'val') ds.valRatio = ratio;
     if (kind === 'test') ds.testRatio = ratio;
+  }
+
+  private analyzeTrainingNetwork(): { issues: LayerValidationIssue[]; shapeMap: Record<number, string> } {
+    const issues: LayerValidationIssue[] = [];
+    const shapeMap: Record<number, string> = {};
+    const enabledLayers = this.layers.filter(layer => layer.enabled !== false);
+    let currentShape: TensorShape = this.trainingInputShape();
+
+    const addIssue = (
+      layer: NetworkLayer,
+      severity: 'error' | 'warning',
+      message: string,
+      field?: string
+    ): void => {
+      issues.push({ layerId: layer.id, layerName: layer.name, severity, message, field });
+    };
+    const intValue = (value: unknown): number => typeof value === 'number' ? value : Number(value);
+    const isIntAtLeast = (value: unknown, min: number): boolean => {
+      const n = intValue(value);
+      return Number.isFinite(n) && Number.isInteger(n) && n >= min;
+    };
+    const isNumberInRange = (value: unknown, min: number, max: number, inclusiveMax = true): boolean => {
+      const n = intValue(value);
+      return Number.isFinite(n) && n >= min && (inclusiveMax ? n <= max : n < max);
+    };
+
+    const inputIndex = enabledLayers.findIndex(layer => layer.type === 'input');
+    const outputIndex = enabledLayers.findIndex(layer => layer.type === 'output');
+    if (inputIndex > 0) {
+      addIssue(enabledLayers[inputIndex], 'error', '输入层必须位于网络第一层。');
+    }
+    if (outputIndex >= 0 && outputIndex !== enabledLayers.length - 1) {
+      addIssue(enabledLayers[outputIndex], 'error', '输出层必须位于网络最后一层。');
+    }
+
+    for (const layer of enabledLayers) {
+      if (!layer.name.trim()) {
+        addIssue(layer, 'warning', '层名称为空，建议补充一个可读名称。');
+      }
+
+      if (layer.type === 'input') {
+        if (!isIntAtLeast(layer.params.height, 1)) addIssue(layer, 'error', '输入高度必须是大于 0 的整数。', 'height');
+        if (!isIntAtLeast(layer.params.width, 1)) addIssue(layer, 'error', '输入宽度必须是大于 0 的整数。', 'width');
+        if (!isIntAtLeast(layer.params.channels, 1)) addIssue(layer, 'error', '输入通道数必须是大于 0 的整数。', 'channels');
+        const p = layer.params;
+        currentShape = isIntAtLeast(p.height, 1) && isIntAtLeast(p.width, 1) && isIntAtLeast(p.channels, 1)
+          ? [Math.floor(intValue(p.height)), Math.floor(intValue(p.width)), Math.floor(intValue(p.channels))]
+          : [];
+      } else if (layer.type === 'conv2d') {
+        if (currentShape.length !== 3) {
+          addIssue(layer, 'error', `Conv2D 需要 3D 图像或特征图输入，当前输入为 ${SimEngine.formatShapeLabel(currentShape)}。`);
+          currentShape = [];
+        } else {
+          if (!isIntAtLeast(layer.params.outChannels, 1)) addIssue(layer, 'error', '输出通道必须是大于 0 的整数。', 'outChannels');
+          if (!isIntAtLeast(layer.params.kernelSize, 1)) addIssue(layer, 'error', '卷积核大小必须是大于 0 的整数。', 'kernelSize');
+          if (!isIntAtLeast(layer.params.stride, 1)) addIssue(layer, 'error', '步长必须是大于 0 的整数。', 'stride');
+          if (!isIntAtLeast(layer.params.padding, 0)) addIssue(layer, 'error', '填充必须是非负整数。', 'padding');
+          if (!isIntAtLeast(layer.params.dilation, 1)) addIssue(layer, 'error', '膨胀率必须是大于 0 的整数。', 'dilation');
+          const [h, w] = currentShape;
+          const k = Math.floor(intValue(layer.params.kernelSize));
+          const p = Math.floor(intValue(layer.params.padding));
+          const d = Math.floor(intValue(layer.params.dilation));
+          const s = Math.floor(intValue(layer.params.stride));
+          const effectiveKernel = d * (k - 1) + 1;
+          const outH = Math.floor((h + 2 * p - effectiveKernel) / s) + 1;
+          const outW = Math.floor((w + 2 * p - effectiveKernel) / s) + 1;
+          if (Number.isFinite(outH) && Number.isFinite(outW) && (outH <= 0 || outW <= 0)) {
+            addIssue(layer, 'error', `卷积后空间尺寸为 ${outH}x${outW}，请减小核大小/膨胀率或增大填充。`, 'kernelSize');
+            currentShape = [];
+          } else {
+            currentShape = SimEngine.inferLayerOutputShape(layer, [currentShape]);
+          }
+        }
+      } else if (layer.type === 'pool2d') {
+        if (currentShape.length !== 3) {
+          addIssue(layer, 'error', `池化层需要 3D 图像或特征图输入，当前输入为 ${SimEngine.formatShapeLabel(currentShape)}。`);
+          currentShape = [];
+        } else {
+          if (!isIntAtLeast(layer.params.kernelSize, 1)) addIssue(layer, 'error', '池化核大小必须是大于 0 的整数。', 'kernelSize');
+          if (!isIntAtLeast(layer.params.stride, 1)) addIssue(layer, 'error', '池化步长必须是大于 0 的整数。', 'stride');
+          if (!isIntAtLeast(layer.params.padding, 0)) addIssue(layer, 'error', '池化填充必须是非负整数。', 'padding');
+          if (isIntAtLeast(layer.params.kernelSize, 1) && isIntAtLeast(layer.params.padding, 0)
+            && intValue(layer.params.padding) > Math.floor(intValue(layer.params.kernelSize) / 2)) {
+            addIssue(layer, 'error', 'PyTorch 池化填充不能大于核大小的一半。', 'padding');
+          }
+          const nextShape = SimEngine.inferLayerOutputShape(layer, [currentShape]);
+          if (!nextShape.length) {
+            addIssue(layer, 'error', '池化后空间尺寸小于 1，请减小核大小或调整步长/填充。', 'kernelSize');
+          }
+          currentShape = nextShape;
+        }
+      } else if (layer.type === 'flatten') {
+        if (!currentShape.length) addIssue(layer, 'error', '上一层输出形状无效，无法展开。');
+        currentShape = SimEngine.inferLayerOutputShape(layer, [currentShape]);
+      } else if (layer.type === 'dense') {
+        if (!isIntAtLeast(layer.params.units, 1)) addIssue(layer, 'error', '神经元数必须是大于 0 的整数。', 'units');
+        if (!currentShape.length) addIssue(layer, 'error', '上一层输出形状无效，无法连接全连接层。');
+        currentShape = isIntAtLeast(layer.params.units, 1) ? [Math.floor(intValue(layer.params.units))] : [];
+      } else if (layer.type === 'activation') {
+        if (!currentShape.length) addIssue(layer, 'error', '上一层输出形状无效，无法应用激活函数。');
+      } else if (layer.type === 'dropout') {
+        if (!isNumberInRange(layer.params.rate, 0, 1, false)) {
+          addIssue(layer, 'error', 'Dropout 比率必须在 [0, 1) 范围内。', 'rate');
+        }
+        if (!currentShape.length) addIssue(layer, 'error', '上一层输出形状无效，无法应用 Dropout。');
+      } else if (layer.type === 'output') {
+        if (!isIntAtLeast(layer.params.units, 1)) addIssue(layer, 'error', '输出类别数必须是大于 0 的整数。', 'units');
+        if (!currentShape.length) addIssue(layer, 'error', '上一层输出形状无效，无法连接输出层。');
+        currentShape = isIntAtLeast(layer.params.units, 1) ? [Math.floor(intValue(layer.params.units))] : [];
+      }
+
+      shapeMap[layer.id] = SimEngine.formatShapeLabel(currentShape);
+    }
+
+    return { issues, shapeMap };
+  }
+
+  private trainingInputShape(): TensorShape {
+    const ds = this.trainingDatasetDetail;
+    if (ds?.kind === 'image') {
+      const p = this.inputLayer?.params;
+      if (p && Number.isFinite(+p.height) && Number.isFinite(+p.width) && Number.isFinite(+p.channels)) {
+        return [Math.max(1, Math.floor(+p.height)), Math.max(1, Math.floor(+p.width)), Math.max(1, Math.floor(+p.channels))];
+      }
+      const parsed = ds.inputShape.match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)/i);
+      if (parsed) return [Number(parsed[1]), Number(parsed[2]), Number(parsed[3])];
+      return [32, 32, 3];
+    }
+    if (ds?.kind === 'points') return [2];
+    const featureMatch = ds?.inputShape.match(/(\d+)/);
+    return [featureMatch ? Math.max(1, Number(featureMatch[1])) : 1];
   }
 
   private normBars(vals: number[]): number[] {
