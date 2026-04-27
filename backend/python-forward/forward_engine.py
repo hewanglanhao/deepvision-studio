@@ -4,6 +4,8 @@ import math
 from typing import Any, Dict, List, Tuple
 import random
 
+import numpy as np
+
 MAX_VISUALIZATION_SIDE = 56
 EDGE_KERNEL_3X3 = [
     [-1.0, -1.0, -1.0],
@@ -365,25 +367,23 @@ def run_conv2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> 
     if out_h <= 0 or out_w <= 0:
         raise ValueError("Conv2D output shape is invalid.")
 
-    output = [0.0] * (out_h * out_w * out_c)
-    for oc in range(out_c):
-        kernel_3d = resolve_kernel_3d(layer, oc, c, k)
-        bias = float((p.get("bias") or [])[oc]) if oc < len(p.get("bias") or []) else 0.0
-        for oy in range(out_h):
-            for ox in range(out_w):
-                acc = bias
-                for ic in range(c):
-                    for ky in range(k):
-                        for kx in range(k):
-                            iy = oy * stride + ky * dilation - pad
-                            ix = ox * stride + kx * dilation - pad
-                            if iy < 0 or iy >= h or ix < 0 or ix >= w:
-                                continue
-                            input_val = tensor3d_get(input_tensor["values"], w, c, iy, ix, ic)
-                            weight = kernel_3d[ic][ky][kx]
-                            acc += input_val * weight
-                activated = activate_value(acc, p["activation"])
-                tensor3d_set(output, out_w, out_c, oy, ox, oc, activated)
+    source = np.asarray(input_tensor["values"], dtype=np.float64).reshape((h, w, c))
+    padded = np.pad(source, ((pad, pad), (pad, pad), (0, 0)), mode="constant")
+    windows = np.lib.stride_tricks.sliding_window_view(
+        padded,
+        (effective_k, effective_k),
+        axis=(0, 1),
+    )[::stride, ::stride, :, ::dilation, ::dilation]
+    kernels = np.asarray(
+        [resolve_kernel_3d(layer, oc, c, k) for oc in range(out_c)],
+        dtype=np.float64,
+    ).transpose((1, 2, 3, 0))
+    output_arr = np.tensordot(windows, kernels, axes=([2, 3, 4], [0, 1, 2]))
+    bias = np.asarray(p.get("bias") or [], dtype=np.float64)
+    if bias.size:
+        output_arr += np.pad(bias[:out_c], (0, max(0, out_c - bias.size)), mode="constant")
+    output_arr = apply_activation_array(output_arr, p["activation"])
+    output = output_arr.reshape(-1).tolist()
 
     return {
         "tensor": {
@@ -417,29 +417,21 @@ def run_pool2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> 
     if out_h <= 0 or out_w <= 0:
         raise ValueError("Pool2D output shape is invalid.")
 
-    output = [0.0] * (out_h * out_w * c)
-    for oy in range(out_h):
-        for ox in range(out_w):
-            for ch in range(c):
-                max_val = float("-inf")
-                total = 0.0
-                cnt = 0
-                for ky in range(k):
-                    for kx in range(k):
-                        iy = oy * stride + ky - pad
-                        ix = ox * stride + kx - pad
-                        if iy < 0 or iy >= h or ix < 0 or ix >= w:
-                            continue
-                        val = tensor3d_get(input_tensor["values"], w, c, iy, ix, ch)
-                        if val > max_val:
-                            max_val = val
-                        total += val
-                        cnt += 1
-                if p["mode"] == "avg":
-                    pooled = total / max(1, cnt)
-                else:
-                    pooled = max_val if cnt > 0 else 0.0
-                tensor3d_set(output, out_w, c, oy, ox, ch, pooled)
+    source = np.asarray(input_tensor["values"], dtype=np.float64).reshape((h, w, c))
+    if p["mode"] == "avg":
+        padded = np.pad(source, ((pad, pad), (pad, pad), (0, 0)), mode="constant")
+        mask = np.pad(np.ones((h, w, 1), dtype=np.float64), ((pad, pad), (pad, pad), (0, 0)), mode="constant")
+        windows = np.lib.stride_tricks.sliding_window_view(padded, (k, k), axis=(0, 1))[::stride, ::stride]
+        mask_windows = np.lib.stride_tricks.sliding_window_view(mask, (k, k), axis=(0, 1))[::stride, ::stride]
+        sums = windows.sum(axis=(-1, -2))
+        counts = np.maximum(mask_windows.sum(axis=(-1, -2)), 1.0)
+        output_arr = sums / counts
+    else:
+        padded = np.pad(source, ((pad, pad), (pad, pad), (0, 0)), mode="constant", constant_values=-np.inf)
+        windows = np.lib.stride_tricks.sliding_window_view(padded, (k, k), axis=(0, 1))[::stride, ::stride]
+        output_arr = windows.max(axis=(-1, -2))
+        output_arr = np.where(np.isneginf(output_arr), 0.0, output_arr)
+    output = output_arr.reshape(-1).tolist()
 
     return {
         "tensor": {
@@ -471,26 +463,23 @@ def run_flatten_operator(input_tensor: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run_dense_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
-    input_vector = input_tensor["values"]
-    in_dim = len(input_vector)
+    input_vector = np.asarray(input_tensor["values"], dtype=np.float64)
+    in_dim = int(input_vector.size)
     p = layer["params"]
     units = max(1, int(p["units"]))
-    out = [0.0] * units
 
     weights = p.get("weights")
-    bias = p.get("bias") or []
-    for o in range(units):
-        acc = float(bias[o]) if o < len(bias) else 0.0
-        for i in range(in_dim):
-            w = weights[o][i] if weights and o < len(weights) and i < len(weights[o]) else synthetic_weight(layer["id"], o, i)
-            acc += input_vector[i] * w
-        out[o] = acc
+    weight_matrix = dense_weight_matrix(layer["id"], units, in_dim, weights)
+    out_arr = weight_matrix @ input_vector
+    bias = np.asarray(p.get("bias") or [], dtype=np.float64)
+    if bias.size:
+        out_arr += np.pad(bias[:units], (0, max(0, units - bias.size)), mode="constant")
 
     activation = p["activation"]
     if activation == "softmax":
-        out = softmax(out)
+        out = softmax_array(out_arr).tolist()
     else:
-        out = [activate_value(v, activation) for v in out]
+        out = apply_activation_array(out_arr, activation).tolist()
 
     return {
         "tensor": {
@@ -721,8 +710,36 @@ def fit_kernel_matrix(matrix: List[List[float]], kernel_size: int) -> List[List[
     return [[float(source[y][x]) if y < len(source) and x < len(source[y]) else 0.0 for x in range(kernel_size)] for y in range(kernel_size)]
 
 
+def dense_weight_matrix(layer_seed: int, units: int, in_dim: int, weights: Any) -> np.ndarray:
+    out_idx = np.arange(units, dtype=np.float64)[:, None]
+    in_idx = np.arange(in_dim, dtype=np.float64)[None, :]
+    matrix = np.sin((layer_seed + 1) * 0.173 + (out_idx + 1) * 0.119 + (in_idx + 1) * 0.071) * 0.5
+
+    if isinstance(weights, list):
+        for row_idx, row in enumerate(weights[:units]):
+            if not isinstance(row, list):
+                continue
+            usable = min(in_dim, len(row))
+            if usable > 0:
+                matrix[row_idx, :usable] = np.asarray(row[:usable], dtype=np.float64)
+    return matrix
+
+
 def synthetic_weight(layer_seed: int, out_index: int, in_index: int) -> float:
     return math.sin((layer_seed + 1) * 0.173 + (out_index + 1) * 0.119 + (in_index + 1) * 0.071) * 0.5
+
+
+def apply_activation_array(values: np.ndarray, activation: str) -> np.ndarray:
+    if activation in ("none", "softmax"):
+        return values
+    if activation == "relu":
+        return np.maximum(values, 0.0)
+    if activation == "tanh":
+        return np.tanh(values)
+    if activation == "gelu":
+        cdf = 0.5 * (1 + np.tanh(np.sqrt(2 / np.pi) * (values + 0.044715 * np.power(values, 3))))
+        return values * cdf
+    return 1 / (1 + np.exp(-values))
 
 
 def activate_value(value: float, activation: str) -> float:
@@ -747,6 +764,16 @@ def softmax(values: List[float]) -> List[float]:
     if total <= 0:
         return [0.0 for _ in values]
     return [v / total for v in exps]
+
+
+def softmax_array(values: np.ndarray) -> np.ndarray:
+    if values.size == 0:
+        return values
+    exps = np.exp(values - np.max(values))
+    total = np.sum(exps)
+    if total <= 0:
+        return np.zeros_like(values)
+    return exps / total
 
 
 def normalize_values(values: List[float]) -> List[float]:
