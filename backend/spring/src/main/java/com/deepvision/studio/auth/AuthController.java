@@ -59,9 +59,11 @@ public class AuthController {
 
   @GetMapping("/me")
   public UserResponse me(Principal principal) {
+    if (principal == null) {
+      return null;
+    }
     AppUser user = users.findByUsername(principal.getName())
         .orElseThrow(() -> new IllegalArgumentException("User not found."));
     return UserResponse.from(user);
   }
 }
-

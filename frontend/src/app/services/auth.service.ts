@@ -18,7 +18,11 @@ export class AuthService {
   async restoreSession(): Promise<void> {
     if (!this.api.token) return;
     try {
-      const user = await this.api.request<AuthUser>('/api/auth/me');
+      const user = await this.api.request<AuthUser | null>('/api/auth/me');
+      if (!user) {
+        this.logout();
+        return;
+      }
       this.storeUser(user);
     } catch {
       this.logout();
@@ -67,4 +71,3 @@ export class AuthService {
     }
   }
 }
-

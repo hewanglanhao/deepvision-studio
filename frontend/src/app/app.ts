@@ -228,7 +228,8 @@ export class App implements OnInit, OnDestroy {
   private tensorChannelPreviewCache = new WeakMap<ForwardTensor, ChannelPreviewItem[]>();
   private forwardDebounceTimer: number | null = null;
   private forwardRequestSeq = 0;
-  private activeForwardAbort: AbortController | null = null;
+  private forwardInFlight = false;
+  private forwardRerunRequested = false;
 
   constructor(
     private trainingSvc: TrainingRuntimeService,
@@ -272,8 +273,6 @@ export class App implements OnInit, OnDestroy {
       window.clearTimeout(this.forwardDebounceTimer);
       this.forwardDebounceTimer = null;
     }
-    this.activeForwardAbort?.abort();
-    this.activeForwardAbort = null;
     this.trainingSvc.pause();
   }
 
@@ -1019,6 +1018,12 @@ export class App implements OnInit, OnDestroy {
       this.forwardStatusMessage = '参数已更新，点击“开始计算”执行前向传播。';
       return;
     }
+    if (this.forwardInFlight) {
+      this.pendingForwardChanges = true;
+      this.forwardRerunRequested = true;
+      this.forwardStatusMessage = '计算中...';
+      return;
+    }
     const activeSeq = ++this.forwardRequestSeq;
     if (this.forwardDebounceTimer !== null) {
       window.clearTimeout(this.forwardDebounceTimer);
@@ -1035,30 +1040,36 @@ export class App implements OnInit, OnDestroy {
       }
 
       this.forwardBusy = true;
+      this.forwardInFlight = true;
       this.pendingForwardChanges = false;
       this.forwardStatusMessage = '计算中...';
-      this.activeForwardAbort?.abort();
-      this.activeForwardAbort = new AbortController();
       try {
         const remote = await this.forwardBackend.executeForward({
           layers: this.layers,
           connections: this.connections,
           inputTensor
-        }, this.activeForwardAbort.signal);
+        });
         this.forwardBackendError = '';
         this.forwardStatusMessage = '计算完成。';
-        this.applyForwardResult(remote, activeSeq);
+        if (!this.forwardRerunRequested) {
+          this.applyForwardResult(remote, activeSeq);
+        }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           this.forwardStatusMessage = '计算已取消。';
           return;
         }
-        this.forwardBackendError = '后端不可用，前端本地前向推理已移除。';
+        this.forwardBackendError = '后端不可用。';
         this.forwardStatusMessage = '后端请求失败。';
       } finally {
+        this.forwardInFlight = false;
+        const shouldRerun = this.forwardRerunRequested;
+        this.forwardRerunRequested = false;
         if (activeSeq === this.forwardRequestSeq) {
           this.forwardBusy = false;
-          this.activeForwardAbort = null;
+        }
+        if (shouldRerun) {
+          this.runForward(true);
         }
       }
     }, 80);
@@ -1069,8 +1080,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   cancelForwardCompute(): void {
-    this.activeForwardAbort?.abort();
-    this.activeForwardAbort = null;
+    this.forwardRerunRequested = false;
     this.forwardBusy = false;
     this.forwardStatusMessage = '计算已取消。';
     this.forwardRequestSeq += 1;

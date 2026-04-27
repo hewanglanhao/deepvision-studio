@@ -21,6 +21,11 @@ public class ApiExceptionHandler {
     return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", ex.getMessage()));
   }
 
+  @ExceptionHandler(IllegalStateException.class)
+  ResponseEntity<Map<String, String>> unavailable(IllegalStateException ex) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", ex.getMessage()));
+  }
+
   @ExceptionHandler(MethodArgumentNotValidException.class)
   ResponseEntity<Map<String, String>> validation(MethodArgumentNotValidException ex) {
     String message = ex.getBindingResult().getFieldErrors().stream()
@@ -30,4 +35,3 @@ public class ApiExceptionHandler {
     return ResponseEntity.badRequest().body(Map.of("error", message));
   }
 }
-

@@ -1,7 +1,6 @@
 # DeepVision Studio Spring Backend
 
-这个后端负责全站用户注册登录，以及 A 模式前向传播记录的保存、查询、回溯和删除。
-现有 Python Flask 后端仍然只负责 A 模式前向传播计算，默认端口还是 `5000`。
+Spring 后端负责用户注册登录、JWT 鉴权、A 模式前向传播记录的保存/查询/删除，以及统一代理 Python 前向传播服务。
 
 ## 技术栈
 
@@ -15,11 +14,11 @@
 
 ## 环境变量
 
-开发环境可以不配置环境变量，后端会使用 `application.yml` 里的默认值。
-正式提交或演示时建议至少配置 JWT 密钥：
+开发环境可以不配置环境变量，默认值在 `src/main/resources/application.yml` 中。
 
 ```powershell
 $env:DEEPVISION_JWT_SECRET="replace-with-a-random-secret-at-least-32-bytes"
+$env:DEEPVISION_FORWARD_BASE_URL="http://127.0.0.1:5000"
 ```
 
 可选配置：
@@ -35,49 +34,26 @@ $env:DEEPVISION_JWT_EXPIRATION_MINUTES="10080"
 ## 启动
 
 ```powershell
-cd spring-backend
-mvn clean package
-java -jar target/studio-backend-0.0.1-SNAPSHOT.jar
+cd backend/spring
+mvn spring-boot:run
 ```
 
 默认地址：
 
 - Spring 后端：`http://127.0.0.1:8080`
 - H2 控制台：`http://127.0.0.1:8080/h2-console`
-- 图片访问：`http://127.0.0.1:8080/uploads/...`
-
-H2 控制台默认连接信息：
-
-- JDBC URL：`jdbc:h2:file:./data/deepvision;AUTO_SERVER=TRUE`
-- User Name：`sa`
-- Password：空
+- 上传图片访问：`http://127.0.0.1:8080/uploads/...`
 
 ## 接口
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/auth/me`
+- `POST /api/forward`
+- `GET /api/forward/health`
 - `GET /api/a/forward-records`
 - `POST /api/a/forward-records`
 - `GET /api/a/forward-records/{id}`
 - `DELETE /api/a/forward-records/{id}`
 
 `/api/a/forward-records` 需要 `Authorization: Bearer <token>`。
-
-## 与前端、Python 后端一起运行
-
-分别开三个终端：
-
-```powershell
-# 1. Angular
-npm start
-
-# 2. Python Flask A 模式计算后端
-cd backend
-python app.py
-
-# 3. Spring 登录与记录后端
-cd spring-backend
-mvn clean package
-java -jar target/studio-backend-0.0.1-SNAPSHOT.jar
-```
