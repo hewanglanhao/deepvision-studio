@@ -1,4 +1,4 @@
-<div class="app-shell">
+﻿<div class="app-shell">
   <header class="topbar">
     <a class="brand-wrap" routerLink="/">
       <div class="brand-logo">D</div>
@@ -243,19 +243,31 @@
                   </label>
                 </div>
                 <div class="row-2">
-                  <label>步长
+                  <label>stride
                     <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'stride')" />
                     @if (hasFieldError(layer.id, 'stride')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div>
                     }
                   </label>
-                  <label>填充
+                  <label>padding
                     <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'padding')" />
                     @if (hasFieldError(layer.id, 'padding')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'padding') }}</div>
                     }
+                  </label>
+                </div>
+                <div class="row-2">
+                  <label>Dilation
+                    <input type="number" min="1" [(ngModel)]="layer.params.dilation" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'dilation')" />
+                    @if (hasFieldError(layer.id, 'dilation')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'dilation') }}</div>
+                    }
+                  </label>
+                  <label>Bias
+                    <input type="number" step="0.01" [ngModel]="convBiasValue(layer)" (ngModelChange)="onConvBiasInput(layer, $event)" />
                   </label>
                 </div>
                 <div class="row-2" [class.row-1]="!showConvInChannelSelector">
@@ -313,11 +325,18 @@
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div>
                     }
                   </label>
-                  <label>步长
+                  <label>stride
                     <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'stride')" />
                     @if (hasFieldError(layer.id, 'stride')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div>
+                    }
+                  </label>
+                  <label>padding
+                    <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'padding')" />
+                    @if (hasFieldError(layer.id, 'padding')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'padding') }}</div>
                     }
                   </label>
                 </div>
@@ -338,6 +357,7 @@
                     </select>
                   </label>
                 </div>
+                <ng-container *ngTemplateOutlet="denseWeightEditor; context: { layer: layer, title: '偏置', unitLabel: '输出神经元' }"></ng-container>
               }
 
               @if (layer.type === 'output') {
@@ -355,6 +375,7 @@
                     </select>
                   </label>
                 </div>
+                <ng-container *ngTemplateOutlet="denseWeightEditor; context: { layer: layer, title: '输出层偏置', unitLabel: '输出类别' }"></ng-container>
               }
 
               @if (layer.type === 'activation') {
@@ -373,10 +394,32 @@
                     <div class="field-error-msg">{{ fieldErrorText(layer.id, 'rate') }}</div>
                   }
                 </label>
+                <div class="checkbox-row">
+                  <input type="checkbox" [(ngModel)]="layer.params.training" (ngModelChange)="onLayerConfigChange()" />
+                  训练模式下启用随机丢弃
+                </div>
               }
             </div>
           </div>
         }
+
+        <ng-template #denseWeightEditor let-layer="layer" let-title="title" let-unitLabel="unitLabel">
+          <div class="advanced-param-box dense-weight-editor">
+            <div class="section-title">{{ title }}</div>
+            <div class="row-2">
+              <label>编辑{{ unitLabel }}
+                <select [ngModel]="selectedDenseWeightRow(layer)" (ngModelChange)="onDenseWeightRowChange(layer, $event)">
+                  @for (unit of denseUnitIndices(layer); track unit) {
+                    <option [ngValue]="unit">{{ unitLabel }} {{ unit }}</option>
+                  }
+                </select>
+              </label>
+              <label>Bias
+                <input type="number" step="0.01" [ngModel]="denseBiasValue(layer, selectedDenseWeightRow(layer))" (ngModelChange)="onDenseBiasInput(layer, $event)" />
+              </label>
+            </div>
+          </div>
+        </ng-template>
       </main>
 
       <!-- 右侧：层检查器 -->
@@ -879,4 +922,9 @@
   }
 
   <app-help-manual [open]="showHelp" (closed)="showHelp=false" />
+  <app-llm-floating-assistant
+    title="A模式 AI 分析"
+    [systemPrompt]="modeALlmSystemPrompt"
+    [contextProvider]="modeALlmContextProvider"
+  />
 </div>

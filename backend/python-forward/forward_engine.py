@@ -713,7 +713,8 @@ def fit_kernel_matrix(matrix: List[List[float]], kernel_size: int) -> List[List[
 def dense_weight_matrix(layer_seed: int, units: int, in_dim: int, weights: Any) -> np.ndarray:
     out_idx = np.arange(units, dtype=np.float64)[:, None]
     in_idx = np.arange(in_dim, dtype=np.float64)[None, :]
-    matrix = np.sin((layer_seed + 1) * 0.173 + (out_idx + 1) * 0.119 + (in_idx + 1) * 0.071) * 0.5
+    scale = 1.0 / math.sqrt(max(1, in_dim))
+    matrix = np.sin((layer_seed + 1) * 0.173 + (out_idx + 1) * 0.119 + (in_idx + 1) * 0.071) * 0.5 * scale
 
     if isinstance(weights, list):
         for row_idx, row in enumerate(weights[:units]):
