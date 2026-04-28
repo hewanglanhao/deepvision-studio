@@ -5,6 +5,7 @@ import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { HelpManualComponent } from '../../components/help-manual.component';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
+import { NETWORK_3D_SESSION_KEY, Network3dPayload } from '../../features/network-3d/network-3d.models';
 import { AuthUser } from '../../models/auth.models';
 import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from '../../models/forward-record.models';
 import { AuthService } from '../../services/auth.service';
@@ -17,7 +18,7 @@ import {
   ConvKernelSpec,
   ForwardInputAsset, ForwardLayerResult, ForwardPassResult,
   ForwardTensor, ImagePreviewItem, InputLayer, LabelDistributionItem, LayerType,
-  LayerValidationIssue, MetricPoint, ModelTemplate, NetworkLayer, PointPreviewItem,
+  LayerValidationIssue, MetricPoint, ModelTemplate, NetworkLayer, PointPreviewItem, TensorShape,
   PresetTask, TablePreview, TrainingConfig, TrainingDatasetDetail, TrainingDatasetKind,
   TrainingDatasetOption
 } from '../../sim-models';
@@ -562,6 +563,23 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
 
   closeImageViewer(): void {
     this.imageViewer = { open: false, title: '', url: '', meta: '' };
+  }
+
+  openNetwork3dViewer(): void {
+    const payload: Network3dPayload = {
+      title: 'A 模式网络层 3D 展示',
+      sourceMode: 'Mode A',
+      createdAt: new Date().toISOString(),
+      inputImageUrl: this.preparedInputImageUrl || this.originalInputImageUrl,
+      inputLabel: this.currentInputAsset?.name,
+      layers: structuredClone(this.layers),
+      shapeHints: structuredClone(this.forwardLayerShapeMap),
+      layerShapes: this.buildNetwork3dLayerShapes(),
+      selectedLayerId: this.selectedLayerId
+    };
+
+    localStorage.setItem(NETWORK_3D_SESSION_KEY, JSON.stringify(payload));
+    window.open('/network-3d', '_blank', 'noopener,noreferrer');
   }
 
   get isRgbInput(): boolean { return (this.currentInputAsset?.originalChannels ?? 1) >= 3; }
@@ -1394,6 +1412,24 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
     this.layers = this.layers.map((l, i) => ({ ...l, inputs: i === 0 ? [] : [this.layers[i - 1].id] }));
     this.connections = SimEngine.rebuildLinearConnections(this.layers);
     this.syncKernelShape();
+  }
+
+  private buildNetwork3dLayerShapes(): Record<number, TensorShape> {
+    const shapes: Record<number, TensorShape> = {};
+    for (const result of this.forwardResult?.layerResults ?? []) {
+      shapes[result.layerId] = result.outputShape;
+    }
+    if (Object.keys(shapes).length) {
+      return shapes;
+    }
+
+    for (const layer of this.layers) {
+      const inputShapes = (layer.inputs ?? [])
+        .map((id) => shapes[id])
+        .filter((shape): shape is TensorShape => shape !== undefined);
+      shapes[layer.id] = SimEngine.inferLayerOutputShape(layer, inputShapes);
+    }
+    return shapes;
   }
 
   private syncKernelShape(): void {

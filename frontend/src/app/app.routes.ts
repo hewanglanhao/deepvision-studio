@@ -40,6 +40,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/mode-d/mode-d-page.component')
       .then(m => m.ModeDPageComponent)
   },
+  {
+    path: 'network-3d',
+    loadComponent: () => import('./features/network-3d/network-3d-viewer.component')
+      .then(m => m.Network3dViewerComponent)
+  },
   { path: 'forward', redirectTo: 'mode-a', pathMatch: 'full' },
   { path: 'training', redirectTo: 'mode-b', pathMatch: 'full' },
   { path: '**', redirectTo: '' }
