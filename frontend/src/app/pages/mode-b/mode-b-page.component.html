@@ -902,6 +902,41 @@
           </div>
         }
 
+        <div class="checkpoint-panel">
+          <div class="checkpoint-head">
+            <div>
+              <div class="section-title">模型 Checkpoint</div>
+              <div class="muted">登录后训练完成会自动保存 checkpoint，可手动选择并重新跑测试集。</div>
+            </div>
+            <button class="btn-sm" (click)="loadTrainingCheckpoints()" [disabled]="!authUser || checkpointBusy">刷新</button>
+          </div>
+          @if (!authUser) {
+            <div class="warn-box">需要登录后才能保存和加载自己的 checkpoint。</div>
+          } @else if (trainingCheckpoints.length) {
+            <div class="checkpoint-controls">
+              <label>选择 Checkpoint
+                <select [(ngModel)]="selectedCheckpointId">
+                  @for (ckpt of trainingCheckpoints; track ckpt.id) {
+                    <option [ngValue]="ckpt.id">{{ ckpt.name }} · {{ ckpt.createdAt | date:'MM-dd HH:mm' }}</option>
+                  }
+                </select>
+              </label>
+              <button class="btn-primary" (click)="runSelectedCheckpointTest()" [disabled]="checkpointBusy || !selectedCheckpointId || trainingStatus==='running'">跑测试集</button>
+            </div>
+            @if (selectedCheckpoint; as ckpt) {
+              <div class="checkpoint-meta">
+                <span>{{ ckpt.datasetName }}</span>
+                <span>Epoch {{ ckpt.epoch }} / {{ ckpt.totalEpochs }}</span>
+                <span>测试准确率 {{ ckpt.testAccuracy === null ? 'N/A' : ((ckpt.testAccuracy * 100) | number:'1.1-1') + '%' }}</span>
+                <span>签名 {{ ckpt.modelSignature.slice(0, 10) }}</span>
+              </div>
+            }
+          } @else {
+            <div class="muted">暂无 checkpoint。完成一次登录状态下的训练后会自动出现。</div>
+          }
+          @if (checkpointError) { <div class="error-box" style="margin-top:8px">{{ checkpointError }}</div> }
+        </div>
+
         <div class="charts-area">
           <div class="chart-wrap"><div class="chart-label" style="color:var(--red)">损失曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="lossPolyline" fill="none" stroke="#dc2626" stroke-width="2"/><polyline [attr.points]="valLossPolyline" fill="none" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#dc2626">— 训练损失</span><span style="color:#d97706">- - 验证损失</span></div></div>
           <div class="chart-wrap"><div class="chart-label" style="color:var(--accent)">准确率曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="accPolyline" fill="none" stroke="#2563eb" stroke-width="2"/><polyline [attr.points]="valPolyline" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#2563eb">— 训练集</span><span style="color:#059669">- - 验证集</span></div></div>

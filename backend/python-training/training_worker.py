@@ -103,7 +103,10 @@ def main() -> int:
 
     request_path = Path(args.request).resolve()
     request = json.loads(request_path.read_text(encoding="utf-8"))
-    train(request)
+    if request.get("action") == "test_checkpoint":
+        test_checkpoint(request)
+    else:
+        train(request)
     return 0
 
 
@@ -115,6 +118,8 @@ def train(request: dict[str, Any]) -> None:
     split = request["split"]
     config = request["config"]
     layers = request.get("layers") or []
+    checkpoint_file = Path(request.get("checkpointFile") or (request_path_fallback(job_id) / "checkpoint.pt")).resolve()
+    model_signature = str(request.get("modelSignature") or "")
 
     seed = int(request.get("seed", 20260427))
     random.seed(seed)
@@ -180,6 +185,7 @@ def train(request: dict[str, Any]) -> None:
             "gradientStatus": gradient_status(gradient_norm),
         })
 
+    save_checkpoint(checkpoint_file, model, layers, dataset_id, config, class_count, model_signature)
     test_loss = None
     test_accuracy = None
     if test_loader is not None:
@@ -190,9 +196,79 @@ def train(request: dict[str, Any]) -> None:
         "testLoss": None if test_loss is None else round(test_loss, 4),
         "testAccuracy": None if test_accuracy is None else round(test_accuracy, 4),
         "sampleCount": len(test_set),
+        "checkpointPath": str(checkpoint_file),
         "samples": collect_prediction_samples(model, dataset, test_set, device, dataset_root, limit=8),
     })
     emit({"type": "control", "jobId": job_id, "status": "completed", "message": "Training completed. Test set evaluated."})
+
+
+def test_checkpoint(request: dict[str, Any]) -> None:
+    job_id = request.get("jobId", "checkpoint-test")
+    dataset_root = Path(request["datasetRoot"]).resolve()
+    dataset_id = request["datasetId"]
+    split = request["split"]
+    checkpoint_file = Path(request["checkpointFile"]).resolve()
+
+    checkpoint = torch.load(checkpoint_file, map_location="cpu", weights_only=False)
+    layers = checkpoint.get("layers") or request.get("layers") or []
+    dataset = load_dataset(dataset_root, dataset_id, layers)
+    _, _, test_set = split_dataset(dataset, split, int(request.get("seed", 20260427)))
+    if len(test_set) <= 0:
+        emit({
+            "type": "test_result",
+            "jobId": job_id,
+            "testLoss": None,
+            "testAccuracy": None,
+            "sampleCount": 0,
+            "samples": [],
+        })
+        return
+
+    sample_x, _ = dataset[0]
+    class_count = len(getattr(dataset, "classes", []))
+    model = build_model(layers, sample_x, class_count)
+    state = checkpoint.get("modelStateDict") or checkpoint.get("model_state_dict")
+    if state is None:
+        raise ValueError(f"Checkpoint has no model state: {checkpoint_file}")
+    model.load_state_dict(state)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    loader = DataLoader(test_set, batch_size=max(1, int(request.get("batchSize") or 32)), shuffle=False, num_workers=0)
+    criterion = nn.CrossEntropyLoss()
+    test_loss, test_accuracy = evaluate(model, loader, criterion, device)
+    emit({
+        "type": "test_result",
+        "jobId": job_id,
+        "testLoss": round(test_loss, 4),
+        "testAccuracy": round(test_accuracy, 4),
+        "sampleCount": len(test_set),
+        "samples": collect_prediction_samples(model, dataset, test_set, device, dataset_root, limit=8),
+    })
+
+
+def request_path_fallback(job_id: str) -> Path:
+    return Path.cwd() / "training-jobs" / job_id
+
+
+def save_checkpoint(
+    checkpoint_file: Path,
+    model: nn.Module,
+    layers: list[dict[str, Any]],
+    dataset_id: str,
+    config: dict[str, Any],
+    class_count: int,
+    model_signature: str,
+) -> None:
+    checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        "modelStateDict": model.state_dict(),
+        "layers": layers,
+        "datasetId": dataset_id,
+        "config": config,
+        "classCount": class_count,
+        "modelSignature": model_signature,
+    }, checkpoint_file)
 
 
 def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any]]) -> Dataset:

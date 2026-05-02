@@ -1,8 +1,11 @@
 package com.deepvision.studio.training;
 
+import com.deepvision.studio.training.TrainingDtos.CheckpointTestResult;
 import com.deepvision.studio.training.TrainingDtos.DatasetErrorResponse;
 import com.deepvision.studio.training.TrainingDtos.DatasetImportResponse;
 import com.deepvision.studio.training.TrainingDtos.StartTrainingRequest;
+import com.deepvision.studio.training.TrainingDtos.TestCheckpointRequest;
+import com.deepvision.studio.training.TrainingDtos.TrainingCheckpointSummary;
 import com.deepvision.studio.training.TrainingDtos.TrainingControlResponse;
 import com.deepvision.studio.training.TrainingDtos.TrainingDatasetDetail;
 import com.deepvision.studio.training.TrainingDtos.TrainingDatasetOption;
@@ -10,6 +13,7 @@ import com.deepvision.studio.training.TrainingDtos.TrainingStartResponse;
 import com.deepvision.studio.training.TrainingDtos.TrainingStatusResponse;
 import com.deepvision.studio.training.TrainingDtos.WeightHistogramResponse;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -59,8 +63,22 @@ public class TrainingController {
   }
 
   @PostMapping("/start")
-  public TrainingStartResponse start(@Valid @RequestBody StartTrainingRequest request) {
-    return jobService.start(request);
+  public TrainingStartResponse start(Principal principal, @Valid @RequestBody StartTrainingRequest request) {
+    return jobService.start(request, principal == null ? null : principal.getName());
+  }
+
+  @GetMapping("/checkpoints")
+  public List<TrainingCheckpointSummary> checkpoints(Principal principal) {
+    return jobService.listCheckpoints(principal == null ? null : principal.getName());
+  }
+
+  @PostMapping("/checkpoints/{checkpointId}/test")
+  public CheckpointTestResult testCheckpoint(
+      Principal principal,
+      @PathVariable Long checkpointId,
+      @Valid @RequestBody TestCheckpointRequest request
+  ) {
+    return jobService.testCheckpoint(principal == null ? null : principal.getName(), checkpointId, request);
   }
 
   @GetMapping("/{jobId}/weights/histogram")
@@ -94,7 +112,7 @@ public class TrainingController {
   }
 
   @PostMapping("/{jobId}/save")
-  public TrainingControlResponse save(@PathVariable String jobId) {
+  public TrainingControlResponse save(Principal principal, @PathVariable String jobId) {
     return jobService.save(jobId);
   }
 

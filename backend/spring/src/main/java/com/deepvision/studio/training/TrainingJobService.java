@@ -1,8 +1,13 @@
 package com.deepvision.studio.training;
 
+import com.deepvision.studio.auth.AppUser;
+import com.deepvision.studio.auth.AppUserRepository;
+import com.deepvision.studio.training.TrainingDtos.CheckpointTestResult;
 import com.deepvision.studio.training.TrainingDtos.HistogramBin;
 import com.deepvision.studio.training.TrainingDtos.SplitRequest;
 import com.deepvision.studio.training.TrainingDtos.StartTrainingRequest;
+import com.deepvision.studio.training.TrainingDtos.TestCheckpointRequest;
+import com.deepvision.studio.training.TrainingDtos.TrainingCheckpointSummary;
 import com.deepvision.studio.training.TrainingDtos.TrainingConfigRequest;
 import com.deepvision.studio.training.TrainingDtos.TrainingControlResponse;
 import com.deepvision.studio.training.TrainingDtos.TrainingDatasetDetail;
@@ -18,6 +23,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,6 +32,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -33,6 +41,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
@@ -43,6 +54,8 @@ public class TrainingJobService {
   private static final DateTimeFormatter JOB_ID_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
   private final TrainingDatasetService datasetService;
+  private final AppUserRepository users;
+  private final TrainingCheckpointRepository checkpoints;
   private final ObjectMapper objectMapper;
   private final ExecutorService executor = Executors.newCachedThreadPool();
   private final Map<String, TrainingJob> jobs = new ConcurrentHashMap<>();
@@ -55,6 +68,8 @@ public class TrainingJobService {
 
   public TrainingJobService(
       TrainingDatasetService datasetService,
+      AppUserRepository users,
+      TrainingCheckpointRepository checkpoints,
       ObjectMapper objectMapper,
       @Value("${deepvision.training.stream-base-url:ws://127.0.0.1:8080}") String streamBaseUrl,
       @Value("${deepvision.datasets.root}") String datasetRoot,
@@ -63,6 +78,8 @@ public class TrainingJobService {
       @Value("${deepvision.training.worker-script:../python-training/training_worker.py}") String workerScript
   ) {
     this.datasetService = datasetService;
+    this.users = users;
+    this.checkpoints = checkpoints;
     this.objectMapper = objectMapper;
     this.streamBaseUrl = trimTrailingSlash(streamBaseUrl);
     this.datasetRoot = Path.of(datasetRoot).toAbsolutePath().normalize();
@@ -71,7 +88,7 @@ public class TrainingJobService {
     this.workerScript = Path.of(workerScript).toAbsolutePath().normalize();
   }
 
-  public TrainingStartResponse start(StartTrainingRequest request) {
+  public TrainingStartResponse start(StartTrainingRequest request, String username) {
     TrainingDatasetDetail dataset = datasetService.getDetail(request.datasetId());
     validateSplit(request.split());
     if (!dataset.hasLabels()) {
@@ -85,7 +102,7 @@ public class TrainingJobService {
     int totalBatches = Math.max(1, (int) Math.ceil(trainSamples / batchSize));
 
     String jobId = nextJobId();
-    TrainingJob job = new TrainingJob(jobId, request, totalEpochs, totalBatches);
+    TrainingJob job = new TrainingJob(jobId, request, username, modelSignature(request), totalEpochs, totalBatches);
     jobs.put(jobId, job);
     startPythonWorker(job);
     return new TrainingStartResponse(
@@ -150,7 +167,32 @@ public class TrainingJobService {
 
   public TrainingControlResponse save(String jobId) {
     TrainingJob job = getJob(jobId);
-    return new TrainingControlResponse(jobId, job.status(), "Training metadata saved. Model checkpoint export is not implemented yet.");
+    if (job.username() == null || job.username().isBlank()) {
+      throw new IllegalArgumentException("Please login before saving checkpoints.");
+    }
+    if (job.testResult() == null) {
+      throw new IllegalArgumentException("Checkpoint can be saved after test set evaluation completes.");
+    }
+    TrainingCheckpoint checkpoint = saveCheckpoint(job, job.testResult());
+    return new TrainingControlResponse(jobId, job.status(), "Checkpoint saved: " + checkpoint.getName());
+  }
+
+  public List<TrainingCheckpointSummary> listCheckpoints(String username) {
+    requireUser(username);
+    return checkpoints.findByUserUsernameOrderByCreatedAtDesc(username).stream()
+        .map(TrainingCheckpointSummary::from)
+        .toList();
+  }
+
+  public CheckpointTestResult testCheckpoint(String username, Long checkpointId, TestCheckpointRequest request) {
+    requireUser(username);
+    TrainingCheckpoint checkpoint = checkpoints.findByIdAndUserUsername(checkpointId, username)
+        .orElseThrow(() -> new IllegalArgumentException("Checkpoint not found."));
+    String requestedSignature = modelSignature(request.datasetId(), request.layers());
+    if (!checkpoint.getModelSignature().equals(requestedSignature)) {
+      throw new IllegalArgumentException("当前模型结构或数据集与 checkpoint 不一致，不能用该 checkpoint 跑测试集。");
+    }
+    return runCheckpointTest(checkpoint);
   }
 
   public void addSession(String jobId, WebSocketSession session) {
@@ -244,6 +286,15 @@ public class TrainingJobService {
       job.setStatus(status);
       broadcastRaw(job.jobId(), line);
     } else if ("test_result".equals(type)) {
+      job.setTestResult(node);
+      if (!job.checkpointSaved() && job.username() != null && !job.username().isBlank()) {
+        try {
+          saveCheckpoint(job, node);
+          job.setCheckpointSaved(true);
+        } catch (RuntimeException ignored) {
+          // Keep streaming the test result even if persistence fails.
+        }
+      }
       broadcastRaw(job.jobId(), line);
     } else if ("error".equals(type)) {
       job.setStatus("stopped");
@@ -340,6 +391,139 @@ public class TrainingJobService {
     return job;
   }
 
+  private void requireUser(String username) {
+    if (username == null || username.isBlank()) {
+      throw new IllegalArgumentException("Please login first.");
+    }
+  }
+
+  private TrainingCheckpoint saveCheckpoint(TrainingJob job, JsonNode testResult) {
+    AppUser user = users.findByUsername(job.username())
+        .orElseThrow(() -> new IllegalArgumentException("User not found."));
+    if (!Files.exists(job.checkpointFile())) {
+      throw new IllegalArgumentException("Checkpoint file is not available yet.");
+    }
+    TrainingDatasetDetail dataset = datasetService.getDetail(job.request().datasetId());
+    try {
+      String layersJson = objectMapper.writeValueAsString(job.request().layers() == null ? List.of() : job.request().layers());
+      String configJson = objectMapper.writeValueAsString(job.request().config());
+      String splitJson = objectMapper.writeValueAsString(job.request().split());
+      String testResultJson = objectMapper.writeValueAsString(testResult);
+      TrainingCheckpoint checkpoint = new TrainingCheckpoint(
+          user,
+          dataset.name() + " · " + job.jobId(),
+          job.jobId(),
+          job.request().datasetId(),
+          dataset.name(),
+          job.modelSignature(),
+          job.checkpointFile().toString(),
+          layersJson,
+          configJson,
+          splitJson,
+          testResultJson,
+          job.epoch(),
+          job.totalEpochs(),
+          testResult.path("testLoss").isNull() || testResult.path("testLoss").isMissingNode() ? null : testResult.path("testLoss").asDouble(),
+          testResult.path("testAccuracy").isNull() || testResult.path("testAccuracy").isMissingNode() ? null : testResult.path("testAccuracy").asDouble(),
+          testResult.path("sampleCount").asInt(0)
+      );
+      return checkpoints.save(checkpoint);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("Failed to serialize checkpoint metadata.");
+    }
+  }
+
+  private CheckpointTestResult runCheckpointTest(TrainingCheckpoint checkpoint) {
+    String testId = "checkpoint-test-" + checkpoint.getId() + "-" + UUID.randomUUID();
+    Path testDir = jobRoot.resolve("checkpoint-tests").resolve(testId).normalize();
+    Path requestFile = testDir.resolve("request.json");
+    try {
+      Files.createDirectories(testDir);
+      JsonNode splitNode = objectMapper.readTree(checkpoint.getSplitJson());
+      JsonNode layersNode = objectMapper.readTree(checkpoint.getLayersJson());
+      Map<String, Object> payload = Map.of(
+          "action", "test_checkpoint",
+          "jobId", testId,
+          "datasetRoot", datasetRoot.toString(),
+          "datasetId", checkpoint.getDatasetId(),
+          "split", splitNode,
+          "layers", layersNode,
+          "checkpointFile", checkpoint.getCheckpointPath()
+      );
+      Files.writeString(requestFile, objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8);
+      Process process = new ProcessBuilder(pythonExecutable, workerScript.toString(), "--request", requestFile.toString())
+          .redirectErrorStream(true)
+          .directory(jobRoot.toFile())
+          .start();
+      JsonNode result = null;
+      StringBuilder diagnostics = new StringBuilder();
+      try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+        String line;
+        while ((line = reader.readLine()) != null) {
+          if (line.isBlank()) {
+            continue;
+          }
+          if (!line.startsWith("{")) {
+            if (diagnostics.length() < 2000) {
+              diagnostics.append(line).append(System.lineSeparator());
+            }
+            continue;
+          }
+          JsonNode node = objectMapper.readTree(line);
+          String type = node.path("type").asText("");
+          if ("error".equals(type)) {
+            throw new IllegalArgumentException(node.path("message").asText("Checkpoint test failed."));
+          }
+          if ("test_result".equals(type)) {
+            result = node;
+          }
+        }
+      }
+      if (!process.waitFor(10, TimeUnit.MINUTES)) {
+        process.destroyForcibly();
+        throw new IllegalArgumentException("Checkpoint test timed out.");
+      }
+      if (process.exitValue() != 0) {
+        String detail = diagnostics.isEmpty() ? "" : " " + diagnostics.toString().trim();
+        throw new IllegalArgumentException("Checkpoint test process failed." + detail);
+      }
+      if (result == null) {
+        String detail = diagnostics.isEmpty() ? "" : " " + diagnostics.toString().trim();
+        throw new IllegalArgumentException("Checkpoint test returned no result." + detail);
+      }
+      return objectMapper.treeToValue(result, CheckpointTestResult.class);
+    } catch (IOException ex) {
+      throw new IllegalArgumentException("Failed to run checkpoint test: " + ex.getMessage());
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      throw new IllegalArgumentException("Checkpoint test interrupted.");
+    }
+  }
+
+  private String modelSignature(StartTrainingRequest request) {
+    return modelSignature(request.datasetId(), request.layers());
+  }
+
+  private String modelSignature(String datasetId, List<JsonNode> layers) {
+    ObjectNode root = objectMapper.createObjectNode();
+    root.put("datasetId", datasetId);
+    ArrayNode normalizedLayers = root.putArray("layers");
+    for (JsonNode layer : layers == null ? List.<JsonNode>of() : layers) {
+      ObjectNode normalized = objectMapper.createObjectNode();
+      normalized.set("type", layer.path("type"));
+      normalized.set("enabled", layer.has("enabled") ? layer.path("enabled") : objectMapper.getNodeFactory().booleanNode(true));
+      normalized.set("params", layer.path("params"));
+      normalizedLayers.add(normalized);
+    }
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] hash = digest.digest(objectMapper.writeValueAsBytes(root));
+      return HexFormat.of().formatHex(hash);
+    } catch (NoSuchAlgorithmException | JsonProcessingException ex) {
+      throw new IllegalArgumentException("Failed to compute model signature.");
+    }
+  }
+
   private void validateSplit(SplitRequest split) {
     if (split.train() <= 0) {
       throw new IllegalArgumentException("split.train must be greater than 0.");
@@ -385,24 +569,32 @@ public class TrainingJobService {
   private final class TrainingJob {
     private final String jobId;
     private final StartTrainingRequest request;
+    private final String username;
+    private final String modelSignature;
     private final int totalEpochs;
     private final int totalBatches;
     private final Path directory;
     private final Path requestFile;
     private final Path controlFile;
+    private final Path checkpointFile;
     private final Instant startedAt = Instant.now();
     private volatile String status = "running";
     private volatile TrainingMetricMessage latestMetric;
+    private volatile JsonNode testResult;
+    private volatile boolean checkpointSaved;
     private volatile Process process;
 
-    private TrainingJob(String jobId, StartTrainingRequest request, int totalEpochs, int totalBatches) {
+    private TrainingJob(String jobId, StartTrainingRequest request, String username, String modelSignature, int totalEpochs, int totalBatches) {
       this.jobId = jobId;
       this.request = request;
+      this.username = username;
+      this.modelSignature = modelSignature;
       this.totalEpochs = totalEpochs;
       this.totalBatches = totalBatches;
       this.directory = jobRoot.resolve(jobId).normalize();
       this.requestFile = directory.resolve("request.json");
       this.controlFile = directory.resolve("control.json");
+      this.checkpointFile = directory.resolve("checkpoint.pt");
     }
 
     private void writeRequest() throws IOException {
@@ -414,7 +606,9 @@ public class TrainingJobService {
           "split", request.split(),
           "layers", request.layers() == null ? List.of() : request.layers(),
           "connections", request.connections() == null ? List.of() : request.connections(),
-          "config", request.config()
+          "config", request.config(),
+          "checkpointFile", checkpointFile.toString(),
+          "modelSignature", modelSignature
       );
       Files.writeString(requestFile, objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8);
     }
@@ -439,6 +633,8 @@ public class TrainingJobService {
 
     private void reset() {
       latestMetric = null;
+      testResult = null;
+      checkpointSaved = false;
       status = "running";
     }
 
@@ -462,6 +658,22 @@ public class TrainingJobService {
       return jobId;
     }
 
+    private StartTrainingRequest request() {
+      return request;
+    }
+
+    private String username() {
+      return username;
+    }
+
+    private String modelSignature() {
+      return modelSignature;
+    }
+
+    private int totalEpochs() {
+      return totalEpochs;
+    }
+
     private String status() {
       return status;
     }
@@ -482,6 +694,22 @@ public class TrainingJobService {
       this.latestMetric = latestMetric;
     }
 
+    private JsonNode testResult() {
+      return testResult;
+    }
+
+    private void setTestResult(JsonNode testResult) {
+      this.testResult = testResult;
+    }
+
+    private boolean checkpointSaved() {
+      return checkpointSaved;
+    }
+
+    private void setCheckpointSaved(boolean checkpointSaved) {
+      this.checkpointSaved = checkpointSaved;
+    }
+
     private Path directory() {
       return directory;
     }
@@ -492,6 +720,10 @@ public class TrainingJobService {
 
     private Path controlFile() {
       return controlFile;
+    }
+
+    private Path checkpointFile() {
+      return checkpointFile;
     }
 
     private Process process() {

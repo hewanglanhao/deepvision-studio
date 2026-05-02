@@ -10,7 +10,7 @@ import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from
 import { AuthService } from '../../services/auth.service';
 import { ForwardRecordService } from '../../services/forward-record.service';
 import { ForwardBackendService } from '../../services/forward-backend.service';
-import { TrainingLog, TrainingRuntimeService, TrainingTestResult } from '../../services/training-runtime.service';
+import { TrainingCheckpointSummary, TrainingLog, TrainingRuntimeService, TrainingTestResult } from '../../services/training-runtime.service';
 import { TrainingDatasetApiService } from '../../services/training-dataset-api.service';
 import { SimEngine } from '../../sim-engine';
 import {
@@ -146,6 +146,10 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   trainingHistory: MetricPoint[] = [];
   trainingLogs: TrainingLog[] = [];
   trainingTestResult: TrainingTestResult | null = null;
+  trainingCheckpoints: TrainingCheckpointSummary[] = [];
+  selectedCheckpointId: number | null = null;
+  checkpointBusy = false;
+  checkpointError = '';
 
   selectedTaskId = 'mnist-classify';
   experimentResults: ExperimentResult[] = [];
@@ -287,11 +291,20 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
-    this.subs.add(this.trainingSvc.testResult$.subscribe(result => this.trainingTestResult = result));
+    this.subs.add(this.trainingSvc.testResult$.subscribe(result => {
+      this.trainingTestResult = result;
+      if (result && this.authUser) void this.loadTrainingCheckpoints();
+    }));
     this.subs.add(this.authSvc.user$.subscribe(user => {
       this.authUser = user;
       if (user && this.showRecordDrawer) {
         this.loadForwardRecords();
+      }
+      if (user) {
+        void this.loadTrainingCheckpoints();
+      } else {
+        this.trainingCheckpoints = [];
+        this.selectedCheckpointId = null;
       }
     }));
     this.authSvc.restoreSession();
@@ -312,6 +325,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get layerPalette(): LayerType[] { return ['conv2d', 'pool2d', 'flatten', 'dense', 'activation', 'dropout']; }
   get selectedTemplate() { return this.modelTemplates.find(t => t.id === this.selectedTemplateId); }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
+  get selectedCheckpoint() { return this.trainingCheckpoints.find(item => item.id === this.selectedCheckpointId) ?? null; }
   get inputLayer(): InputLayer | undefined { const l = this.layers.find(l => l.type === 'input'); return l?.type === 'input' ? l : undefined; }
   get outputLayer() { const l = this.layers.find(l => l.type === 'output'); return l?.type === 'output' ? l : undefined; }
   get datasetSamples() { return this.datasets[this.selectedDataset] ?? []; }
@@ -1403,6 +1417,39 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
   resetTraining(): void  { void this.trainingSvc.reset(); }
+
+  async loadTrainingCheckpoints(): Promise<void> {
+    if (!this.authUser) return;
+    try {
+      this.trainingCheckpoints = await this.trainingSvc.listCheckpoints();
+      if (!this.selectedCheckpointId && this.trainingCheckpoints.length) {
+        this.selectedCheckpointId = this.trainingCheckpoints[0].id;
+      }
+      if (this.selectedCheckpointId && !this.trainingCheckpoints.some(item => item.id === this.selectedCheckpointId)) {
+        this.selectedCheckpointId = this.trainingCheckpoints[0]?.id ?? null;
+      }
+      this.checkpointError = '';
+    } catch (err) {
+      this.checkpointError = err instanceof Error ? err.message : '加载 checkpoint 失败。';
+    }
+  }
+
+  async runSelectedCheckpointTest(): Promise<void> {
+    if (!this.selectedCheckpointId || !this.trainingDatasetDetail) return;
+    this.checkpointBusy = true;
+    this.checkpointError = '';
+    try {
+      await this.trainingSvc.testCheckpoint(this.selectedCheckpointId, {
+        datasetId: this.trainingDatasetDetail.id,
+        layers: this.layers
+      });
+    } catch (err) {
+      this.checkpointError = err instanceof Error ? err.message : 'Checkpoint 测试失败。';
+    } finally {
+      this.checkpointBusy = false;
+    }
+  }
+
   selectTask(id: string): void {
     this.selectedTaskId = id;
     const task = this.presetTasks.find(t => t.id === id);

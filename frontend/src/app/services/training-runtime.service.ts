@@ -43,6 +43,21 @@ export interface TrainingTestResult {
   samples: TrainingPredictionSample[];
 }
 
+export interface TrainingCheckpointSummary {
+  id: number;
+  name: string;
+  jobId: string;
+  datasetId: string;
+  datasetName: string;
+  modelSignature: string;
+  epoch: number;
+  totalEpochs: number;
+  testLoss: number | null;
+  testAccuracy: number | null;
+  testSampleCount: number;
+  createdAt: string;
+}
+
 export interface BackendTrainingStartRequest {
   datasetId: string;
   split: { train: number; val: number; test: number };
@@ -199,6 +214,28 @@ export class TrainingRuntimeService implements OnDestroy {
       this.log('error', message);
       throw err;
     }
+  }
+
+  async listCheckpoints(): Promise<TrainingCheckpointSummary[]> {
+    return this.api.request<TrainingCheckpointSummary[]>('/api/training/checkpoints');
+  }
+
+  async testCheckpoint(checkpointId: number, request: Pick<BackendTrainingStartRequest, 'datasetId' | 'layers'>): Promise<TrainingTestResult> {
+    const result = await this.api.request<TrainingTestResult>(`/api/training/checkpoints/${encodeURIComponent(String(checkpointId))}/test`, {
+      method: 'POST',
+      body: JSON.stringify(request)
+    });
+    const normalized: TrainingTestResult = {
+      ...result,
+      samples: (result.samples ?? []).map(sample => ({
+        ...sample,
+        imageUrl: sample.imageUrl ? this.normalizeResourceUrl(sample.imageUrl) : sample.imageUrl
+      }))
+    };
+    this.testResult$.next(normalized);
+    const accText = normalized.testAccuracy === null ? 'N/A' : `${(normalized.testAccuracy * 100).toFixed(1)}%`;
+    this.log('info', `已使用 checkpoint 跑测试集：accuracy=${accText}, samples=${normalized.sampleCount}`);
+    return normalized;
   }
 
   async pause(): Promise<void> {
