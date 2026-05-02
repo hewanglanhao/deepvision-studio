@@ -1,42 +1,121 @@
-<div class="mode-c-shell">
-  <header class="mode-c-topbar">
-    <a class="brand" routerLink="/">
-      <span class="brand-logo">D</span>
-      <span>
-        <strong>DeepVision Studio</strong>
-        <small>模式 C</small>
-      </span>
+<div class="app-shell mode-c-shell">
+  <header class="topbar">
+    <a class="brand-wrap" routerLink="/">
+      <div class="brand-logo">D</div>
+      <div>
+        <div class="brand-name">DeepVision Studio</div>
+        <div class="brand-sub">深度学习可视化仿真平台</div>
+      </div>
     </a>
-    <nav>
-      <a routerLink="/">首页</a>
-      <a routerLink="/mode-a">模式 A</a>
-      <a routerLink="/mode-b">模式 B</a>
-      <a routerLink="/mode-d">模式 D</a>
-    </nav>
+    <div class="topbar-right mode-c-topbar-right">
+      <nav>
+        <a class="btn-link btn-sm" routerLink="/">Home</a>
+      </nav>
+
+      <span class="meta-pill">Module C</span>
+
+      <section class="auth-panel" aria-label="Module C user status">
+        @if (isLoggedIn && user) {
+          <div class="auth-session">
+            <span class="meta-pill">{{ user.displayName }}</span>
+            <span class="meta-pill">@{{ user.username }}</span>
+            <button type="button" class="btn-ghost btn-sm" (click)="logout()">退出</button>
+          </div>
+        } @else {
+          <div class="auth-entry">
+            <a class="btn-link btn-sm" routerLink="/login">登录</a>
+            <a class="btn-link btn-primary btn-sm" routerLink="/register">注册</a>
+          </div>
+        }
+      </section>
+    </div>
   </header>
 
   <main class="mode-c-main">
-    <section class="mode-c-panel">
-      <p class="eyebrow">Mode C</p>
-      <h1>模式 C 占位页面</h1>
-      <p>这里预留给后续 C 端业务。当前先放置开发占位内容，路由和页面结构已经接入。</p>
+    <section class="mode-c-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Mode C</p>
+        <h1>CNN Explainer Embedded Module</h1>
+        <p>
+          Mode C now acts as a host shell for the standalone <code>cnn-explainer</code>
+          app. The Angular page keeps the platform navigation, while the explainer
+          itself runs inside an isolated iframe to avoid conflicts with Svelte, D3,
+          TensorFlow.js, and global styles.
+        </p>
+      </div>
 
-      <div class="todo-grid" aria-label="模式 C 后续开发占位">
+      <div class="status-card" aria-label="Mode C integration status">
         <div>
-          <span>01</span>
-          <strong>需求确认</strong>
-          <p>整理 C 端的用户角色、核心流程和后端 API。</p>
+          <span>Source Project</span>
+          <strong>{{ sourceProjectPath }}</strong>
         </div>
         <div>
-          <span>02</span>
-          <strong>页面拆分</strong>
-          <p>按 C 端业务模块继续拆分组件和服务。</p>
+          <span>Mounted Path</span>
+          <strong>{{ assetTarget }}</strong>
         </div>
         <div>
-          <span>03</span>
-          <strong>接口接入</strong>
-          <p>为 C 端单独建立 service，避免与 A/B/D 端耦合。</p>
+          <span>Sync Command</span>
+          <strong>{{ syncCommand }}</strong>
         </div>
+      </div>
+    </section>
+
+    <section class="guide-grid" aria-label="Mode C setup guide">
+      <article class="guide-card">
+        <span>01</span>
+        <strong>Build CNN Explainer</strong>
+        <p>
+          In <code>D:\VS Code\cnn-explainer</code>, run <code>npm install</code> once,
+          then <code>npm run build</code> to generate <code>bundle.js</code> and
+          <code>bundle.css</code>.
+        </p>
+      </article>
+
+      <article class="guide-card">
+        <span>02</span>
+        <strong>Sync Static Files</strong>
+        <p>
+          Back in this repo, run <code>{{ syncCommand }}</code>. The script copies the
+          built app into <code>frontend/public/modules/cnn-explainer</code>.
+        </p>
+      </article>
+
+      <article class="guide-card">
+        <span>03</span>
+        <strong>Reload Mode C</strong>
+        <p>
+          Refresh this page after syncing. If the iframe stays blank, the build output
+          is usually still missing from the source project.
+        </p>
+      </article>
+    </section>
+
+    <section class="embed-panel">
+      <div class="embed-header">
+        <div>
+          <p class="eyebrow">Embedded App</p>
+          <h2>CNN Explainer Runtime</h2>
+        </div>
+        <a class="open-link" [href]="assetTarget" target="_blank" rel="noopener noreferrer">
+          Open module directly
+        </a>
+      </div>
+
+      <p class="embed-hint">
+        The iframe below expects a complete static build under
+        <code>frontend/public/modules/cnn-explainer</code>, including
+        <code>index.html</code>, <code>bundle.js</code>, <code>bundle.css</code>,
+        <code>global.css</code>, and <code>assets/</code>.
+      </p>
+
+      <div class="iframe-shell">
+        <iframe
+          class="module-frame"
+          [src]="moduleUrl"
+          title="CNN Explainer module"
+          loading="lazy"
+          referrerpolicy="no-referrer"
+        ></iframe>
       </div>
     </section>
   </main>

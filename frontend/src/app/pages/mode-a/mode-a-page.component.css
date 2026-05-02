@@ -461,8 +461,8 @@ app-network-overview { display: block; }
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px rgba(15, 23, 42, 0.06);
   flex-shrink: 0;
   overflow-y: auto;
-  max-height: min(48vh, 420px);
-  min-height: 260px;
+  max-height: min(70vh, 640px);
+  min-height: 360px;
   padding: 10px 12px;
 }
 .editor-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -487,7 +487,17 @@ app-network-overview { display: block; }
 .kernel-wrap { margin-top: 4px; }
 .kernel-grid { --size: 3; display: grid; grid-template-columns: repeat(var(--size), 1fr); gap: 4px; margin-top: 6px; }
 .kernel-grid input { text-align: center; padding: 4px; font-size: 11px; }
-
+.advanced-param-box {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg3);
+}
+.advanced-param-box label { margin-bottom: 0; }
+.dense-weight-editor { gap: 8px; }
 /* ===== 调色板 ===== */
 .palette { display: flex; flex-wrap: wrap; gap: 4px; }
 .palette-chip {

@@ -242,7 +242,7 @@
                   </label>
                 </div>
                 <div class="row-2">
-                  <label>步长
+                  <label>stride
                     <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'stride')" />
                     @if (hasFieldError(layer.id, 'stride')) {

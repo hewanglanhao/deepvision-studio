@@ -5,6 +5,10 @@ import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { HelpManualComponent } from '../../components/help-manual.component';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
+import { NETWORK_3D_SESSION_KEY, Network3dPayload } from '../../features/network-3d/network-3d.models';
+import { LlmFloatingAssistantComponent } from '../../features/llm/llm-floating-assistant.component';
+import { LlmChatContext } from '../../features/llm/llm.models';
+import { MODE_A_LLM_SYSTEM_PROMPT } from '../../features/llm/llm-prompts';
 import { AuthUser } from '../../models/auth.models';
 import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from '../../models/forward-record.models';
 import { AuthService } from '../../services/auth.service';
@@ -17,7 +21,7 @@ import {
   ConvKernelSpec,
   ForwardInputAsset, ForwardLayerResult, ForwardPassResult,
   ForwardTensor, ImagePreviewItem, InputLayer, LabelDistributionItem, LayerType,
-  LayerValidationIssue, MetricPoint, ModelTemplate, NetworkLayer, PointPreviewItem,
+  LayerValidationIssue, MetricPoint, ModelTemplate, NetworkLayer, PointPreviewItem, TensorShape,
   PresetTask, TablePreview, TrainingConfig, TrainingDatasetDetail, TrainingDatasetKind,
   TrainingDatasetOption
 } from '../../sim-models';
@@ -62,14 +66,27 @@ export const KERNEL_PRESETS: KernelPreset[] = [
 ];
 
 const DATASET_COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be123c', '#4b5563'];
+type EditableBiasParams = { bias?: number[] };
 
 @Component({
   selector: 'app-mode-a-page',
-  imports: [CommonModule, FormsModule, DecimalPipe, RouterModule, HelpManualComponent, NetworkOverviewComponent],
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    DecimalPipe,
+    RouterModule,
+    HelpManualComponent,
+    NetworkOverviewComponent,
+    LlmFloatingAssistantComponent
+  ],
   templateUrl: './mode-a-page.component.html',
   styleUrl: './mode-a-page.component.css'
 })
 export class ModeAPageComponent implements OnInit, OnDestroy {
+  readonly modeALlmSystemPrompt = MODE_A_LLM_SYSTEM_PROMPT;
+  readonly modeALlmContextProvider = (): LlmChatContext => this.buildModeALlmContext();
+
   mode: AppMode = 'forward';
   showHelp = false;
   showSamplePicker = false;
@@ -231,6 +248,7 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
   private forwardRequestSeq = 0;
   private forwardInFlight = false;
   private forwardRerunRequested = false;
+  selectedDenseWeightRows: Record<number, number> = {};
 
   constructor(
     private route: ActivatedRoute,
@@ -562,6 +580,192 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
 
   closeImageViewer(): void {
     this.imageViewer = { open: false, title: '', url: '', meta: '' };
+  }
+
+  openNetwork3dViewer(): void {
+    const payload: Network3dPayload = {
+      title: 'A 模式网络层 3D 展示',
+      sourceMode: 'Mode A',
+      createdAt: new Date().toISOString(),
+      inputImageUrl: this.preparedInputImageUrl || this.originalInputImageUrl,
+      inputLabel: this.currentInputAsset?.name,
+      layers: structuredClone(this.layers),
+      shapeHints: structuredClone(this.forwardLayerShapeMap),
+      layerShapes: this.buildNetwork3dLayerShapes(),
+      selectedLayerId: this.selectedLayerId
+    };
+
+    localStorage.setItem(NETWORK_3D_SESSION_KEY, JSON.stringify(payload));
+    window.open('/network-3d', '_blank', 'noopener,noreferrer');
+  }
+
+  private buildModeALlmContext(): LlmChatContext {
+    const selectedResult = this.selectedForwardResult;
+    const selectedInputTensor = this.selectedLayerInputTensor();
+    const selectedOutputTensor = selectedResult?.tensor ?? null;
+    const lines: string[] = [
+      `模式: A 模式 / 图片前向传播可视化`,
+      `数据集: ${this.selectedDataset}`,
+      `当前样本: ${this.currentInputAsset?.name ?? '未选择'}${this.currentInputAsset?.label ? ` / 标签 ${this.currentInputAsset.label}` : ''}`,
+      `网络层数: ${this.layerCount}`,
+      `参数量估计: ${this.parameterCount}`,
+      `当前选中层: ${this.selectedLayer?.name ?? '无'} (${this.selectedLayer?.type ?? '-'})`,
+      `是否存在后端前向结果: ${this.forwardResult ? '是' : '否'}`
+    ];
+
+    if (this.currentInputAsset) {
+      lines.push(
+        `输入原始尺寸: ${this.currentInputAsset.originalWidth}x${this.currentInputAsset.originalHeight}x${this.currentInputAsset.originalChannels}`,
+        `实际计算尺寸: ${this.currentInputAsset.prepared.tensor.shape.join('x')}`,
+        `预处理备注: ${this.currentInputAsset.prepared.notes.join(', ') || '无'}`
+      );
+    }
+
+    lines.push('', '网络结构:');
+    for (const [index, layer] of this.layers.entries()) {
+      lines.push(`${index + 1}. ${layer.name} / ${layer.type} / inputs=${layer.inputs.join(',') || 'none'} / params=${this.safeJson(layer.params)}`);
+    }
+
+    if (this.forwardResult?.shapePath?.length) {
+      lines.push('', `Shape path: ${this.forwardResult.shapePath.join(' -> ')}`);
+    }
+
+    if (selectedResult) {
+      lines.push(
+        '',
+        '当前选中层前向结果:',
+        `层名: ${selectedResult.layerName}`,
+        `类型: ${selectedResult.layerType}`,
+        `输入形状: ${selectedResult.inputShapes.map(shape => `[${shape.join(', ')}]`).join(', ') || '无'}`,
+        `输出形状: ${selectedResult.outputShapeLabel}`,
+        `输入张量摘要: ${this.tensorSummary(selectedInputTensor)}`,
+        `输出张量摘要: ${this.tensorSummary(selectedOutputTensor)}`,
+        `转换说明: ${selectedResult.transitionNote}`,
+        `参数摘要: ${selectedResult.paramsSummary.join('; ') || '无'}`,
+        `警告: ${selectedResult.warnings.join('; ') || '无'}`,
+        `统计: min=${selectedResult.stats.min.toFixed(4)}, max=${selectedResult.stats.max.toFixed(4)}, mean=${selectedResult.stats.mean.toFixed(4)}, nonZeroRatio=${selectedResult.stats.nonZeroRatio.toFixed(4)}`
+      );
+    }
+
+    if (this.selectedConvLayer) {
+      lines.push(
+        '',
+        '当前卷积核:',
+        `Out ${this.selectedKernelOutChannel} / In ${this.selectedKernelInChannel}`,
+        this.editableKernelMatrix.map(row => row.map(value => Number(value).toFixed(3)).join('\t')).join('\n')
+      );
+    }
+
+    if (selectedResult?.stats.topK?.length) {
+      lines.push(
+        '',
+        `当前层 Top-K/最大值: ${selectedResult.stats.topK.map(item => `${item.label ?? item.index}: ${item.value.toFixed(4)}`).join(', ')}`
+      );
+    }
+
+    const images: Array<{ title: string; url: string }> = [];
+    const inputImageUrl = this.tensorImageUrlForContext(selectedInputTensor);
+    if (inputImageUrl) {
+      images.push({ title: `${selectedResult?.layerName ?? '当前层'} 的输入图像`, url: inputImageUrl });
+    }
+    const outputImageUrl = this.tensorImageUrlForContext(selectedOutputTensor);
+    if (outputImageUrl) {
+      images.push({ title: `${selectedResult?.layerName ?? '当前层'} 的输出图像`, url: outputImageUrl });
+    }
+
+    return {
+      text: lines.join('\n'),
+      images
+    };
+  }
+
+  private selectedLayerInputTensor(): ForwardTensor | null {
+    const selected = this.selectedForwardResult;
+    if (!selected) return null;
+    if (selected.layerType === 'input') {
+      return this.currentInputAsset?.prepared.tensor ?? null;
+    }
+    const layerIndex = this.forwardResult?.layerResults.findIndex(result => result.layerId === selected.layerId) ?? -1;
+    if (layerIndex > 0) {
+      return this.forwardResult?.layerResults[layerIndex - 1]?.tensor ?? null;
+    }
+    return null;
+  }
+
+  private tensorImageUrlForContext(tensor: ForwardTensor | null): string {
+    if (!tensor || tensor.shape.length !== 3) return '';
+    return this.tensorToImageDataUrl(tensor, !(tensor.shape[2] === 3 && tensor.colorMode === 'rgb'));
+  }
+
+  private tensorSummary(tensor: ForwardTensor | null): string {
+    if (!tensor) return '无';
+    const values = tensor.values ?? [];
+    const preview = values.slice(0, 12).map(value => Number(value).toFixed(4)).join(', ');
+    return `kind=${tensor.kind}, shape=[${tensor.shape.join(', ')}], values[0..${Math.min(values.length, 12)}]=${preview}${values.length > 12 ? '...' : ''}`;
+  }
+
+  convBiasValue(layer: Extract<NetworkLayer, { type: 'conv2d' }>): number {
+    return layer.params.bias?.[this.selectedKernelOutChannel] ?? 0;
+  }
+
+  onConvBiasInput(layer: Extract<NetworkLayer, { type: 'conv2d' }>, value: string | number): void {
+    const outChannels = Math.max(1, layer.params.outChannels);
+    const bias = layer.params.bias ?? Array.from({ length: outChannels }, () => 0);
+    while (bias.length < outChannels) bias.push(0);
+    bias[this.selectedKernelOutChannel] = this.finiteNumber(value, bias[this.selectedKernelOutChannel] ?? 0);
+    layer.params.bias = bias.slice(0, outChannels);
+    this.runForward();
+  }
+
+  denseUnitIndices(layer: NetworkLayer): number[] {
+    if (layer.type !== 'dense' && layer.type !== 'output') return [];
+    return Array.from({ length: Math.max(1, layer.params.units) }, (_, index) => index);
+  }
+
+  selectedDenseWeightRow(layer: NetworkLayer): number {
+    if (layer.type !== 'dense' && layer.type !== 'output') return 0;
+    const max = Math.max(1, layer.params.units) - 1;
+    const current = this.selectedDenseWeightRows[layer.id] ?? 0;
+    const next = Math.max(0, Math.min(max, current));
+    this.selectedDenseWeightRows[layer.id] = next;
+    return next;
+  }
+
+  onDenseWeightRowChange(layer: NetworkLayer, row: number): void {
+    if (layer.type !== 'dense' && layer.type !== 'output') return;
+    const max = Math.max(1, layer.params.units) - 1;
+    this.selectedDenseWeightRows[layer.id] = Math.max(0, Math.min(max, Number(row) || 0));
+  }
+
+  denseBiasValue(layer: NetworkLayer, row: number): number {
+    if (layer.type !== 'dense' && layer.type !== 'output') return 0;
+    return layer.params.bias?.[row] ?? 0;
+  }
+
+  onDenseBiasInput(layer: NetworkLayer, value: string | number): void {
+    if (layer.type !== 'dense' && layer.type !== 'output') return;
+    const units = Math.max(1, layer.params.units);
+    const row = this.selectedDenseWeightRow(layer);
+    const params = layer.params as EditableBiasParams;
+    const bias = params.bias ?? Array.from({ length: units }, () => 0);
+    while (bias.length < units) bias.push(0);
+    bias[row] = this.finiteNumber(value, bias[row] ?? 0);
+    params.bias = bias.slice(0, units);
+    this.runForward();
+  }
+
+  private finiteNumber(value: string | number, fallback: number): number {
+    const next = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(next) ? next : fallback;
+  }
+
+  private safeJson(value: unknown): string {
+    try {
+      const text = JSON.stringify(value);
+      return text.length > 900 ? `${text.slice(0, 900)}...` : text;
+    } catch {
+      return String(value);
+    }
   }
 
   get isRgbInput(): boolean { return (this.currentInputAsset?.originalChannels ?? 1) >= 3; }
@@ -1394,6 +1598,24 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
     this.layers = this.layers.map((l, i) => ({ ...l, inputs: i === 0 ? [] : [this.layers[i - 1].id] }));
     this.connections = SimEngine.rebuildLinearConnections(this.layers);
     this.syncKernelShape();
+  }
+
+  private buildNetwork3dLayerShapes(): Record<number, TensorShape> {
+    const shapes: Record<number, TensorShape> = {};
+    for (const result of this.forwardResult?.layerResults ?? []) {
+      shapes[result.layerId] = result.outputShape;
+    }
+    if (Object.keys(shapes).length) {
+      return shapes;
+    }
+
+    for (const layer of this.layers) {
+      const inputShapes = (layer.inputs ?? [])
+        .map((id) => shapes[id])
+        .filter((shape): shape is TensorShape => shape !== undefined);
+      shapes[layer.id] = SimEngine.inferLayerOutputShape(layer, inputShapes);
+    }
+    return shapes;
   }
 
   private syncKernelShape(): void {

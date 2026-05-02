@@ -47,7 +47,7 @@ public class SecurityConfig {
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-            .requestMatchers("/api/auth/**", "/api/health", "/api/forward/**", "/api/forward", "/api/training/**", "/h2-console/**", "/uploads/**", "/datasets/**").permitAll()
+            .requestMatchers("/api/auth/**", "/api/health", "/api/forward/**", "/api/forward", "/api/llm/**", "/api/training/**", "/h2-console/**", "/uploads/**", "/datasets/**").permitAll()
             .anyRequest().authenticated()
         )
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
@@ -57,7 +57,14 @@ public class SecurityConfig {
   @Bean
   CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(List.of("http://localhost:4200", "http://127.0.0.1:4200"));
+    configuration.setAllowedOrigins(List.of(
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
+        "http://localhost:4201",
+        "http://127.0.0.1:4201",
+        "http://localhost:4202",
+        "http://127.0.0.1:4202"
+    ));
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(List.of("*"));
     configuration.setExposedHeaders(List.of("Authorization"));
