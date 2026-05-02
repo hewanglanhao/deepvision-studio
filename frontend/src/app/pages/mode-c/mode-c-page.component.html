@@ -1,18 +1,34 @@
-<div class="mode-c-shell">
-  <header class="mode-c-topbar">
-    <a class="brand" routerLink="/">
-      <span class="brand-logo">D</span>
-      <span>
-        <strong>DeepVision Studio</strong>
-        <small>Module C</small>
-      </span>
+<div class="app-shell mode-c-shell">
+  <header class="topbar">
+    <a class="brand-wrap" routerLink="/">
+      <div class="brand-logo">D</div>
+      <div>
+        <div class="brand-name">DeepVision Studio</div>
+        <div class="brand-sub">深度学习可视化仿真平台</div>
+      </div>
     </a>
-    <nav>
-      <a routerLink="/">Home</a>
-      <a routerLink="/mode-a">Mode A</a>
-      <a routerLink="/mode-b">Mode B</a>
-      <a routerLink="/mode-d">Mode D</a>
-    </nav>
+    <div class="topbar-right mode-c-topbar-right">
+      <nav>
+        <a class="btn-link btn-sm" routerLink="/">Home</a>
+      </nav>
+
+      <span class="meta-pill">Module C</span>
+
+      <section class="auth-panel" aria-label="Module C user status">
+        @if (isLoggedIn && user) {
+          <div class="auth-session">
+            <span class="meta-pill">{{ user.displayName }}</span>
+            <span class="meta-pill">@{{ user.username }}</span>
+            <button type="button" class="btn-ghost btn-sm" (click)="logout()">退出</button>
+          </div>
+        } @else {
+          <div class="auth-entry">
+            <a class="btn-link btn-sm" routerLink="/login">登录</a>
+            <a class="btn-link btn-primary btn-sm" routerLink="/register">注册</a>
+          </div>
+        }
+      </section>
+    </div>
   </header>
 
   <main class="mode-c-main">
