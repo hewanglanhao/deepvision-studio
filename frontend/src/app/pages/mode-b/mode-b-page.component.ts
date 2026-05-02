@@ -10,7 +10,7 @@ import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from
 import { AuthService } from '../../services/auth.service';
 import { ForwardRecordService } from '../../services/forward-record.service';
 import { ForwardBackendService } from '../../services/forward-backend.service';
-import { TrainingLog, TrainingRuntimeService } from '../../services/training-runtime.service';
+import { TrainingLog, TrainingRuntimeService, TrainingTestResult } from '../../services/training-runtime.service';
 import { TrainingDatasetApiService } from '../../services/training-dataset-api.service';
 import { SimEngine } from '../../sim-engine';
 import {
@@ -145,6 +145,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   trainingTotalBatchesValue = 0;
   trainingHistory: MetricPoint[] = [];
   trainingLogs: TrainingLog[] = [];
+  trainingTestResult: TrainingTestResult | null = null;
 
   selectedTaskId = 'mnist-classify';
   experimentResults: ExperimentResult[] = [];
@@ -286,6 +287,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
+    this.subs.add(this.trainingSvc.testResult$.subscribe(result => this.trainingTestResult = result));
     this.subs.add(this.authSvc.user$.subscribe(user => {
       this.authUser = user;
       if (user && this.showRecordDrawer) {

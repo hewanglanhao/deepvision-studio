@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import torch
 from PIL import Image
@@ -179,7 +180,19 @@ def train(request: dict[str, Any]) -> None:
             "gradientStatus": gradient_status(gradient_norm),
         })
 
-    emit({"type": "control", "jobId": job_id, "status": "completed", "message": "Training completed."})
+    test_loss = None
+    test_accuracy = None
+    if test_loader is not None:
+        test_loss, test_accuracy = evaluate(model, test_loader, criterion, device)
+    emit({
+        "type": "test_result",
+        "jobId": job_id,
+        "testLoss": None if test_loss is None else round(test_loss, 4),
+        "testAccuracy": None if test_accuracy is None else round(test_accuracy, 4),
+        "sampleCount": len(test_set),
+        "samples": collect_prediction_samples(model, dataset, test_set, device, dataset_root, limit=8),
+    })
+    emit({"type": "control", "jobId": job_id, "status": "completed", "message": "Training completed. Test set evaluated."})
 
 
 def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any]]) -> Dataset:
@@ -360,6 +373,60 @@ def evaluate(model, loader, criterion, device) -> tuple[float, float]:
             total_correct += int((logits.argmax(dim=1) == y).sum().detach().cpu())
             total += batch_size
     return total_loss / max(1, total), total_correct / max(1, total)
+
+
+def collect_prediction_samples(
+    model: nn.Module,
+    dataset: Dataset,
+    subset: Subset,
+    device: torch.device,
+    dataset_root: Path,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    if len(subset) <= 0:
+        return []
+    classes = list(getattr(dataset, "classes", []))
+    samples: list[dict[str, Any]] = []
+    model.eval()
+    indices = list(getattr(subset, "indices", []))[:limit]
+    with torch.no_grad():
+        for raw_index in indices:
+            x, y = dataset[int(raw_index)]
+            logits = model(x.unsqueeze(0).to(device))
+            probs = torch.softmax(logits, dim=1)[0].detach().cpu()
+            pred = int(torch.argmax(probs).item())
+            true_index = int(y.item())
+            item: dict[str, Any] = {
+                "index": int(raw_index),
+                "trueIndex": true_index,
+                "predictedIndex": pred,
+                "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
+                "predictedLabel": classes[pred] if 0 <= pred < len(classes) else str(pred),
+                "confidence": round(float(probs[pred].item()), 4),
+                "correct": pred == true_index,
+            }
+            image_path = sample_image_path(dataset, int(raw_index))
+            if image_path is not None:
+                item["name"] = image_path.name
+                item["imageUrl"] = dataset_url(image_path, dataset_root)
+            samples.append(item)
+    return samples
+
+
+def sample_image_path(dataset: Dataset, index: int) -> Path | None:
+    raw_samples = getattr(dataset, "samples", None)
+    if not isinstance(raw_samples, list) or index < 0 or index >= len(raw_samples):
+        return None
+    path = raw_samples[index][0]
+    return path if isinstance(path, Path) else Path(path)
+
+
+def dataset_url(path: Path, dataset_root: Path) -> str:
+    try:
+        rel = path.resolve().relative_to(dataset_root.resolve())
+    except ValueError:
+        return ""
+    return "/datasets/" + "/".join(quote(part) for part in rel.parts)
 
 
 def compute_gradient_norm(model) -> float:

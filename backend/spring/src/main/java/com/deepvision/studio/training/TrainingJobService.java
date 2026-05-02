@@ -242,6 +242,9 @@ public class TrainingJobService {
     } else if ("control".equals(type)) {
       String status = node.path("status").asText(job.status());
       job.setStatus(status);
+      broadcastRaw(job.jobId(), line);
+    } else if ("test_result".equals(type)) {
+      broadcastRaw(job.jobId(), line);
     } else if ("error".equals(type)) {
       job.setStatus("stopped");
       broadcastRaw(job.jobId(), line);

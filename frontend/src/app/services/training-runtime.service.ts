@@ -23,6 +23,26 @@ export interface TrainingLog {
   message: string;
 }
 
+export interface TrainingPredictionSample {
+  index: number;
+  trueIndex: number;
+  predictedIndex: number;
+  trueLabel: string;
+  predictedLabel: string;
+  confidence: number;
+  correct: boolean;
+  name?: string;
+  imageUrl?: string;
+}
+
+export interface TrainingTestResult {
+  jobId: string;
+  testLoss: number | null;
+  testAccuracy: number | null;
+  sampleCount: number;
+  samples: TrainingPredictionSample[];
+}
+
 export interface BackendTrainingStartRequest {
   datasetId: string;
   split: { train: number; val: number; test: number };
@@ -40,26 +60,30 @@ interface BackendTrainingStartResponse {
 }
 
 interface BackendMetricMessage {
-  type: 'metric' | 'control' | 'error';
+  type: 'metric' | 'control' | 'error' | 'test_result';
   jobId: string;
-  step: number;
-  epoch: number;
-  batch: number;
-  totalEpochs: number;
-  totalBatches: number;
-  loss: number;
-  valLoss: number | null;
-  accuracy: number;
-  valAccuracy: number | null;
-  lr: number;
-  elapsedSeconds: number;
-  etaSeconds: number;
-  gradientNorm: number;
-  weightMean: number;
-  weightStd: number;
-  gradientStatus: 'stable' | 'vanishing' | 'exploding';
+  step?: number;
+  epoch?: number;
+  batch?: number;
+  totalEpochs?: number;
+  totalBatches?: number;
+  loss?: number;
+  valLoss?: number | null;
+  accuracy?: number;
+  valAccuracy?: number | null;
+  lr?: number;
+  elapsedSeconds?: number;
+  etaSeconds?: number;
+  gradientNorm?: number;
+  weightMean?: number;
+  weightStd?: number;
+  gradientStatus?: 'stable' | 'vanishing' | 'exploding';
   status?: 'running' | 'paused' | 'stopped' | 'completed';
   message?: string;
+  testLoss?: number | null;
+  testAccuracy?: number | null;
+  sampleCount?: number;
+  samples?: TrainingPredictionSample[];
 }
 
 interface BackendControlResponse {
@@ -94,6 +118,7 @@ export class TrainingRuntimeService implements OnDestroy {
 
   readonly history$ = new BehaviorSubject<MetricPoint[]>([]);
   readonly logs$ = new BehaviorSubject<TrainingLog[]>([]);
+  readonly testResult$ = new BehaviorSubject<TrainingTestResult | null>(null);
   readonly epochTick$ = new Subject<MetricPoint>();
 
   private config: TrainingConfig = {
@@ -132,6 +157,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.config = { ...request.config };
     this.layers = [...request.layers];
     this.history$.next([]);
+    this.testResult$.next(null);
     this.patchState({
       status: 'running',
       currentEpoch: 0,
@@ -222,12 +248,14 @@ export class TrainingRuntimeService implements OnDestroy {
       message: 'Stopped.'
     });
     this.history$.next([]);
+    this.testResult$.next(null);
     this.log('warn', 'Training stopped and reset.');
   }
 
   async reset(): Promise<void> {
     if (this.backendJobId) {
       this.history$.next([]);
+      this.testResult$.next(null);
       await this.controlBackend('reset', 'Training reset.');
       return;
     }
@@ -279,9 +307,36 @@ export class TrainingRuntimeService implements OnDestroy {
     if (message.type === 'control') {
       this.patchState({ status: message.status ?? this.state$.value.status, message: message.message ?? 'Training status changed.' });
       this.log('info', message.message ?? 'Training status changed.');
+      if (message.status === 'completed' || message.status === 'stopped') {
+        this.closeSocket();
+      }
+      return;
+    }
+    if (message.type === 'test_result') {
+      const result: TrainingTestResult = {
+        jobId: message.jobId,
+        testLoss: message.testLoss ?? null,
+        testAccuracy: message.testAccuracy ?? null,
+        sampleCount: message.sampleCount ?? 0,
+        samples: (message.samples ?? []).map(sample => ({
+          ...sample,
+          imageUrl: sample.imageUrl ? this.normalizeResourceUrl(sample.imageUrl) : sample.imageUrl
+        }))
+      };
+      this.testResult$.next(result);
+      const accText = result.testAccuracy === null ? 'N/A' : `${(result.testAccuracy * 100).toFixed(1)}%`;
+      this.log('info', `测试集评估完成：accuracy=${accText}, samples=${result.sampleCount}`);
       return;
     }
     if (message.type !== 'metric') return;
+    if (message.step === undefined || message.epoch === undefined || message.batch === undefined
+      || message.totalEpochs === undefined || message.totalBatches === undefined
+      || message.loss === undefined || message.accuracy === undefined || message.lr === undefined
+      || message.elapsedSeconds === undefined || message.etaSeconds === undefined
+      || message.gradientNorm === undefined || message.weightMean === undefined || message.weightStd === undefined) {
+      this.log('warn', '收到不完整的训练指标。');
+      return;
+    }
     const metric: MetricPoint = {
       step: message.step,
       loss: message.loss,
@@ -316,11 +371,10 @@ export class TrainingRuntimeService implements OnDestroy {
     this.history$.next(history);
     this.epochTick$.next(metric);
     if (message.epoch % 5 === 0 || message.epoch === message.totalEpochs) {
-      this.log('info', `Epoch ${message.epoch}: loss=${message.loss.toFixed(4)}, val_loss=${metric.valLoss.toFixed(4)}, acc=${(message.accuracy * 100).toFixed(1)}%, gradient=${message.gradientStatus}`);
+      this.log('info', `Epoch ${message.epoch}: loss=${message.loss.toFixed(4)}, val_loss=${metric.valLoss.toFixed(4)}, acc=${(message.accuracy * 100).toFixed(1)}%, gradient=${message.gradientStatus ?? 'stable'}`);
     }
     if (message.epoch >= message.totalEpochs) {
-      this.log('info', `后端训练完成：${message.jobId}`);
-      this.closeSocket();
+      this.log('info', `训练轮次完成，等待测试集评估：${message.jobId}`);
     }
   }
 
@@ -357,6 +411,11 @@ export class TrainingRuntimeService implements OnDestroy {
       return `${base}${streamUrl}`;
     }
     return streamUrl;
+  }
+
+  private normalizeResourceUrl(url: string): string {
+    if (!url || /^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
+    return `${this.api.baseUrl}${url.startsWith('/') ? url : '/' + url}`;
   }
 
   private startMock(): void {
