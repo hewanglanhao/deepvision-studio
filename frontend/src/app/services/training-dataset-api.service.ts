@@ -20,7 +20,7 @@ export class TrainingDatasetApiService {
 
   async getDatasetDetail(datasetId: string, signal?: AbortSignal): Promise<TrainingDatasetDetail> {
     const response = await fetch(`${this.api.baseUrl}${this.basePath}/${encodeURIComponent(datasetId)}`, { signal });
-    return this.readJson<TrainingDatasetDetail>(response);
+    return this.normalizeDatasetDetail(await this.readJson<TrainingDatasetDetail>(response));
   }
 
   async importDataset(files: File[], signal?: AbortSignal): Promise<DatasetImportResponse> {
@@ -34,7 +34,25 @@ export class TrainingDatasetApiService {
       body: form,
       signal
     });
-    return this.readJson<DatasetImportResponse>(response);
+    const result = await this.readJson<DatasetImportResponse>(response);
+    return { ...result, detail: this.normalizeDatasetDetail(result.detail) };
+  }
+
+  private normalizeDatasetDetail(detail: TrainingDatasetDetail): TrainingDatasetDetail {
+    return {
+      ...detail,
+      imagePreview: (detail.imagePreview ?? []).map(item => ({
+        ...item,
+        url: this.normalizeResourceUrl(item.url)
+      }))
+    };
+  }
+
+  private normalizeResourceUrl(url: string): string {
+    if (!url || /^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) {
+      return url;
+    }
+    return `${this.api.baseUrl}${url.startsWith('/') ? url : '/' + url}`;
   }
 
   private async readJson<T>(response: Response): Promise<T> {
