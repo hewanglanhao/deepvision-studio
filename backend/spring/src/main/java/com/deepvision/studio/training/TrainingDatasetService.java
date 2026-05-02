@@ -307,15 +307,7 @@ public class TrainingDatasetService {
         0.2,
         evenDistribution(irisLabels, 150),
         null,
-        new TablePreview(
-            List.of("sepal_length", "sepal_width", "petal_length", "petal_width", "label"),
-            List.of(
-                List.of("5.1", "3.5", "1.4", "0.2", "setosa"),
-                List.of("6.4", "3.2", "4.5", "1.5", "versicolor"),
-                List.of("6.3", "3.3", "6.0", "2.5", "virginica"),
-                List.of("5.8", "2.7", "4.1", "1.0", "versicolor")
-            )
-        ),
+        irisTablePreview(),
         null,
         List.of()
     ));
@@ -429,6 +421,37 @@ public class TrainingDatasetService {
       points.add(new PointPreviewItem(round(x, 3), round(y, 3), label, i % 2 == 0 ? COLORS.get(0) : COLORS.get(1)));
     }
     return points;
+  }
+
+  private TablePreview irisTablePreview() {
+    Path path = datasetsRoot.resolve("builtin").resolve("iris").resolve("iris.csv").normalize();
+    try {
+      List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8).stream()
+          .map(String::trim)
+          .filter(line -> !line.isBlank())
+          .toList();
+      if (lines.size() >= 2) {
+        List<String> headers = parseCsvLine(lines.get(0));
+        List<List<String>> rows = lines.stream()
+            .skip(1)
+            .limit(8)
+            .map(this::parseCsvLine)
+            .filter(row -> !row.isEmpty())
+            .toList();
+        return new TablePreview(headers, rows);
+      }
+    } catch (IOException ignored) {
+      // Fall through to the bundled static preview.
+    }
+    return new TablePreview(
+        List.of("sepal_length", "sepal_width", "petal_length", "petal_width", "label"),
+        List.of(
+            List.of("5.1", "3.5", "1.4", "0.2", "setosa"),
+            List.of("6.4", "3.2", "4.5", "1.5", "versicolor"),
+            List.of("6.3", "3.3", "6.0", "2.5", "virginica"),
+            List.of("5.8", "2.7", "4.1", "1.0", "versicolor")
+        )
+    );
   }
 
   private List<LabelDistributionItem> evenDistribution(List<String> labels, int sampleCount) {
