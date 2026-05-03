@@ -1,0 +1,28 @@
+<section class="panel-card article-card" aria-labelledby="mode-c-article-title">
+  <div class="panel-header">
+    <div>
+      <p class="eyebrow">原生文章区</p>
+      <h2 id="mode-c-article-title">结构化教学内容</h2>
+    </div>
+    <span class="status-badge planned">第二阶段+</span>
+  </div>
+
+  <div class="article-grid">
+    @for (section of state.articleSections; track section.id) {
+      <article class="article-section">
+        <p class="eyebrow">{{ section.eyebrow }}</p>
+        <h3>{{ section.title }}</h3>
+        @for (paragraph of section.body; track $index) {
+          <p class="article-copy">{{ paragraph }}</p>
+        }
+        @if (section.bullets?.length) {
+          <ul>
+            @for (bullet of section.bullets!; track bullet) {
+              <li>{{ bullet }}</li>
+            }
+          </ul>
+        }
+      </article>
+    }
+  </div>
+</section>

@@ -1,0 +1,419 @@
+<aside class="panel-card detail-card" aria-labelledby="mode-c-detail-title">
+  <div class="panel-header">
+    <div>
+      <p class="eyebrow">细节面板</p>
+      <h2 id="mode-c-detail-title">解释与联动面板</h2>
+    </div>
+    <span class="status-badge" [class.ready]="model.shellStatus().status === 'ready'" [class.in-progress]="model.shellStatus().status === 'in-progress'">
+      {{ model.shellStatus().status }}
+    </span>
+  </div>
+
+  <div class="status-block">
+    <strong>{{ model.shellStatus().title }}</strong>
+    <p>{{ model.shellStatus().description }}</p>
+  </div>
+
+  @if (state.currentSample(); as sample) {
+    <div class="context-card">
+      <span class="context-label">当前样例</span>
+      <strong>{{ sample.title }}</strong>
+      <p>{{ sample.label }}</p>
+      @if (state.currentSamplePrediction(); as prediction) {
+        <div class="context-meta">
+          <span>预测结果：{{ prediction.label }}</span>
+          <span>{{ (prediction.confidence * 100).toFixed(1) }}%</span>
+        </div>
+        <div class="score-list">
+          @for (candidate of getPredictionSummaryRows(); track candidate.label) {
+            <div class="context-meta score-row">
+              <span>{{ candidate.label }}</span>
+              <span>{{ (candidate.score * 100).toFixed(1) }}%</span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  @if (state.selectedLayer(); as layer) {
+    <div class="context-card selected-layer-card">
+      <span class="context-label">当前选中层</span>
+      <strong>{{ layer.title }}</strong>
+      <p>{{ layer.description }}</p>
+      <div class="context-meta">
+        <span>{{ layer.type }}</span>
+        <span>{{ layer.outputShapeLabel }}</span>
+      </div>
+      <div class="context-meta">
+        <span>{{ layer.kernelLabel ?? '无卷积核' }}</span>
+        <span>{{ layer.parameterCount | number }} 个参数</span>
+      </div>
+    </div>
+  }
+
+  @if (state.selectedLayer(); as layer) {
+    <section class="focus-card live-data-card">
+      <span class="context-label">实时层数据</span>
+      <h3>{{ layer.title }}</h3>
+      <p>{{ getLayerNarrative(layer) }}</p>
+
+      <div class="live-grid">
+        @if (state.selectedLayerPreview(); as preview) {
+          <div class="preview-card">
+            <span class="mini-label">预览</span>
+            <img class="layer-preview" [src]="preview.dataUrl" [alt]="layer.title + ' live preview'" />
+          </div>
+        }
+
+        @if (state.selectedLayerSummary(); as summary) {
+          <div class="metric-card">
+            <span class="mini-label">激活统计</span>
+            <div class="metric-list">
+              <div class="metric-row">
+                <span>均值</span>
+                <strong>{{ formatSigned(summary.mean) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>正值占比</span>
+                <strong>{{ formatPercent(summary.positiveRatio) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>最小值</span>
+                <strong>{{ formatSigned(summary.min, 3) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>最大值</span>
+                <strong>{{ formatSigned(summary.max, 3) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>能量</span>
+                <strong>{{ summary.energy.toFixed(4) }}</strong>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if ((isConvLayer(layer) || isReluLayer(layer) || isPoolLayer(layer) || isInputLayer(layer)) && state.selectedLayerDetail()?.channelPreviews?.length) {
+        <div class="interactive-block">
+          <div class="interactive-header">
+            <span class="mini-label">通道浏览器</span>
+            <span class="interactive-hint">选择一个通道，查看它的预览图和响应统计。</span>
+          </div>
+
+          <div class="channel-grid">
+            @for (channel of state.selectedLayerDetail()!.channelPreviews; track channel.index) {
+              <button
+                type="button"
+                class="channel-card"
+                [class.active]="getActiveChannelPreview()?.index === channel.index"
+                (click)="selectChannel(channel.index)"
+              >
+                <img [src]="channel.dataUrl" [alt]="layer.title + ' channel ' + channel.index" />
+                <span>通道 {{ channel.index }}</span>
+              </button>
+            }
+          </div>
+
+          @if (getActiveChannelPreview(); as activeChannel) {
+            <div class="channel-focus">
+              <img [src]="activeChannel.dataUrl" [alt]="layer.title + ' focused channel ' + activeChannel.index" />
+              <div class="metric-list">
+                <div class="metric-row">
+                  <span>当前聚焦通道</span>
+                  <strong>{{ activeChannel.index }}</strong>
+                </div>
+                <div class="metric-row">
+                  <span>通道均值</span>
+                  <strong>{{ formatSigned(activeChannel.mean) }}</strong>
+                </div>
+                <div class="metric-row">
+                  <span>通道能量</span>
+                  <strong>{{ activeChannel.energy.toFixed(4) }}</strong>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      @if (isFlattenLayer(layer) && getVisibleVectorValues().length) {
+        <div class="interactive-block">
+          <div class="interactive-header">
+            <span class="mini-label">Flatten 向量</span>
+            <span class="interactive-hint">下方用带符号的条形图展示了拉平向量的前一部分。</span>
+          </div>
+          <div class="vector-list">
+            @for (entry of getVisibleVectorValues(); track entry.index) {
+              <div class="vector-row">
+                <span class="vector-index">#{{ entry.index }}</span>
+                <div class="vector-bar-track">
+                  <div class="vector-bar" [style.width.%]="getVectorMagnitude(entry.value)"></div>
+                </div>
+                <strong>{{ formatSigned(entry.value, 3) }}</strong>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (isConvLayer(layer)) {
+        <div class="type-note">
+          <strong>卷积层解读：</strong>
+          预览图强调的是卷积核在图像中响应最强的位置。正值占比较高通常说明这些卷积核响应得更广，较低则说明它们更具选择性。
+        </div>
+        @if (getActiveConvExample(); as convExample) {
+          <div class="interactive-block conv-process">
+            <div class="interactive-header">
+              <span class="mini-label">单通道卷积示例</span>
+              <span class="interactive-hint">
+                当前展示的是输出通道 {{ convExample.outputChannelIndex }} 的一个真实示例，
+                位置取该通道响应最强的坐标 ({{ convExample.row }}, {{ convExample.col }})。
+              </span>
+            </div>
+
+            <div class="conv-grid">
+              <div class="conv-card">
+                <span class="mini-label">输入局部块</span>
+                <img class="layer-preview" [src]="convExample.patchPreviewUrl" [alt]="layer.title + ' input patch'" />
+                <div class="matrix-grid">
+                  @for (row of convExample.patch; track $index) {
+                    @for (value of row; track $index) {
+                      <span>{{ formatSigned(value, 3) }}</span>
+                    }
+                  }
+                </div>
+              </div>
+
+              <div class="conv-card">
+                <span class="mini-label">卷积核</span>
+                <img class="layer-preview" [src]="convExample.kernelPreviewUrl" [alt]="layer.title + ' kernel'" />
+                <div class="matrix-grid">
+                  @for (row of convExample.kernel; track $index) {
+                    @for (value of row; track $index) {
+                      <span>{{ formatSigned(value, 3) }}</span>
+                    }
+                  }
+                </div>
+              </div>
+
+              <div class="conv-card">
+                <span class="mini-label">逐元素乘积</span>
+                <div class="matrix-grid">
+                  @for (row of convExample.products; track $index) {
+                    @for (value of row; track $index) {
+                      <span>{{ formatSigned(value, 3) }}</span>
+                    }
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div class="metric-list conv-metric-list">
+              <div class="metric-row">
+                <span>当前输入通道</span>
+                <strong>{{ convExample.inputChannelIndex }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>加权和</span>
+                <strong>{{ formatSigned(convExample.weightedSum) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>偏置</span>
+                <strong>{{ formatSigned(convExample.bias) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>输出值</span>
+                <strong>{{ formatSigned(convExample.outputValue) }}</strong>
+              </div>
+            </div>
+          </div>
+        }
+      }
+
+      @if (isReluLayer(layer)) {
+        <div class="type-note">
+          <strong>ReLU 层解读：</strong>
+          这一层只保留正向证据。把它的正值占比和前一层卷积结果对比，可以看出特征图中有多少区域被抑制了。
+        </div>
+        @if (getActiveReluExample(); as reluExample) {
+          <div class="interactive-block relu-process">
+            <div class="interactive-header">
+              <span class="mini-label">ReLU 前后对比</span>
+              <span class="interactive-hint">
+                当前展示的是通道 {{ reluExample.channelIndex }} 的真实前后变化。
+              </span>
+            </div>
+            <div class="channel-focus">
+              <div class="conv-card">
+                <span class="mini-label">ReLU 之前</span>
+                <img class="layer-preview" [src]="reluExample.beforePreviewUrl" [alt]="layer.title + ' before relu'" />
+              </div>
+              <div class="conv-card">
+                <span class="mini-label">ReLU 之后</span>
+                <img class="layer-preview" [src]="reluExample.afterPreviewUrl" [alt]="layer.title + ' after relu'" />
+              </div>
+            </div>
+            <div class="metric-list conv-metric-list">
+              <div class="metric-row">
+                <span>激活前负值占比</span>
+                <strong>{{ formatPercent(reluExample.beforeNegativeRatio) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>激活后正值占比</span>
+                <strong>{{ formatPercent(reluExample.afterPositiveRatio) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>激活前最小值</span>
+                <strong>{{ formatSigned(reluExample.beforeMin, 3) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>激活后最小值</span>
+                <strong>{{ formatSigned(reluExample.afterMin, 3) }}</strong>
+              </div>
+            </div>
+          </div>
+        }
+      }
+
+      @if (isPoolLayer(layer)) {
+        <div class="type-note">
+          <strong>池化层解读：</strong>
+          池化会降低分辨率，同时尽量保留最强结构。预览图会更块状，但重要响应区域通常仍然可见。
+        </div>
+        @if (getActivePoolExample(); as poolExample) {
+          <div class="interactive-block pool-process">
+            <div class="interactive-header">
+              <span class="mini-label">2×2 最大池化步骤</span>
+              <span class="interactive-hint">
+                当前展示的是通道 {{ poolExample.channelIndex }} 在输出位置 ({{ poolExample.row }}, {{ poolExample.col }}) 的真实示例。
+              </span>
+            </div>
+            <div class="channel-focus">
+              <div class="conv-card">
+                <span class="mini-label">输入 2×2 局部块</span>
+                <img class="layer-preview" [src]="poolExample.patchPreviewUrl" [alt]="layer.title + ' pooling patch'" />
+                <div class="matrix-grid matrix-grid-2">
+                  @for (row of poolExample.patch; track $index) {
+                    @for (value of row; track $index) {
+                      <span>{{ formatSigned(value, 3) }}</span>
+                    }
+                  }
+                </div>
+              </div>
+              <div class="metric-card">
+                <span class="mini-label">池化结果</span>
+                <div class="metric-list">
+                  <div class="metric-row">
+                    <span>当前通道</span>
+                    <strong>{{ poolExample.channelIndex }}</strong>
+                  </div>
+                  <div class="metric-row">
+                    <span>窗口最大值</span>
+                    <strong>{{ formatSigned(poolExample.maxValue, 3) }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      }
+
+      @if (isFlattenLayer(layer)) {
+        <div class="type-note">
+          <strong>Flatten 层解读：</strong>
+          到这里空间结构已经被展开，剩下的是可直接送去分类的特征向量，这里用紧凑平铺的方式显示。
+        </div>
+      }
+
+      @if (isOutputLayer(layer) && state.currentSamplePrediction(); as prediction) {
+        <div class="type-note output-note">
+          <strong>Softmax 解读：</strong>
+          当前样例被分类为 <strong>{{ prediction.label }}</strong>，置信度为 <strong>{{ formatPercent(prediction.confidence) }}</strong>。
+        </div>
+        <div class="interactive-block">
+          <div class="interactive-header">
+            <span class="mini-label">类别概率</span>
+            <span class="interactive-hint">这里展示的是当前样例在真实输出层上的完整 10 类 softmax 排名。</span>
+          </div>
+          <div class="softmax-summary">
+            <div class="softmax-pill">
+              <span>预测类别</span>
+              <strong>{{ prediction.label }}</strong>
+            </div>
+            <div class="softmax-pill">
+              <span>置信度</span>
+              <strong>{{ formatPercent(prediction.confidence) }}</strong>
+            </div>
+            <div class="softmax-pill">
+              <span>显示类别数</span>
+              <strong>{{ getProbabilityRows().length }}</strong>
+            </div>
+          </div>
+          <div class="vector-list">
+            @for (candidate of getProbabilityRows(); track candidate.label; let rank = $index) {
+              <div class="vector-row probability-row" [class.active]="candidate.label === prediction.label">
+                <span class="vector-index probability-rank">#{{ rank + 1 }}</span>
+                <span class="vector-index probability-label">{{ candidate.label }}</span>
+                <div class="vector-bar-track">
+                  <div class="vector-bar probability" [style.width.%]="candidate.score * 100"></div>
+                </div>
+                <strong>{{ formatPercent(candidate.score) }}</strong>
+              </div>
+            }
+          </div>
+          <div class="softmax-footnote">
+            右侧输出轨和这里的面板现在都使用完整的 softmax 排名，而不是只截取前三类，因此像 <code>espresso</code> 这样的标签即使不是第一名也仍然可见。
+          </div>
+        </div>
+      }
+
+      @if (isInputLayer(layer)) {
+        <div class="type-note">
+          <strong>输入层解读：</strong>
+          这里展示的就是送入 CNN 的原始图像张量，后续所有预览都可以理解为从这个起点信号演化而来的结果。
+        </div>
+      }
+    </section>
+  }
+
+  <div class="topic-list" role="list" aria-label="Mode C rewrite topics">
+    @for (topic of state.detailTopics; track topic.id) {
+      <button
+        type="button"
+        class="topic-card"
+        [class.active]="state.selectedTopicId() === topic.id"
+        (click)="selectTopic(topic.id)"
+      >
+        <div class="topic-topline">
+          <strong>{{ topic.title }}</strong>
+          <span class="priority-pill">{{ topic.priority }}</span>
+        </div>
+        <p>{{ topic.description }}</p>
+      </button>
+    }
+  </div>
+
+  @if (state.selectedTopic(); as topic) {
+    <section class="focus-card">
+      <span class="context-label">Current focus</span>
+      <h3>{{ topic.title }}</h3>
+      <p>{{ topic.description }}</p>
+    </section>
+  }
+
+  <div class="milestone-list">
+    @for (item of state.milestones; track item.id) {
+      <article class="milestone-item">
+        <div class="milestone-topline">
+          <strong>{{ item.title }}</strong>
+          <span class="status-badge" [class.ready]="item.status === 'ready'" [class.in-progress]="item.status === 'in-progress'" [class.planned]="item.status === 'planned'">
+            {{ item.status }}
+          </span>
+        </div>
+        <p>{{ item.note }}</p>
+      </article>
+    }
+  </div>
+</aside>

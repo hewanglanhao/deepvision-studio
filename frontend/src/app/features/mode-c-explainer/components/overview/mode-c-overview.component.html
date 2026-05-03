@@ -1,0 +1,844 @@
+<section class="panel-card overview-card" aria-labelledby="mode-c-overview-title">
+  <div class="panel-header">
+    <div>
+      <p class="eyebrow">总览视图 V2</p>
+      <h2 id="mode-c-overview-title">CNN 拓扑画布</h2>
+    </div>
+    <span class="status-badge in-progress">拓扑</span>
+  </div>
+
+  <p class="panel-copy">
+    这一版优先重建原始 cnn-explainer 的拓扑结构：样例条、输入通道、纵向特征图列，以及右侧输出类别轨道。
+    右侧细节面板仍然保持联动，但主画布现在已经成为核心解释界面。
+  </p>
+
+  @if (state.networkLayersError()) {
+    <div class="overview-alert error">
+      <strong>网络数据已切换到回退模式。</strong>
+      <span>{{ state.networkLayersError() }}</span>
+    </div>
+  } @else if (state.inferenceError()) {
+    <div class="overview-alert error">
+      <strong>当前无法执行推理。</strong>
+      <span>{{ state.inferenceError() }}</span>
+    </div>
+  } @else if (state.inferenceLoading()) {
+    <div class="overview-alert info">
+      <strong>正在执行样例推理…</strong>
+      <span>正在为当前选中的样例计算真实激活值，随后绘制拓扑画布。</span>
+    </div>
+  }
+
+  <div class="sample-strip" role="list" aria-label="教学样例">
+    @for (sample of state.sampleOptions; track sample.id) {
+      <button
+        type="button"
+        class="sample-chip"
+        [class.active]="state.currentSampleId() === sample.id"
+        (click)="selectSample(sample.id)"
+      >
+        <img [src]="sample.assetPath" [alt]="sample.title + ' sample'" />
+      </button>
+    }
+    <button type="button" class="sample-chip add-chip" aria-label="预留样例槽位">
+      <span>+</span>
+    </button>
+  </div>
+
+  <div class="topology-shell">
+    <div class="topology-toolbar">
+      <div class="toolbar-copy">
+        @if (state.currentSample(); as sample) {
+          <strong>{{ sample.title }}</strong>
+          <span>{{ sample.label }}</span>
+        }
+      </div>
+      <div class="toolbar-actions">
+        @if (state.selectedLayer(); as layer) {
+          <button type="button" class="toolbar-button primary" (click)="focusTopic('overview-graph')">
+            查看细节
+          </button>
+          <span class="toolbar-pill">{{ layer.shortTitle }}</span>
+        }
+      </div>
+    </div>
+
+    <div class="graph-board" aria-label="CNN 拓扑总览" [class.overlay-active]="hasActiveOverlay()">
+      <div class="topology-stage" [style.width.px]="boardWidth()" [style.height.px]="boardHeight()">
+        <svg
+          class="topology-svg"
+          [attr.viewBox]="'0 0 ' + boardWidth() + ' ' + boardHeight()"
+          role="img"
+          aria-labelledby="mode-c-overview-title"
+        >
+          <defs>
+            <linearGradient id="topology-output-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#d1d5db" />
+              <stop offset="100%" stop-color="#737373" />
+            </linearGradient>
+          </defs>
+
+          @for (path of topologyLinks(); track trackLink($index)) {
+            <path class="topology-link" [attr.d]="path" />
+          }
+
+          @for (input of inputChannels(); track input.index) {
+            <g
+              class="input-node"
+              [class.overlay-source]="isOverlaySource('input', input.index)"
+              [class.overlay-dim]="hasActiveOverlay() && !isOverlaySource('input', input.index)"
+            >
+              <rect
+                class="input-fallback"
+                [attr.x]="input.x"
+                [attr.y]="input.y"
+                [attr.width]="tileSize"
+                [attr.height]="tileSize"
+                rx="10"
+              />
+              <text class="input-label" [attr.x]="input.x + tileSize / 2" [attr.y]="input.y + 84" [attr.fill]="input.accent">
+                {{ input.label }}
+              </text>
+            </g>
+          }
+
+          @if (inputLayer(); as layer) {
+            <text class="column-title main-title" x="90" y="36">输入</text>
+            <text class="column-subtitle" x="90" y="56">{{ layer.outputShapeLabel }}</text>
+          }
+
+          @for (layer of topologyColumns(); track layer.id) {
+            <g class="layer-column" [class.active]="layer.isActive">
+              <text class="column-title" [attr.x]="layer.x + tileSize / 2" y="36" (click)="selectLayer(layer.id)">
+                {{ layer.sourceName }}
+              </text>
+              <text class="column-subtitle" [attr.x]="layer.x + tileSize / 2" y="56">
+                {{ layer.outputShapeLabel }}
+              </text>
+
+              @for (preview of layer.previews; track preview.index) {
+                <g
+                  class="feature-tile"
+                  [class.active]="layer.isActive && state.selectedChannelIndex() === preview.index"
+                  [class.overlay-source]="isOverlaySource(layer.id, preview.index)"
+                  [class.overlay-target]="isOverlayTarget(layer.id, preview.index)"
+                  [class.overlay-dim]="hasActiveOverlay() && !isOverlaySource(layer.id, preview.index) && !isOverlayTarget(layer.id, preview.index)"
+                  (click)="selectLayerChannel(layer.id, preview.index)"
+                >
+                  <rect
+                    class="feature-frame"
+                    [attr.x]="layer.x"
+                    [attr.y]="getTileY($index)"
+                    [attr.width]="tileSize"
+                    [attr.height]="tileSize"
+                    rx="8"
+                  />
+                </g>
+              }
+
+              @if (layer.isActive) {
+                <rect
+                  class="column-selection"
+                  [attr.x]="layer.x - 8"
+                  [attr.y]="getTileY(state.selectedChannelIndex()) - 8"
+                  [attr.width]="tileSize + 16"
+                  [attr.height]="tileSize + 16"
+                  rx="14"
+                />
+              }
+            </g>
+          }
+
+          @if (outputNodes().length) {
+            <text class="column-title main-title" [attr.x]="outputColumnX() + 28" y="36">输出</text>
+            <text class="column-subtitle" [attr.x]="outputColumnX() + 28" y="56">(10)</text>
+
+            @for (output of outputNodes(); track output.label) {
+              <g class="output-row" [class.active]="output.isActive">
+                <text class="output-label" [attr.x]="output.x + 12" [attr.y]="output.y">{{ output.label }}</text>
+                <rect class="output-bar-track" [attr.x]="output.x + 12" [attr.y]="output.y + 10" width="92" height="8" rx="4" />
+                <rect
+                  class="output-bar-fill"
+                  [attr.x]="output.x + 12"
+                  [attr.y]="output.y + 10"
+                  [attr.width]="getOutputBarWidth(output.score)"
+                  height="8"
+                  rx="4"
+                />
+              </g>
+            }
+          }
+        </svg>
+
+        <div class="preview-layer" aria-hidden="true">
+          @for (input of inputChannels(); track input.index) {
+            @if (input.preview; as preview) {
+              <div
+                class="preview-tile input-tile"
+                [class.overlay-source]="isOverlaySource('input', input.index)"
+                [class.overlay-dim]="hasActiveOverlay() && !isOverlaySource('input', input.index)"
+                [style.left.px]="input.x + 1"
+                [style.top.px]="input.y + 1"
+                [style.width.px]="tileSize - 2"
+                [style.height.px]="tileSize - 2"
+              >
+                <app-mode-c-preview-canvas [matrix]="preview.matrix" [grayscale]="preview.grayscale ?? true"></app-mode-c-preview-canvas>
+              </div>
+            }
+          }
+
+          @for (layer of topologyColumns(); track layer.id) {
+            @for (preview of layer.previews; track preview.index) {
+              <div
+                class="preview-tile feature-tile-image"
+                [class.active]="layer.isActive && state.selectedChannelIndex() === preview.index"
+                [class.overlay-source]="isOverlaySource(layer.id, preview.index)"
+                [class.overlay-target]="isOverlayTarget(layer.id, preview.index)"
+                [class.overlay-dim]="hasActiveOverlay() && !isOverlaySource(layer.id, preview.index) && !isOverlayTarget(layer.id, preview.index)"
+                [style.left.px]="layer.x + 1"
+                [style.top.px]="getTileY($index) + 1"
+                [style.width.px]="tileSize - 2"
+                [style.height.px]="tileSize - 2"
+              >
+                <app-mode-c-preview-canvas [matrix]="preview.matrix" [grayscale]="preview.grayscale ?? false"></app-mode-c-preview-canvas>
+              </div>
+            }
+          }
+        </div>
+      </div>
+
+      @if (showConvOverlay() && activeConvExample(); as convExample) {
+        <section class="intermediate-overlay" aria-label="卷积中间视图">
+          <div class="overlay-scrim"></div>
+          <button type="button" class="overlay-close" (click)="closeOverlay()" aria-label="关闭卷积中间视图">
+            ×
+          </button>
+
+          <div class="overlay-header">
+            <div>
+              <p class="eyebrow">中间过程视图</p>
+              <h3>{{ overlayTitle() }}</h3>
+              <p class="overlay-copy">{{ overlayHint() }}</p>
+            </div>
+            @if (state.selectedLayer(); as layer) {
+              <div class="overlay-meta">
+                <strong>{{ layer.sourceName }}</strong>
+                <span>输出通道 #{{ convExample.outputChannelIndex }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="overlay-stepper" role="tablist" aria-label="卷积解释步骤">
+            @for (step of convStepItems; track step.id) {
+              <button
+                type="button"
+                class="overlay-step"
+                [class.active]="isConvOverlayStep(step.id)"
+                (click)="setConvOverlayStep(step.id)"
+              >
+                <span class="overlay-step-index">{{ step.id + 1 }}</span>
+                <span class="overlay-step-label">{{ step.label }}</span>
+              </button>
+            }
+          </div>
+
+          <div class="overlay-step-note">
+            <strong>步骤 {{ activeConvStepMeta().id + 1 }}。</strong>
+            <span>{{ activeConvStepMeta().note }}</span>
+            @if (animatedConvContribution(); as contribution) {
+              <span class="step-channel-badge">
+                通道 {{ contribution.inputChannelIndex }} {{ convAutoplay() ? '自动' : '手动' }}
+              </span>
+            }
+            <span class="step-channel-badge">
+              位置 ({{ activeConvScanPoint().row }}, {{ activeConvScanPoint().col }})
+            </span>
+          </div>
+
+          <div class="conv-transport" aria-label="卷积通道播放控制">
+            <div class="conv-transport-status">
+              <strong>通道 {{ animatedConvInputIndex() + 1 }}</strong>
+              @if (activeConvExample(); as activeExample) {
+                <span>/ {{ activeExample.inputContributions.length }}</span>
+              }
+              @if (convOverlayStep() <= 2) {
+                <span>· 位置 {{ convScanIndex() + 1 }}/{{ convScanPositions().length }}</span>
+              }
+            </div>
+            <div class="conv-transport-actions">
+              <button type="button" class="toolbar-button subtle transport-button" (click)="previousConvInputContribution()">
+                上一通道
+              </button>
+              <button type="button" class="toolbar-button primary transport-button" (click)="toggleConvAutoplay()">
+                {{ convAutoplay() ? '暂停' : '播放' }}
+              </button>
+              <button type="button" class="toolbar-button subtle transport-button" (click)="nextConvInputContribution()">
+                下一通道
+              </button>
+            </div>
+          </div>
+
+          @switch (convOverlayStep()) {
+            @case (0) {
+              <div class="overlay-flow overlay-flow-single">
+                <article class="overlay-stage overlay-stage-source">
+                  <span class="overlay-label">遍历输入通道</span>
+                  <div class="conv-channel-strip">
+                    @for (contribution of convExample.inputContributions; track contribution.inputChannelIndex) {
+                      <button
+                        type="button"
+                        class="conv-channel-chip"
+                        [class.active]="animatedConvContribution()?.inputChannelIndex === contribution.inputChannelIndex"
+                        (click)="setAnimatedConvInput($index)"
+                      >
+                        通道 {{ contribution.inputChannelIndex }}
+                      </button>
+                    }
+                  </div>
+                  <div class="conv-pipeline-board">
+                    <div class="conv-pipeline-column conv-pipeline-inputs">
+                      <span class="conv-pipeline-title">输入</span>
+                      @for (contribution of convExample.inputContributions; track contribution.inputChannelIndex) {
+                        <div class="conv-input-row" [class.active]="isAnimatedConvContribution(contribution.inputChannelIndex)">
+                          <div class="conv-input-visual">
+                            @if (getConvContributionSourcePreview(contribution.inputChannelIndex); as sourcePreview) {
+                              <img class="overlay-image overlay-image-sm" [src]="sourcePreview.dataUrl" alt="输入通道预览" />
+                            } @else {
+                              <img class="overlay-image overlay-image-sm" [src]="contribution.patchPreviewUrl" alt="输入通道局部块预览" />
+                            }
+                            <div
+                              class="slide-preview conv-slide-preview"
+                              [style.--conv-grid-step.%]="getConvGridStepPercent()"
+                            >
+                              <div
+                                class="slide-window"
+                                [class.focused]="isAnimatedConvContribution(contribution.inputChannelIndex)"
+                                [style.left.%]="getConvWindowInsetPercent('col')"
+                                [style.top.%]="getConvWindowInsetPercent('row')"
+                                [style.width.%]="getConvWindowSizePercent()"
+                                [style.height.%]="getConvWindowSizePercent()"
+                              ></div>
+                            </div>
+                            <span class="conv-position-tag input-tag">
+                              输入 ({{ activeConvScanPoint().row }}, {{ activeConvScanPoint().col }})
+                            </span>
+                          </div>
+                          <div class="conv-input-copy">
+                            <strong>通道 {{ contribution.inputChannelIndex }}</strong>
+                            <span>每个输入通道都会配上一组独立卷积核，并生成自己的中间响应。</span>
+                          </div>
+                          <div class="contribution-transfer inline-transfer always-flow curved-transfer" aria-hidden="true">
+                            <svg class="transfer-svg" viewBox="0 0 64 24" preserveAspectRatio="none">
+                              <path class="transfer-path" d="M 2 4 C 18 4, 20 20, 42 20 S 56 14, 62 12"></path>
+                            </svg>
+                            <span class="transfer-pulse"></span>
+                          </div>
+                          <div
+                            class="contribution-output-cell conv-intermediate-cell"
+                            [class.active]="isAnimatedConvContribution(contribution.inputChannelIndex)"
+                            [class.live]="true"
+                          >
+                            <span>中间结果</span>
+                            <strong>{{ formatSigned(getConvContributionValue(contribution.inputChannelIndex), 2) }}</strong>
+                          </div>
+                        </div>
+                      }
+                    </div>
+
+                    <div class="conv-pipeline-column conv-pipeline-merge" [style.paddingTop.px]="getConvPipelineOffsetPx()">
+                      <span class="conv-pipeline-title">中间层</span>
+                      <div class="conv-bias-line-wrap">
+                        <div class="conv-bias-node">
+                          <span>偏置</span>
+                          <strong>{{ formatSigned(convExample.bias, 2) }}</strong>
+                        </div>
+                        <div class="conv-output-connector bias-only" [class.active]="!!animatedConvContribution()" aria-hidden="true">
+                          <span class="conv-output-connector-line"></span>
+                          <span class="conv-output-connector-pulse"></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="conv-pipeline-column conv-pipeline-output" [style.paddingTop.px]="getConvPipelineOffsetPx()">
+                      <div class="contribution-sum conv-output-card" [class.receiving]="!!animatedConvContribution()">
+                        <span class="conv-pipeline-title">{{ state.selectedLayer()?.sourceName ?? 'conv' }}</span>
+                        <span>目标单元</span>
+                        <div class="conv-output-visual">
+                          <div
+                            class="conv-output-grid"
+                            aria-hidden="true"
+                            [style.--conv-grid-step.%]="getConvOutputGridStepPercent()"
+                          >
+                            <span
+                              class="conv-output-focus-cell"
+                              [style.left.%]="getConvOutputCellInsetPercent('col')"
+                              [style.top.%]="getConvOutputCellInsetPercent('row')"
+                              [style.width.%]="getConvOutputCellSizePercent('col')"
+                              [style.height.%]="getConvOutputCellSizePercent('row')"
+                            ></span>
+                          </div>
+                        </div>
+                        <div class="contribution-output-cell final" [class.live]="!!animatedConvContribution()">
+                          <span>当前输出</span>
+                          <strong>{{ formatSigned(activeConvDynamicOutputValue(), 2) }}</strong>
+                        </div>
+                        <strong>{{ formatSigned(activeConvDynamicOutputValue(), 3) }}</strong>
+                        <small class="contribution-target-note">
+                          单元 ({{ activeConvScanPoint().row }}, {{ activeConvScanPoint().col }})
+                        </small>
+                        <p class="conv-output-note">
+                          当前这个 3×3 输入块，只对应右侧高亮的一个输出单元。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  @if (animatedConvSourcePreview(); as sourcePreview) {
+                    <img class="overlay-image" [src]="sourcePreview.dataUrl" alt="输入通道预览" />
+                  } @else {
+                    <img class="overlay-image" [src]="animatedConvContribution()?.patchPreviewUrl || convExample.patchPreviewUrl" alt="输入局部块预览" />
+                  }
+                  <div class="slide-preview">
+                    <div
+                      class="slide-window"
+                      [style.left.%]="getConvWindowInsetPercent('col')"
+                      [style.top.%]="getConvWindowInsetPercent('row')"
+                      [style.width.%]="getConvWindowSizePercent()"
+                      [style.height.%]="getConvWindowSizePercent()"
+                    ></div>
+                  </div>
+                  <p>
+                    当前正在演示通道 {{ animatedConvContribution()?.inputChannelIndex ?? convExample.inputChannelIndex }}。
+                    滑窗会逐格移动，而每一个 3×3 输入块都会严格对应高亮位置上的一个输出值。
+                  </p>
+                </article>
+                <article class="overlay-stage">
+                  <span class="overlay-label">贡献汇聚</span>
+                  <div class="contribution-lane">
+                    @for (contribution of convExample.inputContributions; track contribution.inputChannelIndex) {
+                      <div
+                        class="contribution-card"
+                        [class.active]="isAnimatedConvContribution(contribution.inputChannelIndex)"
+                        [class.flowing]="isAnimatedConvContribution(contribution.inputChannelIndex)"
+                      >
+                        <strong>通道 {{ contribution.inputChannelIndex }}</strong>
+                        <span>{{ formatSigned(getConvContributionValue(contribution.inputChannelIndex), 3) }}</span>
+                        <div class="contribution-output-cell">
+                          <span>中间结果</span>
+                          <strong>{{ formatSigned(getConvContributionValue(contribution.inputChannelIndex), 2) }}</strong>
+                        </div>
+                        <div class="contribution-mini">
+                          <div class="contribution-fill" [style.width.%]="getContributionFillPercent(getConvContributionValue(contribution.inputChannelIndex))"></div>
+                        </div>
+                        <div class="contribution-transfer" aria-hidden="true">
+                          <span class="transfer-track"></span>
+                          <span class="transfer-pulse"></span>
+                        </div>
+                      </div>
+                    }
+                    <div class="contribution-arrow" aria-hidden="true">→</div>
+                    <div class="contribution-sum" [class.receiving]="!!animatedConvContribution()">
+                      <span>目标单元</span>
+                      <div class="contribution-output-cell final" [class.live]="!!animatedConvContribution()">
+                        <span>当前输出</span>
+                        <strong>{{ formatSigned(convAccumulatedOutput(), 2) }}</strong>
+                      </div>
+                      <strong>{{ formatSigned(convAccumulatedOutput(), 3) }}</strong>
+                      <small class="contribution-target-note">
+                        {{ convExample.inputContributions.length ? (animatedConvInputIndex() + 1) : 0 }}/{{ convExample.inputContributions.length }}
+                        个通道已累计
+                      </small>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            }
+            @case (1) {
+              <div class="overlay-flow overlay-flow-dual">
+                <article class="overlay-stage overlay-stage-kernel">
+                  <span class="overlay-label">输入局部块 · 通道 {{ animatedConvContribution()?.inputChannelIndex ?? convExample.inputChannelIndex }}</span>
+                  <div class="overlay-preview-surface overlay-preview-surface-sm">
+                    <app-mode-c-preview-canvas [matrix]="activeConvDynamicPatch()" [grayscale]="false"></app-mode-c-preview-canvas>
+                  </div>
+                  <div class="matrix-grid">
+                    @for (row of activeConvDynamicPatch(); track $index; let rowIndex = $index) {
+                      @for (value of row; track $index; let colIndex = $index) {
+                        <span
+                          class="matrix-cell interactive"
+                          [class.active]="isHoveredConvCell(rowIndex, colIndex)"
+                          (mouseenter)="setHoveredConvCell(rowIndex, colIndex)"
+                          (mouseleave)="clearHoveredConvCell()"
+                        >{{ value.toFixed(2) }}</span>
+                      }
+                    }
+                  </div>
+                  <p class="overlay-stage-note">上方播放控件负责切换通道，局部扫描则按输出单元的位置逐格推进。</p>
+                </article>
+
+                <div class="overlay-arrow overlay-arrow-large" aria-hidden="true">×</div>
+
+                <article class="overlay-stage overlay-stage-kernel">
+                  <span class="overlay-label">卷积核权重 · 通道 {{ animatedConvContribution()?.inputChannelIndex ?? convExample.inputChannelIndex }}</span>
+                  <img class="overlay-image overlay-image-sm" [src]="animatedConvContribution()?.kernelPreviewUrl || convExample.kernelPreviewUrl" alt="卷积核预览" />
+                  <div class="matrix-grid">
+                    @for (row of (animatedConvContribution()?.kernel || convExample.kernel); track $index; let rowIndex = $index) {
+                      @for (value of row; track $index; let colIndex = $index) {
+                        <span
+                          class="matrix-cell interactive"
+                          [class.active]="isHoveredConvCell(rowIndex, colIndex)"
+                          (mouseenter)="setHoveredConvCell(rowIndex, colIndex)"
+                          (mouseleave)="clearHoveredConvCell()"
+                        >{{ value.toFixed(2) }}</span>
+                      }
+                    }
+                  </div>
+                </article>
+              </div>
+            }
+            @case (2) {
+              <div class="overlay-flow overlay-flow-single">
+                <article class="overlay-stage overlay-stage-products">
+                  <span class="overlay-label">逐元素乘积 · 通道 {{ animatedConvContribution()?.inputChannelIndex ?? convExample.inputChannelIndex }}</span>
+                  <div class="matrix-grid">
+                    @for (row of activeConvDynamicProducts(); track $index; let rowIndex = $index) {
+                      @for (value of row; track $index; let colIndex = $index) {
+                        <span
+                          class="matrix-cell interactive"
+                          [class.active]="isHoveredConvCell(rowIndex, colIndex)"
+                          (mouseenter)="setHoveredConvCell(rowIndex, colIndex)"
+                          (mouseleave)="clearHoveredConvCell()"
+                        >{{ value.toFixed(2) }}</span>
+                      }
+                    }
+                  </div>
+                  <p>
+                    这里的每一个格子，都对应当前播放通道上的一次逐元素乘法。
+                    你可以通过“上一通道 / 暂停 / 下一通道”来观察相同扫描路径在不同通道上的差异。
+                  </p>
+                  @if (activeConvCellDetail(); as cell) {
+                    <div class="hover-equation">
+                      <strong>当前聚焦格 ({{ cell.row }}, {{ cell.col }})</strong>
+                      <span>{{ cell.patchValue.toFixed(2) }} × {{ cell.kernelValue.toFixed(2) }} = {{ cell.productValue.toFixed(2) }}</span>
+                    </div>
+                  }
+                </article>
+              </div>
+            }
+            @default {
+              <div class="overlay-flow overlay-flow-single">
+                <article class="overlay-stage overlay-stage-result">
+                  <span class="overlay-label">累加并加上偏置</span>
+                  <div class="equation-stack">
+                    <div class="equation-row">
+                      <span>Σ products</span>
+                      <strong>{{ convExample.weightedSum.toFixed(3) }}</strong>
+                    </div>
+                    <div class="equation-row">
+                      <span>+ bias</span>
+                      <strong>{{ formatSigned(convExample.bias, 3) }}</strong>
+                    </div>
+                    <div class="equation-row emphasis">
+                      <span>输出</span>
+                      <strong>{{ convExample.outputValue.toFixed(3) }}</strong>
+                    </div>
+                  </div>
+                  <div class="metric-pill anchor-pill">
+                    <span>特征图位置</span>
+                    <strong>({{ convExample.row }}, {{ convExample.col }})</strong>
+                  </div>
+                </article>
+                <article class="overlay-stage">
+                  <span class="overlay-label">输入通道汇总</span>
+                  <div class="contribution-stack">
+                    @for (contribution of convExample.inputContributions; track contribution.inputChannelIndex) {
+                      <div
+                        class="contribution-row"
+                        [class.active]="isAnimatedConvContribution(contribution.inputChannelIndex)"
+                        [class.flowing]="isAnimatedConvContribution(contribution.inputChannelIndex)"
+                        [class.accumulated]="isAccumulatedConvContribution(contribution.inputChannelIndex)"
+                      >
+                        <span>通道 {{ contribution.inputChannelIndex }}</span>
+                        <div class="contribution-row-main">
+                          <div class="contribution-output-cell">
+                            <span>单元</span>
+                            <strong>{{ formatSigned(contribution.weightedSum, 2) }}</strong>
+                          </div>
+                          <div class="contribution-mini">
+                            <div class="contribution-fill" [style.width.%]="getContributionFillPercent(contribution.weightedSum)"></div>
+                          </div>
+                          <div class="contribution-transfer" aria-hidden="true">
+                            <span class="transfer-track"></span>
+                            <span class="transfer-pulse"></span>
+                          </div>
+                          <strong>{{ formatSigned(contribution.weightedSum, 3) }}</strong>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                  <div class="equation-stack equation-stack-compact">
+                    <div class="equation-row live-equation">
+                      <span>当前累计和</span>
+                      <strong>{{ formatSigned(convAccumulatedTotal(), 3) }}</strong>
+                    </div>
+                    <div class="equation-row">
+                      <span>+ bias</span>
+                      <strong>{{ formatSigned(convExample.bias, 3) }}</strong>
+                    </div>
+                    <div class="equation-row emphasis">
+                      <span>当前输出</span>
+                      <strong>{{ formatSigned(convAccumulatedOutput(), 3) }}</strong>
+                    </div>
+                  </div>
+                  <div class="hover-equation">
+                    <strong>当前正在累加通道 {{ animatedConvContribution()?.inputChannelIndex ?? convExample.inputChannelIndex }}</strong>
+                    <span>
+                      {{ formatSigned(convAccumulatedTotal(), 3) }}
+                      已累计 {{ animatedConvInputIndex() + 1 }}/{{ convExample.inputContributions.length }} 个通道
+                    </span>
+                  </div>
+                  <div class="hover-equation final-equation">
+                    <strong>通道总和</strong>
+                    <span>{{ formatSigned(convContributionTotal(), 3) }} + bias {{ formatSigned(convExample.bias, 3) }} → {{ formatSigned(convExample.outputValue, 3) }}</span>
+                  </div>
+                </article>
+              </div>
+            }
+          }
+
+          <div class="overlay-nav">
+            <button type="button" class="toolbar-button subtle" (click)="previousConvOverlayStep()" [disabled]="convOverlayStep() === 0">
+              上一步
+            </button>
+            <button type="button" class="toolbar-button primary" (click)="nextConvOverlayStep()" [disabled]="convOverlayStep() === 3">
+              下一步
+            </button>
+          </div>
+        </section>
+      }
+
+      @if (showReluOverlay() && activeReluExample(); as reluExample) {
+        <section class="intermediate-overlay" aria-label="ReLU 中间视图">
+          <div class="overlay-scrim"></div>
+          <button type="button" class="overlay-close" (click)="closeOverlay()" aria-label="关闭 ReLU 中间视图">
+            ×
+          </button>
+
+          <div class="overlay-header">
+            <div>
+              <p class="eyebrow">中间过程视图</p>
+              <h3>{{ overlayTitle() }}</h3>
+              <p class="overlay-copy">{{ overlayHint() }}</p>
+            </div>
+            @if (state.selectedLayer(); as layer) {
+              <div class="overlay-meta">
+                <strong>{{ layer.sourceName }}</strong>
+                <span>通道 #{{ reluExample.channelIndex }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="overlay-flow overlay-flow-dual">
+            <article class="overlay-stage">
+              <span class="overlay-label">ReLU 之前</span>
+              @if (activeReluBeforePreview(); as beforePreview) {
+                <div
+                  class="overlay-preview-surface"
+                  (mousemove)="setReluHoverFromEvent($event)"
+                  (mouseleave)="clearReluHover()"
+                >
+                  <app-mode-c-preview-canvas [matrix]="beforePreview.matrix" [grayscale]="false"></app-mode-c-preview-canvas>
+                  @if (reluHoverPoint(); as point) {
+                    <span
+                      class="hover-marker"
+                      [style.top.%]="getHoverMarkerTopPercent(point, beforePreview.matrix)"
+                      [style.left.%]="getHoverMarkerLeftPercent(point, beforePreview.matrix)"
+                    ></span>
+                  }
+                </div>
+              } @else {
+                <img class="overlay-image" [src]="reluExample.beforePreviewUrl" alt="ReLU 输入预览" />
+              }
+              <p>在激活之前，特征图中仍然保留着负响应。</p>
+              <div class="metric-stack">
+                <div class="metric-pill">
+                  <span>负值占比</span>
+                  <strong>{{ formatPercent(reluExample.beforeNegativeRatio) }}</strong>
+                </div>
+                <div class="metric-pill">
+                  <span>最小值</span>
+                  <strong>{{ formatSigned(reluExample.beforeMin, 3) }}</strong>
+                </div>
+              </div>
+            </article>
+
+            <div class="overlay-arrow overlay-arrow-large" aria-hidden="true">max(0, x)</div>
+
+            <article class="overlay-stage">
+              <span class="overlay-label">ReLU 之后</span>
+              @if (activeReluAfterPreview(); as afterPreview) {
+                <div
+                  class="overlay-preview-surface"
+                  (mousemove)="setReluHoverFromEvent($event)"
+                  (mouseleave)="clearReluHover()"
+                >
+                  <app-mode-c-preview-canvas [matrix]="afterPreview.matrix" [grayscale]="false"></app-mode-c-preview-canvas>
+                  @if (reluHoverPoint(); as point) {
+                    <span
+                      class="hover-marker"
+                      [style.top.%]="getHoverMarkerTopPercent(point, afterPreview.matrix)"
+                      [style.left.%]="getHoverMarkerLeftPercent(point, afterPreview.matrix)"
+                    ></span>
+                  }
+                </div>
+              } @else {
+                <img class="overlay-image" [src]="reluExample.afterPreviewUrl" alt="ReLU 输出预览" />
+              }
+              <p>ReLU 会把小于零的响应压到零，只保留正向证据。</p>
+              <div class="metric-stack">
+                <div class="metric-pill">
+                  <span>正值占比</span>
+                  <strong>{{ formatPercent(reluExample.afterPositiveRatio) }}</strong>
+                </div>
+                <div class="metric-pill">
+                  <span>范围</span>
+                  <strong>{{ formatSigned(reluExample.afterMin, 3) }} to {{ formatSigned(reluExample.afterMax, 3) }}</strong>
+                </div>
+              </div>
+              @if (activeReluHoverValues(); as values) {
+                <div class="hover-equation relu-hover-equation">
+                      <strong>像素 ({{ values.row }}, {{ values.col }})</strong>
+                  <span>max(0, {{ values.before.toFixed(2) }}) = {{ values.after.toFixed(2) }}</span>
+                </div>
+              }
+            </article>
+          </div>
+        </section>
+      }
+
+      @if (showPoolOverlay() && activePoolExample(); as poolExample) {
+        <section class="intermediate-overlay" aria-label="池化中间视图">
+          <div class="overlay-scrim"></div>
+          <button type="button" class="overlay-close" (click)="closeOverlay()" aria-label="关闭池化中间视图">
+            ×
+          </button>
+
+          <div class="overlay-header">
+            <div>
+              <p class="eyebrow">中间过程视图</p>
+              <h3>{{ overlayTitle() }}</h3>
+              <p class="overlay-copy">{{ overlayHint() }}</p>
+            </div>
+            @if (state.selectedLayer(); as layer) {
+              <div class="overlay-meta">
+                <strong>{{ layer.sourceName }}</strong>
+                <span>通道 #{{ poolExample.channelIndex }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="overlay-flow overlay-flow-dual">
+            <article class="overlay-stage">
+              <span class="overlay-label">输入特征图</span>
+              @if (activePoolInputPreview(); as inputPreview) {
+                <div
+                  class="overlay-preview-surface"
+                  (mousemove)="setPoolHoverFromEvent($event)"
+                  (mouseleave)="clearPoolHover()"
+                >
+                  <app-mode-c-preview-canvas [matrix]="inputPreview.matrix" [grayscale]="false"></app-mode-c-preview-canvas>
+                  @if (poolHoverPoint(); as point) {
+                    <span
+                      class="hover-marker"
+                      [style.top.%]="getHoverMarkerTopPercent(point, inputPreview.matrix)"
+                      [style.left.%]="getHoverMarkerLeftPercent(point, inputPreview.matrix)"
+                    ></span>
+                  }
+                </div>
+              } @else {
+                <img class="overlay-image" [src]="poolExample.patchPreviewUrl" alt="池化输入窗口预览" />
+              }
+              <p>将鼠标移动到输入图上，可以查看是哪个 2×2 窗口产生了当前池化输出。</p>
+            </article>
+
+            <div class="overlay-arrow overlay-arrow-large" aria-hidden="true">take max</div>
+
+            <article class="overlay-stage">
+              <span class="overlay-label">下采样结果</span>
+              @if (activePoolOutputPreview(); as outputPreview) {
+                <div
+                  class="overlay-preview-surface"
+                  (mousemove)="setPoolHoverFromEvent($event)"
+                  (mouseleave)="clearPoolHover()"
+                >
+                  <app-mode-c-preview-canvas [matrix]="outputPreview.matrix" [grayscale]="false"></app-mode-c-preview-canvas>
+                  @if (activePoolHoverValues()) {
+                    <span
+                      class="hover-marker"
+                      [style.top.%]="getPoolOutputMarkerTopPercent()"
+                      [style.left.%]="getPoolOutputMarkerLeftPercent()"
+                    ></span>
+                  }
+                </div>
+              }
+              <p>池化层会保留每个 2×2 窗口里的最大响应，其余值会被舍弃。</p>
+              <div class="metric-stack">
+                <div class="metric-pill">
+                  <span>输出位置</span>
+                  <strong>({{ poolExample.row }}, {{ poolExample.col }})</strong>
+                </div>
+                <div class="metric-pill">
+                  <span>窗口最大值</span>
+                  <strong>{{ formatSigned(poolExample.maxValue, 3) }}</strong>
+                </div>
+              </div>
+              @if (activePoolWindowValues(); as windowValues) {
+                <div class="hover-equation pool-hover-window">
+                  <strong>2×2 最大值比较</strong>
+                  <div class="pool-compare-grid">
+                    @for (value of windowValues.values; track $index) {
+                      <span class="pool-compare-cell" [class.active]="$index === windowValues.maxIndex">
+                        {{ value.toFixed(2) }}
+                      </span>
+                    }
+                  </div>
+                  <span>
+                    max({{ windowValues.values[0].toFixed(2) }}, {{ windowValues.values[1].toFixed(2) }}, {{ windowValues.values[2].toFixed(2) }}, {{ windowValues.values[3].toFixed(2) }})
+                    = {{ windowValues.maxValue.toFixed(2) }}
+                  </span>
+                </div>
+              }
+              @if (activePoolHoverValues(); as values) {
+                <div class="hover-equation relu-hover-equation">
+                  <strong>输入 ({{ values.inputRow }}, {{ values.inputCol }}) → 输出 ({{ values.outputRow }}, {{ values.outputCol }})</strong>
+                  <span>{{ values.inputValue.toFixed(2) }} 会参与形成池化值 {{ values.outputValue.toFixed(2) }}</span>
+                </div>
+              }
+            </article>
+          </div>
+        </section>
+      }
+    </div>
+  </div>
+
+  @if (state.selectedLayer(); as layer) {
+    <div class="layer-inspector">
+      <div>
+        <span class="inspector-label">当前选中层</span>
+        <strong>{{ layer.title }}</strong>
+      </div>
+      <div>
+        <span class="inspector-label">当前聚焦通道</span>
+        <strong>#{{ state.selectedChannelIndex() }}</strong>
+      </div>
+      <div>
+        <span class="inspector-label">输出形状</span>
+        <strong>{{ layer.outputShapeLabel }}</strong>
+      </div>
+      <div>
+        <span class="inspector-label">卷积核</span>
+        <strong>{{ layer.kernelLabel ?? '无' }}</strong>
+      </div>
+      <p>{{ layer.description }}</p>
+    </div>
+  }
+
+</section>

@@ -1,0 +1,81 @@
+<div class="app-shell mode-c-shell">
+  <header class="topbar">
+    <a class="brand-wrap" routerLink="/">
+      <div class="brand-logo">D</div>
+      <div>
+        <div class="brand-name">DeepVision Studio</div>
+        <div class="brand-sub">深度学习可视化实验平台</div>
+      </div>
+    </a>
+
+    <div class="topbar-right">
+      <nav class="topbar-nav" aria-label="Mode C navigation">
+        <a class="btn-link btn-sm" routerLink="/">首页</a>
+      </nav>
+
+      <span class="meta-pill">模块 C</span>
+      <span
+        class="meta-pill"
+        [class.meta-pill-ready]="model.shellStatus().status === 'ready'"
+      >
+        {{ model.shellStatus().title }}
+      </span>
+
+      <section class="auth-panel" aria-label="Mode C user status">
+        @if (isLoggedIn && user) {
+          <div class="auth-session">
+            <span class="meta-pill">{{ user.displayName }}</span>
+            <span class="meta-pill">@{{ user.username }}</span>
+            <button type="button" class="btn-ghost btn-sm" (click)="requestLogout()">退出登录</button>
+          </div>
+        } @else {
+          <div class="auth-entry">
+            <a class="btn-link btn-sm" routerLink="/login">登录</a>
+            <a class="btn-link btn-primary btn-sm" routerLink="/register">注册</a>
+          </div>
+        }
+      </section>
+    </div>
+  </header>
+
+  <main class="mode-c-main">
+    <section class="hero-card">
+      <div class="hero-copy">
+        <p class="eyebrow">第一阶段</p>
+        <h1>Mode C 已切换为原生 Angular 运行方式</h1>
+        <p>
+          这个页面已经不再依赖嵌入式 Svelte 运行时，而是提供了后续 CNN 总览重构、
+          细节面板迁移以及教学文章迁移所需的长期平台结构。
+        </p>
+      </div>
+
+      <div class="hero-status">
+        <article>
+          <span>架构</span>
+          <strong>原生 Angular 功能外壳</strong>
+          <p>组件边界、类型化服务以及与平台一致的布局结构已经完成。</p>
+        </article>
+        <article>
+          <span>下一目标</span>
+          <strong>总览图迁移</strong>
+          <p>下方的总览区域就是后续原生图形渲染的主承载面。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="workspace-stack">
+      <app-mode-c-overview />
+      <app-mode-c-detail-panel />
+    </section>
+
+    <details class="article-drawer">
+      <summary>
+        <span>学习文章</span>
+        <span class="drawer-hint">展开补充阅读</span>
+      </summary>
+      <div class="article-drawer-body">
+        <app-mode-c-article />
+      </div>
+    </details>
+  </main>
+</div>
