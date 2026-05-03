@@ -546,7 +546,7 @@
   @if (mode === 'training') {
     <div class="workspace mode-workspace training-mode-workspace">
       <aside class="side-panel">
-        <div class="pane">
+        <div class="pane training-data-pane">
           <div class="pane-title">训练数据</div>
           <div [class]="trainingDatasetError && trainingBackendNotice.includes('暂不可用') ? 'warn-box' : 'success-box'" style="margin-bottom:8px">
             {{ trainingBackendNotice }}
@@ -830,7 +830,7 @@
                 @if (ds.warnings.length || trainingDatasetError) { <div class="warn-box" style="margin-top:8px">@if (trainingDatasetError) { <div>{{ trainingDatasetError }}</div> } @for (warning of ds.warnings; track warning) { <div>{{ warning }}</div> }</div> }
               </div>
               <div>
-                <div class="section-title" style="margin-bottom:6px">数据预览</div>
+                <div class="section-title" style="margin-bottom:6px">{{ ds.imagePreview?.length ? '图片预览' : ds.tablePreview ? '表格预览' : ds.pointPreview?.length ? '散点预览' : '数据预览' }}</div>
                 @if (ds.imagePreview?.length) {
                   <div class="image-preview-grid">@for (img of ds.imagePreview; track img.name) { <div class="image-preview-card"><img [src]="img.url" [alt]="img.label" /><span>{{ img.label }}</span></div> }</div>
                 } @else if (ds.tablePreview; as table) {
@@ -843,15 +843,29 @@
           </div>
         }
 
-        <div class="status-grid train-visual-status">
-          <div class="status-card"><div class="status-card-label">训练损失</div><div class="status-card-value" style="color:var(--red)">{{ trainingLoss | number:'1.4-4' }}</div></div>
-          <div class="status-card"><div class="status-card-label">验证损失</div><div class="status-card-value" style="color:var(--yellow)">{{ trainingValLoss | number:'1.4-4' }}</div></div>
-          <div class="status-card"><div class="status-card-label">训练准确率</div><div class="status-card-value" style="color:var(--accent)">{{ (trainingAcc*100) | number:'1.1-1' }}%</div></div>
-          <div class="status-card"><div class="status-card-label">验证准确率</div><div class="status-card-value" style="color:var(--green)">{{ (trainingValAcc*100) | number:'1.1-1' }}%</div></div>
-          <div class="status-card"><div class="status-card-label">当前 Batch</div><div class="status-card-value">{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div></div>
-          <div class="status-card"><div class="status-card-label">训练耗时</div><div class="status-card-value">{{ formatDuration(trainingElapsedSeconds) }}</div></div>
-          <div class="status-card"><div class="status-card-label">预计剩余</div><div class="status-card-value">{{ formatDuration(trainingEtaSeconds) }}</div></div>
-          <div class="status-card"><div class="status-card-label">进度</div><div class="status-card-value">{{ trainingProgressPercent | number:'1.0-0' }}%</div></div>
+        <div class="training-status-block">
+          <div class="training-status-head">
+            <div>
+              <div class="section-title">当前训练状态</div>
+              <div class="training-status-summary">Epoch {{ trainingEpoch }} / {{ trainingConfig.totalEpochs }} · Batch {{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div>
+            </div>
+            <div class="training-status-right">
+              <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : trainingStatus === 'completed' ? '已完成' : '已停止' }}</div>
+              <strong>{{ trainingProgressPercent | number:'1.0-0' }}%</strong>
+            </div>
+          </div>
+          <div class="training-status-progress"><div [style.width.%]="trainingProgressPercent"></div></div>
+          <div class="status-grid train-visual-status">
+            <div class="status-card status-card-epoch"><div class="status-card-label">当前 Epoch</div><div class="status-card-value">{{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</div></div>
+            <div class="status-card status-card-loss"><div class="status-card-label">训练损失</div><div class="status-card-value">{{ trainingLoss | number:'1.4-4' }}</div></div>
+            <div class="status-card status-card-val-loss"><div class="status-card-label">验证损失</div><div class="status-card-value">{{ trainingValLoss | number:'1.4-4' }}</div></div>
+            <div class="status-card status-card-acc"><div class="status-card-label">训练准确率</div><div class="status-card-value">{{ (trainingAcc*100) | number:'1.1-1' }}%</div></div>
+            <div class="status-card status-card-val-acc"><div class="status-card-label">验证准确率</div><div class="status-card-value">{{ (trainingValAcc*100) | number:'1.1-1' }}%</div></div>
+            <div class="status-card"><div class="status-card-label">当前 Batch</div><div class="status-card-value">{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div></div>
+            <div class="status-card"><div class="status-card-label">训练耗时</div><div class="status-card-value">{{ formatDuration(trainingElapsedSeconds) }}</div></div>
+            <div class="status-card"><div class="status-card-label">预计剩余</div><div class="status-card-value">{{ formatDuration(trainingEtaSeconds) }}</div></div>
+            <div class="status-card status-card-progress"><div class="status-card-label">进度</div><div class="status-card-value">{{ trainingProgressPercent | number:'1.0-0' }}%</div></div>
+          </div>
         </div>
 
         <div class="training-inline-panels">
@@ -865,13 +879,138 @@
           </div>
         </div>
 
+        @if (trainingTestResult; as test) {
+          <div class="test-result-panel">
+            <div class="test-result-head">
+              <div>
+                <div class="section-title">测试集效果</div>
+                <div class="muted">训练完成后由后端在测试集上推理得到。</div>
+              </div>
+              <div class="test-metrics">
+                <div><span>测试准确率</span><strong>{{ test.testAccuracy === null ? 'N/A' : ((test.testAccuracy * 100) | number:'1.1-1') + '%' }}</strong></div>
+                <div><span>测试损失</span><strong>{{ test.testLoss === null ? 'N/A' : (test.testLoss | number:'1.4-4') }}</strong></div>
+                <div><span>测试样本</span><strong>{{ test.sampleCount }}</strong></div>
+              </div>
+            </div>
+            @if (test.samples.length) {
+              <div class="prediction-grid">
+                @for (sample of test.samples; track sample.index) {
+                  <div class="prediction-card" [class.correct]="sample.correct" [class.wrong]="!sample.correct">
+                    @if (sample.imageUrl) {
+                      <img [src]="sample.imageUrl" [alt]="sample.name || sample.trueLabel" />
+                    } @else {
+                      <div class="prediction-placeholder">#{{ sample.index }}</div>
+                    }
+                    <div class="prediction-meta">
+                      <div><span>预测</span><strong>{{ sample.predictedLabel }}</strong></div>
+                      <div><span>真实</span><strong>{{ sample.trueLabel }}</strong></div>
+                      <div><span>置信度</span><strong>{{ (sample.confidence * 100) | number:'1.1-1' }}%</strong></div>
+                    </div>
+                    <div [class]="sample.correct ? 'prediction-tag ok' : 'prediction-tag bad'">{{ sample.correct ? '正确' : '错误' }}</div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="muted">当前划分没有测试样本，或该数据集暂不提供图片预览。</div>
+            }
+          </div>
+        }
+
+        <div class="checkpoint-panel">
+          <div class="checkpoint-head">
+            <div>
+              <div class="section-title">模型 Checkpoint</div>
+              <div class="muted">登录后训练完成会自动保存 checkpoint，可手动选择并重新跑测试集。</div>
+            </div>
+            <button class="btn-sm" (click)="loadTrainingCheckpoints()" [disabled]="!authUser || checkpointBusy">刷新</button>
+          </div>
+          @if (!authUser) {
+            <div class="warn-box">需要登录后才能保存和加载自己的 checkpoint。</div>
+          } @else if (trainingCheckpoints.length) {
+            <div class="checkpoint-controls">
+              <label>选择 Checkpoint
+                <select [(ngModel)]="selectedCheckpointId">
+                  @for (ckpt of trainingCheckpoints; track ckpt.id) {
+                    <option [ngValue]="ckpt.id">{{ ckpt.name }} · {{ ckpt.createdAt | date:'MM-dd HH:mm' }}</option>
+                  }
+                </select>
+              </label>
+              <button class="btn-primary" (click)="runSelectedCheckpointTest()" [disabled]="checkpointBusy || !selectedCheckpointId || trainingStatus==='running'">跑测试集</button>
+            </div>
+            @if (selectedCheckpoint; as ckpt) {
+              <div class="checkpoint-meta">
+                <span>{{ ckpt.datasetName }}</span>
+                <span>Epoch {{ ckpt.epoch }} / {{ ckpt.totalEpochs }}</span>
+                <span>测试准确率 {{ ckpt.testAccuracy === null ? 'N/A' : ((ckpt.testAccuracy * 100) | number:'1.1-1') + '%' }}</span>
+                <span>签名 {{ ckpt.modelSignature.slice(0, 10) }}</span>
+              </div>
+            }
+          } @else {
+            <div class="muted">暂无 checkpoint。完成一次登录状态下的训练后会自动出现。</div>
+          }
+          @if (checkpointError) { <div class="error-box" style="margin-top:8px">{{ checkpointError }}</div> }
+        </div>
+
         <div class="charts-area">
-          <div class="chart-wrap"><div class="chart-label" style="color:var(--red)">损失曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="lossPolyline" fill="none" stroke="#dc2626" stroke-width="2"/><polyline [attr.points]="valLossPolyline" fill="none" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#dc2626">— 训练损失</span><span style="color:#d97706">- - 验证损失</span></div></div>
-          <div class="chart-wrap"><div class="chart-label" style="color:var(--accent)">准确率曲线</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="accPolyline" fill="none" stroke="#2563eb" stroke-width="2"/><polyline [attr.points]="valPolyline" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/></svg><div class="chart-legend"><span style="color:#2563eb">— 训练集</span><span style="color:#059669">- - 验证集</span></div></div>
-          <div class="chart-wrap"><div class="chart-label" style="color:var(--accent2)">学习率变化</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="lrPolyline" fill="none" stroke="#0ea5e9" stroke-width="2"/></svg><div class="chart-legend"><span>当前 LR: {{ trainingLr | number:'1.5-5' }}</span></div></div>
-          <div class="chart-wrap"><div class="chart-label" [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">梯度大小变化</div><svg viewBox="0 0 300 80" preserveAspectRatio="none" style="height:88px"><polyline [attr.points]="gradientPolyline" fill="none" stroke="#059669" stroke-width="2"/></svg><div class="chart-legend"><span>Norm: {{ trainingGradientNorm | number:'1.4-4' }}</span><span [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">{{ gradientAlert }}</span></div></div>
+          <div class="chart-wrap metric-card">
+            <div class="chart-label" style="color:var(--red)">损失曲线</div>
+            <div class="metric-chart">
+              <div class="metric-y-axis">@for (tick of lossAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
+              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                <polyline [attr.points]="lossPolyline" fill="none" stroke="#dc2626" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
+                <polyline [attr.points]="valLossPolyline" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+              </svg>
+            </div>
+            <div class="chart-legend"><span style="color:#dc2626">— 训练损失</span><span style="color:#d97706">- - 验证损失</span></div>
+          </div>
+          <div class="chart-wrap metric-card">
+            <div class="chart-label" style="color:var(--accent)">准确率曲线</div>
+            <div class="metric-chart">
+              <div class="metric-y-axis">@for (tick of accuracyAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
+              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                <polyline [attr.points]="accPolyline" fill="none" stroke="#2563eb" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
+                <polyline [attr.points]="valPolyline" fill="none" stroke="#059669" stroke-width="1.8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+              </svg>
+            </div>
+            <div class="chart-legend"><span style="color:#2563eb">— 训练集</span><span style="color:#059669">- - 验证集</span></div>
+          </div>
+          <div class="chart-wrap metric-card">
+            <div class="chart-label" style="color:var(--accent2)">学习率变化</div>
+            <div class="metric-chart">
+              <div class="metric-y-axis">@for (tick of lrAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
+              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                <polyline [attr.points]="lrPolyline" fill="none" stroke="#0ea5e9" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
+              </svg>
+            </div>
+            <div class="chart-legend"><span>当前 LR: {{ trainingLr | number:'1.5-5' }}</span></div>
+          </div>
+          <div class="chart-wrap metric-card">
+            <div class="chart-label" [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">梯度大小变化</div>
+            <div class="metric-chart">
+              <div class="metric-y-axis">@for (tick of gradientAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
+              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                <polyline [attr.points]="gradientPolyline" fill="none" stroke="#059669" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
+              </svg>
+            </div>
+            <div class="chart-legend"><span>Norm: {{ trainingGradientNorm | number:'1.4-4' }}</span><span [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">{{ gradientAlert }}</span></div>
+          </div>
           <div class="chart-wrap parameter-panel"><div class="chart-label">权重分布直方图</div><div class="weight-histogram">@for (bin of weightHistogramBins; track bin.label) { <div class="weight-bin" [style.height.%]="(bin.value / maxWeightBin) * 100" [title]="bin.label"></div> }</div><div class="chart-legend"><span>Mean {{ trainingWeightMean | number:'1.3-3' }}</span><span>Std {{ trainingWeightStd | number:'1.3-3' }}</span></div></div>
-          <div class="chart-wrap parameter-panel"><div class="chart-label">当前训练状态</div><div class="runtime-list"><div><span>Epoch</span><strong>{{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</strong></div><div><span>Batch</span><strong>{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</strong></div><div><span>Loss</span><strong>{{ trainingLoss | number:'1.4-4' }}</strong></div><div><span>Accuracy</span><strong>{{ (trainingAcc*100) | number:'1.1-1' }}%</strong></div><div><span>Elapsed</span><strong>{{ formatDuration(trainingElapsedSeconds) }}</strong></div><div><span>ETA</span><strong>{{ formatDuration(trainingEtaSeconds) }}</strong></div></div></div>
           <div style="grid-column:1/-1"><div class="section-title" style="margin-bottom:6px">实验对比 <span class="muted">（前端辅助模拟）</span></div>@for (exp of experimentResults; track exp.name) { <div class="exp-row"><span class="exp-name">{{ exp.name }}</span><div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="exp.finalAccuracy*100"></div></div><span class="exp-acc">{{ (exp.finalAccuracy*100).toFixed(1) }}%</span></div> }<button style="margin-top:5px;font-size:12px" (click)="runExperiments()">运行实验对比</button></div>
         </div>
       </main>

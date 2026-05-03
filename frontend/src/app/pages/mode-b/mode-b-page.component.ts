@@ -10,7 +10,7 @@ import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from
 import { AuthService } from '../../services/auth.service';
 import { ForwardRecordService } from '../../services/forward-record.service';
 import { ForwardBackendService } from '../../services/forward-backend.service';
-import { TrainingLog, TrainingRuntimeService } from '../../services/training-runtime.service';
+import { TrainingCheckpointSummary, TrainingLog, TrainingRuntimeService, TrainingTestResult } from '../../services/training-runtime.service';
 import { TrainingDatasetApiService } from '../../services/training-dataset-api.service';
 import { SimEngine } from '../../sim-engine';
 import {
@@ -63,6 +63,8 @@ export const KERNEL_PRESETS: KernelPreset[] = [
 ];
 
 const DATASET_COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be123c', '#4b5563'];
+type TrainingChartMetric = 'loss' | 'valLoss' | 'accuracy' | 'valAccuracy' | 'lr' | 'gradientNorm';
+type TrainingChartFormat = 'number' | 'percent' | 'lr';
 
 @Component({
   selector: 'app-mode-b-page',
@@ -145,6 +147,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   trainingTotalBatchesValue = 0;
   trainingHistory: MetricPoint[] = [];
   trainingLogs: TrainingLog[] = [];
+  trainingTestResult: TrainingTestResult | null = null;
+  trainingCheckpoints: TrainingCheckpointSummary[] = [];
+  selectedCheckpointId: number | null = null;
+  checkpointBusy = false;
+  checkpointError = '';
 
   selectedTaskId = 'mnist-classify';
   experimentResults: ExperimentResult[] = [];
@@ -165,11 +172,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   builtinTrainingDatasets: TrainingDatasetOption[] = [
     {
       id: 'mnist-1000',
-      name: 'MNIST 1000 张',
+      name: 'MNIST 全量',
       source: 'builtin',
       kind: 'image',
-      description: '28x28 灰度手写数字，小规模分类教学样本。',
-      sampleCount: 1000,
+      description: '28x28 灰度手写数字，包含训练集和测试集共 70000 张。',
+      sampleCount: 70000,
       classCount: 10,
       inputShape: '28 x 28 x 1',
       recommendedSplit: '70% / 15% / 15%',
@@ -177,11 +184,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     },
     {
       id: 'cifar10-500',
-      name: 'CIFAR-10 500 张',
+      name: 'CIFAR-10 全量',
       source: 'builtin',
       kind: 'image',
-      description: '32x32 RGB 彩色图片，覆盖 10 个常见物体类别。',
-      sampleCount: 500,
+      description: '32x32 RGB 彩色图片，覆盖 10 个常见物体类别，共 60000 张。',
+      sampleCount: 60000,
       classCount: 10,
       inputShape: '32 x 32 x 3',
       recommendedSplit: '70% / 15% / 15%',
@@ -286,10 +293,20 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
+    this.subs.add(this.trainingSvc.testResult$.subscribe(result => {
+      this.trainingTestResult = result;
+      if (result && this.authUser) void this.loadTrainingCheckpoints();
+    }));
     this.subs.add(this.authSvc.user$.subscribe(user => {
       this.authUser = user;
       if (user && this.showRecordDrawer) {
         this.loadForwardRecords();
+      }
+      if (user) {
+        void this.loadTrainingCheckpoints();
+      } else {
+        this.trainingCheckpoints = [];
+        this.selectedCheckpointId = null;
       }
     }));
     this.authSvc.restoreSession();
@@ -310,6 +327,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get layerPalette(): LayerType[] { return ['conv2d', 'pool2d', 'flatten', 'dense', 'activation', 'dropout']; }
   get selectedTemplate() { return this.modelTemplates.find(t => t.id === this.selectedTemplateId); }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
+  get selectedCheckpoint() { return this.trainingCheckpoints.find(item => item.id === this.selectedCheckpointId) ?? null; }
   get inputLayer(): InputLayer | undefined { const l = this.layers.find(l => l.type === 'input'); return l?.type === 'input' ? l : undefined; }
   get outputLayer() { const l = this.layers.find(l => l.type === 'output'); return l?.type === 'output' ? l : undefined; }
   get datasetSamples() { return this.datasets[this.selectedDataset] ?? []; }
@@ -603,12 +621,28 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   get isRgbInput(): boolean { return (this.currentInputAsset?.originalChannels ?? 1) >= 3; }
-  get lossPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'loss'); }
-  get valLossPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'valLoss'); }
-  get accPolyline()  { return SimEngine.buildPolyline(this.trainingHistory, 'accuracy'); }
-  get valPolyline()  { return SimEngine.buildPolyline(this.trainingHistory, 'valAccuracy'); }
-  get lrPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'lr'); }
-  get gradientPolyline() { return SimEngine.buildPolyline(this.trainingHistory, 'gradientNorm'); }
+  get lossPolyline() { return this.metricPolyline('loss', this.lossChartDomain); }
+  get valLossPolyline() { return this.metricPolyline('valLoss', this.lossChartDomain); }
+  get accPolyline()  { return this.metricPolyline('accuracy', this.accuracyChartDomain); }
+  get valPolyline()  { return this.metricPolyline('valAccuracy', this.accuracyChartDomain); }
+  get lrPolyline() { return this.metricPolyline('lr', this.lrChartDomain); }
+  get gradientPolyline() { return this.metricPolyline('gradientNorm', this.gradientChartDomain); }
+  get lossAxisTicks() { return this.chartAxisTicks(this.lossChartDomain, 'number'); }
+  get accuracyAxisTicks() { return this.chartAxisTicks(this.accuracyChartDomain, 'percent'); }
+  get lrAxisTicks() { return this.chartAxisTicks(this.lrChartDomain, 'lr'); }
+  get gradientAxisTicks() { return this.chartAxisTicks(this.gradientChartDomain, 'number'); }
+  private get lossChartDomain(): [number, number] {
+    return this.chartDomain(['loss', 'valLoss'], { min: 0, padRatio: 0.08, fallbackMax: 1 });
+  }
+  private get accuracyChartDomain(): [number, number] {
+    return [0, 1];
+  }
+  private get lrChartDomain(): [number, number] {
+    return this.chartDomain(['lr'], { min: 0, padRatio: 0.08, fallbackMax: Math.max(0.001, this.trainingConfig.learningRate) });
+  }
+  private get gradientChartDomain(): [number, number] {
+    return this.chartDomain(['gradientNorm'], { min: 0, padRatio: 0.12, fallbackMax: 1 });
+  }
   get trainingTotalBatches(): number {
     if (this.trainingTotalBatchesValue > 0) return this.trainingTotalBatchesValue;
     const ds = this.trainingDatasetDetail;
@@ -640,6 +674,52 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
   get maxWeightBin(): number {
     return Math.max(1e-6, ...this.weightHistogramBins.map(bin => bin.value));
+  }
+
+  private metricPolyline(metric: TrainingChartMetric, domain: [number, number]): string {
+    if (this.trainingHistory.length === 0) return '';
+    const maxStep = Math.max(1, ...this.trainingHistory.map(point => point.step));
+    const [minValue, maxValue] = domain;
+    const span = Math.max(0.000001, maxValue - minValue);
+    return this.trainingHistory
+      .map(point => {
+        const x = (point.step / maxStep) * 100;
+        const y = 100 - ((point[metric] - minValue) / span) * 100;
+        return `${x.toFixed(2)},${Math.min(100, Math.max(0, y)).toFixed(2)}`;
+      })
+      .join(' ');
+  }
+
+  private chartDomain(
+    metrics: TrainingChartMetric[],
+    options: { min?: number; max?: number; padRatio?: number; fallbackMax?: number } = {}
+  ): [number, number] {
+    const values = this.trainingHistory
+      .flatMap(point => metrics.map(metric => point[metric]))
+      .filter(value => Number.isFinite(value));
+    const rawMin = values.length ? Math.min(...values) : 0;
+    const rawMax = values.length ? Math.max(...values) : (options.fallbackMax ?? 1);
+    const min = options.min ?? rawMin;
+    let max = options.max ?? Math.max(rawMax, options.fallbackMax ?? rawMax);
+    if (max <= min) max = min + Math.max(0.001, Math.abs(min) * 0.1 || 1);
+    max += (max - min) * (options.padRatio ?? 0);
+    return [min, max];
+  }
+
+  private chartAxisTicks(domain: [number, number], format: TrainingChartFormat): string[] {
+    const [min, max] = domain;
+    return [max, (max + min) / 2, min].map(value => this.formatChartTick(value, format));
+  }
+
+  private formatChartTick(value: number, format: TrainingChartFormat): string {
+    if (format === 'percent') return `${Math.round(value * 100)}%`;
+    if (format === 'lr') {
+      if (value === 0) return '0';
+      return value < 0.001 ? value.toExponential(1) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+    }
+    if (value >= 10) return value.toFixed(1);
+    if (value >= 1) return value.toFixed(2);
+    return value.toFixed(3);
   }
 
   get validationIssues(): LayerValidationIssue[] {
@@ -1401,6 +1481,39 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
   resetTraining(): void  { void this.trainingSvc.reset(); }
+
+  async loadTrainingCheckpoints(): Promise<void> {
+    if (!this.authUser) return;
+    try {
+      this.trainingCheckpoints = await this.trainingSvc.listCheckpoints();
+      if (!this.selectedCheckpointId && this.trainingCheckpoints.length) {
+        this.selectedCheckpointId = this.trainingCheckpoints[0].id;
+      }
+      if (this.selectedCheckpointId && !this.trainingCheckpoints.some(item => item.id === this.selectedCheckpointId)) {
+        this.selectedCheckpointId = this.trainingCheckpoints[0]?.id ?? null;
+      }
+      this.checkpointError = '';
+    } catch (err) {
+      this.checkpointError = err instanceof Error ? err.message : '加载 checkpoint 失败。';
+    }
+  }
+
+  async runSelectedCheckpointTest(): Promise<void> {
+    if (!this.selectedCheckpointId || !this.trainingDatasetDetail) return;
+    this.checkpointBusy = true;
+    this.checkpointError = '';
+    try {
+      await this.trainingSvc.testCheckpoint(this.selectedCheckpointId, {
+        datasetId: this.trainingDatasetDetail.id,
+        layers: this.layers
+      });
+    } catch (err) {
+      this.checkpointError = err instanceof Error ? err.message : 'Checkpoint 测试失败。';
+    } finally {
+      this.checkpointBusy = false;
+    }
+  }
+
   selectTask(id: string): void {
     this.selectedTaskId = id;
     const task = this.presetTasks.find(t => t.id === id);

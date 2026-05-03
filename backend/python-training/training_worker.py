@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import torch
 from PIL import Image
@@ -102,7 +103,10 @@ def main() -> int:
 
     request_path = Path(args.request).resolve()
     request = json.loads(request_path.read_text(encoding="utf-8"))
-    train(request)
+    if request.get("action") == "test_checkpoint":
+        test_checkpoint(request)
+    else:
+        train(request)
     return 0
 
 
@@ -114,6 +118,8 @@ def train(request: dict[str, Any]) -> None:
     split = request["split"]
     config = request["config"]
     layers = request.get("layers") or []
+    checkpoint_file = Path(request.get("checkpointFile") or (request_path_fallback(job_id) / "checkpoint.pt")).resolve()
+    model_signature = str(request.get("modelSignature") or "")
 
     seed = int(request.get("seed", 20260427))
     random.seed(seed)
@@ -179,7 +185,90 @@ def train(request: dict[str, Any]) -> None:
             "gradientStatus": gradient_status(gradient_norm),
         })
 
-    emit({"type": "control", "jobId": job_id, "status": "completed", "message": "Training completed."})
+    save_checkpoint(checkpoint_file, model, layers, dataset_id, config, class_count, model_signature)
+    test_loss = None
+    test_accuracy = None
+    if test_loader is not None:
+        test_loss, test_accuracy = evaluate(model, test_loader, criterion, device)
+    emit({
+        "type": "test_result",
+        "jobId": job_id,
+        "testLoss": None if test_loss is None else round(test_loss, 4),
+        "testAccuracy": None if test_accuracy is None else round(test_accuracy, 4),
+        "sampleCount": len(test_set),
+        "checkpointPath": str(checkpoint_file),
+        "samples": collect_prediction_samples(model, dataset, test_set, device, dataset_root, limit=8),
+    })
+    emit({"type": "control", "jobId": job_id, "status": "completed", "message": "Training completed. Test set evaluated."})
+
+
+def test_checkpoint(request: dict[str, Any]) -> None:
+    job_id = request.get("jobId", "checkpoint-test")
+    dataset_root = Path(request["datasetRoot"]).resolve()
+    dataset_id = request["datasetId"]
+    split = request["split"]
+    checkpoint_file = Path(request["checkpointFile"]).resolve()
+
+    checkpoint = torch.load(checkpoint_file, map_location="cpu", weights_only=False)
+    layers = checkpoint.get("layers") or request.get("layers") or []
+    dataset = load_dataset(dataset_root, dataset_id, layers)
+    _, _, test_set = split_dataset(dataset, split, int(request.get("seed", 20260427)))
+    if len(test_set) <= 0:
+        emit({
+            "type": "test_result",
+            "jobId": job_id,
+            "testLoss": None,
+            "testAccuracy": None,
+            "sampleCount": 0,
+            "samples": [],
+        })
+        return
+
+    sample_x, _ = dataset[0]
+    class_count = len(getattr(dataset, "classes", []))
+    model = build_model(layers, sample_x, class_count)
+    state = checkpoint.get("modelStateDict") or checkpoint.get("model_state_dict")
+    if state is None:
+        raise ValueError(f"Checkpoint has no model state: {checkpoint_file}")
+    model.load_state_dict(state)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    loader = DataLoader(test_set, batch_size=max(1, int(request.get("batchSize") or 32)), shuffle=False, num_workers=0)
+    criterion = nn.CrossEntropyLoss()
+    test_loss, test_accuracy = evaluate(model, loader, criterion, device)
+    emit({
+        "type": "test_result",
+        "jobId": job_id,
+        "testLoss": round(test_loss, 4),
+        "testAccuracy": round(test_accuracy, 4),
+        "sampleCount": len(test_set),
+        "samples": collect_prediction_samples(model, dataset, test_set, device, dataset_root, limit=8),
+    })
+
+
+def request_path_fallback(job_id: str) -> Path:
+    return Path.cwd() / "training-jobs" / job_id
+
+
+def save_checkpoint(
+    checkpoint_file: Path,
+    model: nn.Module,
+    layers: list[dict[str, Any]],
+    dataset_id: str,
+    config: dict[str, Any],
+    class_count: int,
+    model_signature: str,
+) -> None:
+    checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        "modelStateDict": model.state_dict(),
+        "layers": layers,
+        "datasetId": dataset_id,
+        "config": config,
+        "classCount": class_count,
+        "modelSignature": model_signature,
+    }, checkpoint_file)
 
 
 def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any]]) -> Dataset:
@@ -360,6 +449,60 @@ def evaluate(model, loader, criterion, device) -> tuple[float, float]:
             total_correct += int((logits.argmax(dim=1) == y).sum().detach().cpu())
             total += batch_size
     return total_loss / max(1, total), total_correct / max(1, total)
+
+
+def collect_prediction_samples(
+    model: nn.Module,
+    dataset: Dataset,
+    subset: Subset,
+    device: torch.device,
+    dataset_root: Path,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    if len(subset) <= 0:
+        return []
+    classes = list(getattr(dataset, "classes", []))
+    samples: list[dict[str, Any]] = []
+    model.eval()
+    indices = list(getattr(subset, "indices", []))[:limit]
+    with torch.no_grad():
+        for raw_index in indices:
+            x, y = dataset[int(raw_index)]
+            logits = model(x.unsqueeze(0).to(device))
+            probs = torch.softmax(logits, dim=1)[0].detach().cpu()
+            pred = int(torch.argmax(probs).item())
+            true_index = int(y.item())
+            item: dict[str, Any] = {
+                "index": int(raw_index),
+                "trueIndex": true_index,
+                "predictedIndex": pred,
+                "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
+                "predictedLabel": classes[pred] if 0 <= pred < len(classes) else str(pred),
+                "confidence": round(float(probs[pred].item()), 4),
+                "correct": pred == true_index,
+            }
+            image_path = sample_image_path(dataset, int(raw_index))
+            if image_path is not None:
+                item["name"] = image_path.name
+                item["imageUrl"] = dataset_url(image_path, dataset_root)
+            samples.append(item)
+    return samples
+
+
+def sample_image_path(dataset: Dataset, index: int) -> Path | None:
+    raw_samples = getattr(dataset, "samples", None)
+    if not isinstance(raw_samples, list) or index < 0 or index >= len(raw_samples):
+        return None
+    path = raw_samples[index][0]
+    return path if isinstance(path, Path) else Path(path)
+
+
+def dataset_url(path: Path, dataset_root: Path) -> str:
+    try:
+        rel = path.resolve().relative_to(dataset_root.resolve())
+    except ValueError:
+        return ""
+    return "/datasets/" + "/".join(quote(part) for part in rel.parts)
 
 
 def compute_gradient_norm(model) -> float:

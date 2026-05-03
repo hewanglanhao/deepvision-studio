@@ -590,7 +590,7 @@
   @if (mode === 'training') {
     <div class="workspace mode-workspace">
       <aside class="side-panel">
-        <div class="pane">
+        <div class="pane training-data-pane">
           <div class="pane-title">训练数据</div>
           <label>内置数据集
             <select [ngModel]="selectedTrainingDatasetId" (ngModelChange)="selectTrainingDataset($event)">
@@ -638,7 +638,7 @@
           </div>
         </div>
 
-        <div class="pane">
+        <div class="pane training-hyperparams-pane">
           <div class="pane-title">训练超参数</div>
           <div class="row-2">
             <label>批大小 <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>

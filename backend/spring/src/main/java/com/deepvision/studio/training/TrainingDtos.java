@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.time.Instant;
 import java.util.List;
 
 public final class TrainingDtos {
@@ -139,4 +140,63 @@ public final class TrainingDtos {
   public record HistogramBin(String label, int count) {}
 
   public record WeightHistogramResponse(String jobId, int epoch, List<HistogramBin> bins) {}
+
+  public record TrainingPredictionSample(
+      int index,
+      int trueIndex,
+      int predictedIndex,
+      String trueLabel,
+      String predictedLabel,
+      double confidence,
+      boolean correct,
+      String name,
+      String imageUrl
+  ) {}
+
+  public record CheckpointTestResult(
+      String type,
+      String jobId,
+      Double testLoss,
+      Double testAccuracy,
+      int sampleCount,
+      List<TrainingPredictionSample> samples
+  ) {}
+
+  public record TrainingCheckpointSummary(
+      Long id,
+      String name,
+      String jobId,
+      String datasetId,
+      String datasetName,
+      String modelSignature,
+      int epoch,
+      int totalEpochs,
+      Double testLoss,
+      Double testAccuracy,
+      int testSampleCount,
+      Instant createdAt
+  ) {
+    static TrainingCheckpointSummary from(TrainingCheckpoint checkpoint) {
+      return new TrainingCheckpointSummary(
+          checkpoint.getId(),
+          checkpoint.getName(),
+          checkpoint.getJobId(),
+          checkpoint.getDatasetId(),
+          checkpoint.getDatasetName(),
+          checkpoint.getModelSignature(),
+          checkpoint.getEpoch(),
+          checkpoint.getTotalEpochs(),
+          checkpoint.getTestLoss(),
+          checkpoint.getTestAccuracy(),
+          checkpoint.getTestSampleCount(),
+          checkpoint.getCreatedAt()
+      );
+    }
+  }
+
+  public record TestCheckpointRequest(
+      @NotBlank(message = "datasetId is required.")
+      String datasetId,
+      List<JsonNode> layers
+  ) {}
 }
