@@ -1,43 +1,4 @@
-<div class="mode-d-shell">
-  <header class="mode-d-topbar">
-    <a class="brand" routerLink="/">
-      <span class="brand-logo">D</span>
-      <span>
-        <strong>DeepVision Studio</strong>
-        <small>模式 D</small>
-      </span>
-    </a>
-    <nav>
-      <a routerLink="/">首页</a>
-      <a routerLink="/mode-a">模式 A</a>
-      <a routerLink="/mode-b">模式 B</a>
-      <a routerLink="/mode-c">模式 C</a>
-    </nav>
-  </header>
-
-  <main class="mode-d-main">
-    <section class="mode-d-panel">
-      <p class="eyebrow">Mode D</p>
-      <h1>模式 D 占位页面</h1>
-      <p>这里预留给后续 D 端业务。当前先放置开发占位内容，后续可以替换为正式功能。</p>
-
-      <div class="todo-grid" aria-label="模式 D 后续开发占位">
-        <div>
-          <span>01</span>
-          <strong>需求确认</strong>
-          <p>整理 D 端的业务目标、页面边界和数据来源。</p>
-        </div>
-        <div>
-          <span>02</span>
-          <strong>独立实现</strong>
-          <p>在 D 端目录内继续添加组件，不影响 A/B/C 端。</p>
-        </div>
-        <div>
-          <span>03</span>
-          <strong>接口接入</strong>
-          <p>为 D 端建立专属 service 和模型类型。</p>
-        </div>
-      </div>
-    </section>
-  </main>
-</div>
+<app-mode-d-explainer-shell
+  [user]="user"
+  (logoutRequested)="logout()"
+/>

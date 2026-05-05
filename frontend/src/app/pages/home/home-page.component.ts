@@ -41,10 +41,10 @@ export class HomePageComponent {
     },
     {
       title: '模式 D',
-      label: '预留业务端',
-      description: '结构已支持继续扩展，不需要改动根组件。',
+      label: '反向传播可视化',
+      description: '观察前向传播、损失计算、反向传播和参数更新的完整过程。',
       route: '/mode-d',
-      status: '已占位'
+      status: '已接入'
     }
   ];
 }

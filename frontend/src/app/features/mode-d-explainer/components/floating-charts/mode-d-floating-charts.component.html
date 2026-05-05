@@ -1,0 +1,59 @@
+<div class="floating-panel">
+  <!-- Dataset scatterplot -->
+  <div class="chart-card">
+    <h4>{{ s.datasetMeta()?.name ?? '训练数据' }}</h4>
+    <svg viewBox="0 0 100 100" class="chart-svg">
+      <rect x="0" y="0" width="100" height="100" fill="#fff" rx="4"/>
+      <line x1="20" y1="80" x2="80" y2="80" stroke="#e2e6ea" stroke-width="0.5"/>
+      <line x1="20" y1="20" x2="20" y2="80" stroke="#e2e6ea" stroke-width="0.5"/>
+      @for (pt of datasetPoints(); track $index) {
+        <circle
+          [attr.cx]="20 + pt.x * 60" [attr.cy]="20 + (1 - pt.y) * 60"
+          [attr.r]="pt.current ? 3 : 1.3"
+          [attr.fill]="classColors[pt.label]"
+          [attr.stroke]="pt.current ? '#1e293b' : 'none'"
+          [attr.stroke-width]="pt.current ? 1 : 0"
+          [style.opacity]="pt.current ? 1 : 0.6"
+        />
+      }
+    </svg>
+    <div class="chart-labels">
+      @for (lbl of s.datasetMeta()?.classLabels ?? []; track $index) {
+        <span class="lbl"><span class="dot" [style.background]="classColors[$index]"></span>{{ lbl }}</span>
+      }
+    </div>
+  </div>
+
+  <!-- Loss -->
+  <div class="chart-card">
+    <h4>损失曲线</h4>
+    <svg viewBox="0 0 200 80" class="chart-svg">
+      <rect x="0" y="0" width="200" height="80" fill="#fff" rx="4"/>
+      <line x1="0" y1="80" x2="200" y2="80" stroke="#e2e6ea" stroke-width="0.5"/>
+      @if (s.lossHistory().length > 1) {
+        <polyline [attr.points]="lossSvgPoints()" fill="none" stroke="#d97706" stroke-width="2"/>
+      }
+    </svg>
+    <div class="loss-stat">
+      <span>迭代 {{ iteration() }}</span>
+      <span>Loss <strong>{{ lossVal() }}</strong></span>
+    </div>
+  </div>
+
+  <!-- Prediction -->
+  <div class="chart-card">
+    <h4>当前预测</h4>
+    <div class="pred-info">
+      <div class="pred-line">样本 <code>[{{ fmt(curSample()?.input?.[0] ?? 0) }}, {{ fmt(curSample()?.input?.[1] ?? 0) }}]</code></div>
+      <div class="pred-line">真实 <strong>{{ trueLabel() }}</strong></div>
+      <div class="pred-line" [class.good]="predLabel() === trueLabel()" [class.bad]="predLabel() !== trueLabel()">
+        预测 <strong>{{ predLabel() }}</strong>
+        @if (hasStep()) {
+          <span class="tag" [class.ok]="predLabel() === trueLabel()" [class.err]="predLabel() !== trueLabel()">
+            {{ predLabel() === trueLabel() ? '✓' : '✗' }}
+          </span>
+        }
+      </div>
+    </div>
+  </div>
+</div>

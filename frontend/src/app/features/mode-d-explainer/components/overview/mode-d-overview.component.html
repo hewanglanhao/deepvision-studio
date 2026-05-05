@@ -1,0 +1,164 @@
+<div class="overview-board">
+  <!-- ====== Control bar ====== -->
+  <div class="control-bar">
+    <!-- Progress + label -->
+    <div class="ctl-info">
+      @if (sub().type !== 'idle' && sub().type !== 'done') {
+        <div class="substep-label">{{ subStepLabel() }}</div>
+        <div class="substep-track">
+          <div class="substep-fill" [style.width.%]="((currentSubStepIndex() + 1) / totalSubSteps()) * 100"></div>
+        </div>
+      } @else if (sub().type === 'idle') {
+        <div class="substep-label idle-hint">{{ subStepLabel() }}</div>
+      } @else {
+        <div class="substep-label done-hint">{{ subStepLabel() }}</div>
+      }
+    </div>
+
+    <!-- Buttons -->
+    <div class="ctl-buttons">
+      @if (!s.isAnimating()) {
+        <button class="ctl-btn primary" (click)="doStep()" [disabled]="s.isPlaying()" title="开始逐阶段观察">
+          ▶ 单步
+        </button>
+        <button class="ctl-btn" [class.on]="s.isPlaying()" (click)="doTogglePlay()">
+          {{ s.isPlaying() ? '⏸ 暂停' : '⏩ 连续' }}
+        </button>
+      } @else {
+        <button class="ctl-btn primary" (click)="doNext()" title="推进到下一阶段">
+          ⏭ 继续
+          @if (s.hasMoreSubSteps()) { <span class="ctl-badge">{{ s.remainingSubSteps() }}</span> }
+        </button>
+      }
+      <button class="ctl-btn" (click)="doReset()" title="重置网络">↺ 重置</button>
+    </div>
+  </div>
+
+  <!-- ====== Main neuron graph ====== -->
+  <div class="graph-card">
+    <div class="graph-scroll" style="position:relative">
+      <svg
+           [attr.viewBox]="'0 0 ' + svgW() + ' ' + svgH()"
+           class="graph-svg"
+           (mousemove)="onSvgMove($event)"
+           (mouseleave)="onEdgeLeave()">
+
+        <!-- Weight edges -->
+        @for (e of edges(); track e.layerFrom + '-' + e.neuronFrom + '-' + e.layerTo + '-' + e.neuronTo) {
+          @let x1 = nx(e.layerFrom); @let y1 = ny(e.neuronFrom, e.layerFrom);
+          @let x2 = nx(e.layerTo); @let y2 = ny(e.neuronTo, e.layerTo);
+          @let active = isActiveLayerPair(e);
+          @let hover = isEdgeHovered(e);
+          @let dimmed = isEdgeDimmed(e);
+          <g (mouseenter)="onEdgeEnter(e)">
+            <line [attr.x1]="x1" [attr.y1]="y1" [attr.x2]="x2" [attr.y2]="y2"
+                  stroke="transparent" stroke-width="16" style="cursor:crosshair" />
+            <line [attr.x1]="x1" [attr.y1]="y1" [attr.x2]="x2" [attr.y2]="y2"
+                  [attr.stroke]="edgeStroke(e)" stroke-width="1.2"
+                  [attr.opacity]="hover ? 1 : dimmed ? 0.15 : active ? 1 : 0.45"
+                  style="pointer-events:none"
+                  [style.stroke-width.px]="hover ? 2.5 : 1.2" />
+
+            @if (active && showFlowDots(e)) {
+              <circle [attr.r]="4"
+                      [attr.fill]="flowDirection() === 'forward' ? '#2563eb' : '#d97706'"
+                      [attr.opacity]="edgeOpacity(e)">
+                <animateMotion
+                  [attr.dur]="flowDirection() === 'forward' ? '0.7s' : '0.6s'"
+                  repeatCount="indefinite"
+                  [attr.path]="'M' + x1 + ',' + y1 + ' L' + x2 + ',' + y2"
+                  [attr.keyPoints]="flowDirection() === 'forward' ? '0;1' : '1;0'"
+                  keyTimes="0;1" calcMode="linear" />
+              </circle>
+            }
+          </g>
+        }
+
+        <!-- Neuron nodes -->
+        @for (layer of layers(); track layer.id; let li = $index) {
+          <g>
+            @for (_ of [].constructor(counts()[li]); track ni; let ni = $index) {
+              @let cx = nx(li); @let cy = ny(ni, li);
+              @let isSel = selRef()?.layerIdx === li && selRef()?.neuronIdx === ni;
+              <!-- Highlight ring for active layer -->
+              @if (neuronHighlight(li)) {
+                <circle [attr.cx]="cx" [attr.cy]="cy" [attr.r]="NEURON_R + 4"
+                        fill="none" [attr.stroke]="hlRingColor(li)" stroke-width="2"
+                        style="pointer-events:none" />
+              }
+              <!-- Selection glow ring -->
+              @if (isSel) {
+                <circle [attr.cx]="cx" [attr.cy]="cy" [attr.r]="NEURON_R + 5"
+                        fill="none" [attr.stroke]="selGlowColor(li, ni)" stroke-width="3"
+                        style="pointer-events:none" />
+              }
+              <!-- Neuron body -->
+              <circle [attr.cx]="cx" [attr.cy]="cy" [attr.r]="NEURON_R"
+                      [attr.fill]="nFill(li, ni)" stroke="#94a3b8" stroke-width="1"
+                      class="neuron-circle"
+                      (click)="selectN(li, ni)" />
+              <text [attr.x]="cx" [attr.y]="cy + 4" text-anchor="middle" fill="#1e293b"
+                    font-size="11" font-weight="700"
+                    style="pointer-events:none"
+              >{{ fmtAct(li, ni) }}</text>
+
+              @for (b of biases(); track b.layerIdx + '-' + b.neuronIdx) {
+                @if (b.layerIdx === li && b.neuronIdx === ni) {
+                  <text [attr.x]="cx" [attr.y]="cy + NEURON_R + 15"
+                        text-anchor="middle" fill="#94a3b8" font-size="9"
+                        font-family="'Courier New', monospace"
+                        style="pointer-events:none"
+                  >b={{ hasStep() ? fmt(b.bias) : '—' }}</text>
+                }
+              }
+            }
+
+            <!-- Layer name + type note -->
+            <text [attr.x]="nx(li)" [attr.y]="PAD - 18" text-anchor="middle"
+                  fill="#475569" font-size="12" font-weight="600"
+            >{{ layer.name }}</text>
+            <text [attr.x]="nx(li)" [attr.y]="PAD - 4" text-anchor="middle"
+                  fill="#94a3b8" font-size="10"
+            >{{ layer.type === 'input' ? '输入层' : layer.type === 'output' ? '输出层 (Softmax)' : layer.type === 'dense' ? (layer.params['activation'] ?? '线性') : layer.type }}</text>
+            <!-- ReLU note -->
+            @if (layer.type === 'dense' && layer.params['activation'] === 'relu') {
+              <text [attr.x]="nx(li)" [attr.y]="PAD + 8" text-anchor="middle"
+                    fill="#94a3b8" font-size="9"
+              >ReLU: 负输入→0</text>
+            }
+          </g>
+        }
+      </svg>
+
+      <!-- Hover tooltip overlay (HTML, follows mouse) -->
+      @if (hoverLabel(); as label) {
+        <div class="edge-tooltip" [style.left.px]="labelX" [style.top.px]="labelY - 36">
+          <span class="tooltip-text">{{ label }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="graph-legend">
+    <span class="leg-item"><span class="leg-swatch fw"></span>蓝=前向传播</span>
+    <span class="leg-item"><span class="leg-swatch bw"></span>橙=反向传播</span>
+    <span class="leg-item"><span class="leg-swatch up"></span>绿=参数更新</span>
+    <span class="leg-item"><span class="leg-swatch dot"></span>流动点=数据方向</span>
+    <span class="leg-item">悬停连线=显示权重</span>
+  </div>
+
+  <!-- Prediction bars -->
+  @if (predPct().length > 0 && hasStep()) {
+    <div class="softmax-strip">
+      @for (p of predPct(); track p.idx) {
+        <div class="ss-item" [class.ss-correct]="p.correct">
+          <span class="ss-label">{{ p.label }}</span>
+          <div class="ss-track"><div class="ss-fill" [style.width.%]="p.pct"></div></div>
+          <span class="ss-val">{{ p.pct }}%</span>
+        </div>
+      }
+    </div>
+  }
+
+</div>

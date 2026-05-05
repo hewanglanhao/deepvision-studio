@@ -1,0 +1,51 @@
+<div class="mode-d-shell">
+  <!-- Floating charts sidebar (outside main content) -->
+  <app-mode-d-floating-charts />
+
+  <!-- top bar -->
+  <header class="topbar">
+    <a class="brand" routerLink="/">
+      <span class="brand-logo">D</span>
+      <span>
+        <strong>DeepVision Studio</strong>
+        <small>模式 D · 反向传播可视化</small>
+      </span>
+    </a>
+    <nav>
+      <a routerLink="/">首页</a>
+      <a routerLink="/mode-a">模式 A</a>
+      <a routerLink="/mode-b">模式 B</a>
+      <a routerLink="/mode-c">模式 C</a>
+    </nav>
+    <div class="meta-pills">
+      <span class="meta-pill" [class.ready]="state.status() === 'ready'" [class.running]="state.status() === 'running'">
+        {{ state.readableStatus() }}
+      </span>
+    </div>
+    <div class="auth-slot">
+      @if (isLoggedIn) {
+        <span class="user-display">{{ user!.displayName }}</span>
+        <button class="logout-btn" (click)="requestLogout()">退出</button>
+      } @else {
+        <a routerLink="/login" class="auth-link">登录</a>
+        <a routerLink="/register" class="auth-link">注册</a>
+      }
+    </div>
+  </header>
+
+  <!-- hero (compact) -->
+  <section class="hero-card">
+    <p class="eyebrow">模式 D</p>
+    <h1>反向传播 — 单步数据流可视化</h1>
+    <p class="hero-desc">
+      点击图中<strong>神经元</strong>，查看前向传播的加权和计算；切换阶段，观察梯度反向流动与参数更新。
+    </p>
+      </section>
+
+  <!-- main: control panel (compact config) + overview (with built-in play controls) + detail -->
+  <main class="workspace">
+    <app-mode-d-control-panel />
+    <app-mode-d-overview />
+    <app-mode-d-detail-panel />
+  </main>
+</div>

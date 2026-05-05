@@ -1,0 +1,55 @@
+:host { display: block; }
+
+.control-panel {
+  display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap;
+  background: #fff; border: 1px solid #e2e6ea; border-radius: 16px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+
+.ctrl-group { }
+.ctrl-group label {
+  display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: #8a9ab0; margin-bottom: 6px; white-space: nowrap; font-weight: 600;
+}
+.ctrl-group label strong { color: #4a5568; font-family: 'Courier New', monospace; }
+
+/* preset buttons */
+.preset-list { display: flex; gap: 4px; }
+.preset-btn {
+  padding: 7px 14px; border: 1px solid #e2e6ea; border-radius: 8px;
+  background: #fff; color: #4a5568; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.preset-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+.preset-btn.selected { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+
+/* slider */
+.lr-slider {
+  width: 120px; height: 4px; -webkit-appearance: none; appearance: none;
+  background: #e2e6ea; border-radius: 2px; outline: none; cursor: pointer;
+}
+.lr-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: #2563eb; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+
+/* optimizer / speed buttons - larger */
+.opt-list, .speed-list { display: flex; gap: 4px; }
+.opt-btn, .speed-btn {
+  padding: 8px 16px; border: 1px solid #e2e6ea; border-radius: 8px;
+  background: #fff; color: #4a5568; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.opt-btn:hover, .speed-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+.opt-btn.selected, .speed-btn.selected { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+
+/* status */
+.status-row { display: flex; gap: 8px; font-size: 12px; margin-bottom: 3px; }
+.status-label { color: #8a9ab0; }
+.status-val { color: #4a5568; font-weight: 600; }
+.status-val.correct { color: #059669; }
+
+@media (max-width: 700px) {
+  .control-panel { flex-direction: column; align-items: stretch; }
+}

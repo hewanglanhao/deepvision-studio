@@ -1,0 +1,119 @@
+<div class="detail-panel">
+  <!-- Header -->
+  <div class="detail-card">
+    <h4>神经元详情</h4>
+    @if (neuron(); as n) {
+      <div class="neuron-header">
+        <span class="neuron-badge">{{ n.layerType }}</span>
+        <strong>{{ n.layerName }} · 神经元 #{{ n.neuronIdx }}</strong>
+      </div>
+      <div class="neuron-meta">
+        <div class="meta-row">
+          <span>激活值</span>
+          <span class="act-val" [style.color]="n.activation > 0 ? '#60a5fa' : n.activation < 0 ? '#f87171' : '#888'">
+            {{ fmt(n.activation) }}
+          </span>
+        </div>
+        @if (n.bias; as b) {
+          <div class="meta-row">
+            <span>偏置 (b)</span>
+            <span>{{ fmt(b.bias) }}</span>
+          </div>
+          @if (b.gradient != null) {
+            <div class="meta-row">
+              <span>偏置梯度</span>
+              <span [style.color]="b.gradient >= 0 ? '#10b981' : '#f59e0b'">∇{{ fmt(b.gradient) }}</span>
+            </div>
+          }
+          @if (b.before != null && b.after != null) {
+            <div class="meta-row">
+              <span>偏置变化</span>
+              <span class="chg-val">{{ fmt(b.before) }} → {{ fmt(b.after) }} (Δ={{ fmt(abs(b.after - b.before)) }})</span>
+            </div>
+          }
+        }
+      </div>
+    } @else {
+      <p class="placeholder">点击图中任意神经元查看入边权重和梯度</p>
+    }
+  </div>
+
+  <!-- Incoming weights -->
+  @if (neuron(); as n) {
+    @if (n.incoming.length > 0) {
+      <div class="detail-card">
+        <h4>入边权重 ({{ n.incoming.length }} 条)</h4>
+        <div class="edge-list">
+          @for (e of n.incoming; track e.layerFrom + '-' + e.neuronFrom) {
+            <div class="edge-row">
+              <div class="edge-source">
+                <span class="src-layer">{{ sourceLayerName(e) }}</span>
+                <span class="src-neuron">N{{ e.neuronFrom }}</span>
+              </div>
+              <div class="edge-values">
+                <span class="w-val" [style.background]="weightColor(e.weight)">
+                  W={{ fmt(e.weight) }}
+                </span>
+                @if (e.gradient != null) {
+                  <span class="grad-tag" [style.background]="gradientColor(e.gradient)">
+                    ∇{{ fmt(e.gradient) }}
+                  </span>
+                }
+                @if (e.before != null && e.after != null) {
+                  <span class="chg-tag" [style.background]="changeColor(e.after - e.before)">
+                    Δ{{ fmt(abs(e.after - e.before)) }}
+                  </span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Outgoing weights -->
+    @if (n.outgoing.length > 0) {
+      <div class="detail-card">
+        <h4>出边权重 ({{ n.outgoing.length }} 条)</h4>
+        <div class="edge-list">
+          @for (e of n.outgoing; track e.layerTo + '-' + e.neuronTo) {
+            <div class="edge-row">
+              <div class="edge-source">
+                <span class="src-layer">→ L{{ e.layerTo }}</span>
+                <span class="src-neuron">N{{ e.neuronTo }}</span>
+              </div>
+              <div class="edge-values">
+                <span class="w-val" [style.background]="weightColor(e.weight)">
+                  W={{ fmt(e.weight) }}
+                </span>
+                @if (e.gradient != null) {
+                  <span class="grad-tag" [style.background]="gradientColor(e.gradient)">
+                    ∇{{ fmt(e.gradient) }}
+                  </span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Prediction summary (existing) -->
+  @if (state.currentStep(); as s) {
+    <div class="detail-card">
+      <h4>输出概率</h4>
+      @if (s.predictions) {
+        <div class="softmax-list">
+          @for (p of s.predictions; track idx; let idx = $index) {
+            <div class="sm-row" [class.correct]="idx === s.trueClass">
+              <span class="sm-label">{{ classes()[idx] || '类'+idx }}</span>
+              <div class="sm-track"><div class="sm-fill" [style.width.%]="p * 100"></div></div>
+              <span class="sm-pct">{{ (p * 100).toFixed(1) }}%</span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
