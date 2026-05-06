@@ -3,11 +3,13 @@ import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 interface PortalEntry {
+  id: string;
   title: string;
   label: string;
   description: string;
   route: string;
-  status: string;
+  accent: string;
+  highlights: string[];
 }
 
 @Component({
@@ -19,32 +21,46 @@ interface PortalEntry {
 export class HomePageComponent {
   readonly entries: PortalEntry[] = [
     {
+      id: 'A',
       title: '模式 A',
-      label: '前向传播可视化',
-      description: '导入图片、编辑网络层、查看张量尺寸和每层输出。',
+      label: '前向传播实验室',
+      description: '导入图片、编辑网络结构，观察卷积核、公式和每层激活如何共同完成一次真实前向传播。',
       route: '/mode-a',
-      status: '已接入'
+      accent: 'blue',
+      highlights: ['卷积核对比', '层公式解释', 'AI 分析']
     },
     {
+      id: 'B',
       title: '模式 B',
-      label: '训练工作台',
-      description: '选择数据集、配置训练参数、观察指标曲线和训练日志。',
+      label: '模型训练工作台',
+      description: '选择数据集和超参数，启动后端训练任务，实时观察损失、准确率、日志与测试评估。',
       route: '/mode-b',
-      status: '已接入'
+      accent: 'green',
+      highlights: ['真实训练', '指标曲线', '模型评估']
     },
     {
+      id: 'C',
       title: '模式 C',
-      label: '预留业务端',
-      description: '后续可独立增加路由、页面组件和专属服务。',
+      label: 'CNN 解释工作台',
+      description: '拆解卷积窗口、卷积核乘积、中间特征图与分类依据，帮助理解 CNN 为什么这样判断。',
       route: '/mode-c',
-      status: '已占位'
+      accent: 'orange',
+      highlights: ['卷积过程', '特征图', '模型解释']
     },
     {
+      id: 'D',
       title: '模式 D',
-      label: '反向传播可视化',
-      description: '观察前向传播、损失计算、反向传播和参数更新的完整过程。',
+      label: '反向传播沙盒',
+      description: '在二维数据和 MLP 上逐步观察 loss、梯度、优化器与参数更新，理解模型如何学习。',
       route: '/mode-d',
-      status: '已接入'
+      accent: 'purple',
+      highlights: ['梯度回传', '优化器对比', '决策边界']
     }
+  ];
+
+  readonly metrics = [
+    { label: '学习模式', value: '4' },
+    { label: '可视化主线', value: 'Forward / Train / Explain / Backprop' },
+    { label: '高级能力', value: 'Web3D + AI + WebSocket' }
   ];
 }
