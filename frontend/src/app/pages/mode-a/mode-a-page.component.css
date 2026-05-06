@@ -658,6 +658,66 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .stat-cell { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; }
 .stat-label { font-size: 10px; color: var(--text3); }
 .stat-value { font-size: 15px; font-weight: 600; color: var(--text); font-family: monospace; margin-top: 2px; }
+.formula-card {
+  margin-top: 10px;
+  padding: 10px 11px;
+  border: 1px solid #dbeafe;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, .06);
+}
+.formula-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.formula-card code {
+  display: block;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1f2937;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.formula-detail {
+  margin-top: 7px;
+  color: var(--text2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.formula-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.formula-chips span,
+.param-note {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--text3);
+  font-size: 11px;
+}
+.formula-chips span {
+  padding: 3px 7px;
+  font-family: monospace;
+}
+.param-note {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
 
 /* ===== 条形图 ===== */
 .bar-chart { display: flex; align-items: flex-end; gap: 2px; height: 42px; padding: 0; margin-bottom: 2px; }

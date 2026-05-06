@@ -418,6 +418,7 @@
                 <input type="number" step="0.01" [ngModel]="denseBiasValue(layer, selectedDenseWeightRow(layer))" (ngModelChange)="onDenseBiasInput(layer, $event)" />
               </label>
             </div>
+            <div class="param-note">Dense/Output 权重由系统按层 ID 生成确定性演示权重；当前面板只开放偏置，避免庞大的权重矩阵干扰前向传播教学。</div>
           </div>
         </ng-template>
       </main>
@@ -437,6 +438,20 @@
               <span class="shape-tag" style="border-color:#bbf7d0;background:#f0fdf4;color:var(--green)">{{ res.outputShapeLabel }}</span>
             </div>
             <div class="muted" style="margin-top:5px">{{ res.transitionNote }}</div>
+            @if (selectedFormula; as formula) {
+              <div class="formula-card">
+                <div class="formula-head">
+                  <span>{{ formula.title }}</span>
+                </div>
+                <code>{{ formula.expression }}</code>
+                <div class="formula-detail">{{ formula.detail }}</div>
+                <div class="formula-chips">
+                  @for (chip of formula.chips; track chip) {
+                    <span>{{ chip }}</span>
+                  }
+                </div>
+              </div>
+            }
           </div>
 
           <div class="pane">

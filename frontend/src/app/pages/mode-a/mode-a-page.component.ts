@@ -51,6 +51,13 @@ interface LocalImageSample {
   source?: string;
 }
 
+interface LayerFormulaView {
+  title: string;
+  expression: string;
+  detail: string;
+  chips: string[];
+}
+
 export const KERNEL_PRESETS: KernelPreset[] = [
   { label: 'Identity',     matrix: [[0,0,0],[0,1,0],[0,0,0]] },
   { label: 'Edge Detect',  matrix: [[-1,-1,-1],[-1,8,-1],[-1,-1,-1]] },
@@ -214,6 +221,13 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
     if (!this.forwardResult?.layerResults.length) return null;
     return this.forwardResult.layerResults.find(r => r.layerId === this.selectedLayerId)
       ?? this.forwardResult.layerResults[0];
+  }
+
+  get selectedFormula(): LayerFormulaView | null {
+    const result = this.selectedForwardResult;
+    if (!result) return null;
+    const layer = this.layers.find(l => l.id === result.layerId);
+    return this.buildLayerFormula(result, layer);
   }
 
   get selectedBars(): number[] {
@@ -586,6 +600,107 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
   private finiteNumber(value: string | number, fallback: number): number {
     const next = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(next) ? next : fallback;
+  }
+
+  private buildLayerFormula(result: ForwardLayerResult, layer?: NetworkLayer): LayerFormulaView {
+    const params = layer?.params as Record<string, any> | undefined;
+    const input = result.inputShapes[0] ?? [];
+    const output = result.outputShape ?? [];
+    const shapeChip = `${result.inputShapeLabel} -> ${result.outputShapeLabel}`;
+
+    if (result.layerType === 'conv2d') {
+      const k = this.numParam(params, 'kernelSize', 3);
+      const stride = this.numParam(params, 'stride', 1);
+      const pad = this.numParam(params, 'padding', 0);
+      const dilation = this.numParam(params, 'dilation', 1);
+      const outChannels = this.numParam(params, 'outChannels', output[2] ?? 1);
+      const h = input[0] ?? '?';
+      const w = input[1] ?? '?';
+      return {
+        title: '卷积层计算',
+        expression: 'Y[o, y, x] = sum(X[c, y + i, x + j] * K[o, c, i, j]) + b[o]',
+        detail: `空间尺寸按 floor((输入 + 2P - D*(K-1) - 1) / S + 1) 计算；每个输出通道使用一组卷积核在输入特征图上滑动求和。当前输入 ${h}x${w}，输出 ${result.outputShapeLabel}。`,
+        chips: [`K=${k}`, `S=${stride}`, `P=${pad}`, `D=${dilation}`, `Out=${outChannels}`, shapeChip]
+      };
+    }
+
+    if (result.layerType === 'pool2d') {
+      const k = this.numParam(params, 'kernelSize', 2);
+      const stride = this.numParam(params, 'stride', k);
+      const pad = this.numParam(params, 'padding', 0);
+      const mode = String(params?.['mode'] ?? 'max');
+      return {
+        title: mode === 'avg' ? '平均池化计算' : '最大池化计算',
+        expression: mode === 'avg' ? 'Y[y, x, c] = mean(window(X))' : 'Y[y, x, c] = max(window(X))',
+        detail: `池化不学习参数，只在每个通道内用 ${k}x${k} 窗口压缩空间尺寸；shape 仍按卷积类窗口公式计算。`,
+        chips: [`mode=${mode}`, `K=${k}`, `S=${stride}`, `P=${pad}`, shapeChip]
+      };
+    }
+
+    if (result.layerType === 'flatten') {
+      const size = input.reduce((acc, v) => acc * v, 1);
+      return {
+        title: '展平计算',
+        expression: 'Y[index] = reshape(X[h, w, c])',
+        detail: `Flatten 只改变张量排列方式，不改变数值本身；${result.inputShapeLabel} 被拉平成长度 ${Number.isFinite(size) ? size : result.outputShapeLabel} 的向量。`,
+        chips: ['no parameters', shapeChip]
+      };
+    }
+
+    if (result.layerType === 'dense' || result.layerType === 'output') {
+      const units = this.numParam(params, 'units', output[0] ?? 1);
+      const activation = String(params?.['activation'] ?? 'none');
+      return {
+        title: result.layerType === 'output' ? '输出层计算' : '全连接层计算',
+        expression: activation && activation !== 'none' ? 'Y = activation(Wx + b)' : 'Y = Wx + b',
+        detail: 'Dense/Output 使用真实矩阵乘法完成前向传播。当前模式不做训练，权重由系统按层 ID 生成确定性演示权重，偏置可在左侧手动设置。',
+        chips: [`units=${units}`, `activation=${activation}`, shapeChip]
+      };
+    }
+
+    if (result.layerType === 'activation') {
+      const activation = String(params?.['activationType'] ?? params?.['activation'] ?? 'relu');
+      const expression = activation === 'relu'
+        ? 'Y = max(0, X)'
+        : activation === 'sigmoid'
+          ? 'Y = 1 / (1 + exp(-X))'
+          : activation === 'tanh'
+            ? 'Y = tanh(X)'
+            : activation === 'softmax'
+              ? 'Y_i = exp(X_i) / sum(exp(X_j))'
+              : `Y = ${activation}(X)`;
+      return {
+        title: '激活函数计算',
+        expression,
+        detail: '激活层逐元素改变数值分布，通常不改变 shape；它负责引入非线性，让网络不只是线性变换的叠加。',
+        chips: [`activation=${activation}`, shapeChip]
+      };
+    }
+
+    if (result.layerType === 'dropout') {
+      const rate = this.numParam(params, 'rate', 0);
+      const enabled = !!params?.['training'];
+      return {
+        title: 'Dropout 前向演示',
+        expression: enabled ? 'Y = X * mask / (1 - rate)' : 'Y = X',
+        detail: enabled
+          ? '当前启用了随机丢弃演示，会按比例遮蔽部分激活值；这是前向传播中的随机算子展示，不代表 A 模式在训练模型。'
+          : '当前未启用随机丢弃，Dropout 在前向传播中保持输入不变。',
+        chips: [`rate=${rate}`, enabled ? 'dropout on' : 'dropout off', shapeChip]
+      };
+    }
+
+    return {
+      title: '输入层',
+      expression: 'Y = X',
+      detail: '输入层负责把预处理后的图片张量送入网络，不改变数值。',
+      chips: [shapeChip]
+    };
+  }
+
+  private numParam(params: Record<string, any> | undefined, key: string, fallback: number): number {
+    const value = Number(params?.[key]);
+    return Number.isFinite(value) ? value : fallback;
   }
 
   private safeJson(value: unknown): string {
