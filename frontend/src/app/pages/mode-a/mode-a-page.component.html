@@ -292,7 +292,10 @@
                   <div class="muted" style="margin-bottom:6px">当前输入是单通道，卷积核仅存在 In 0 切片。</div>
                 }
                 <div class="kernel-presets">
-                  <div class="section-title" style="margin-bottom:4px">经典卷积核预设</div>
+                  <div class="section-line" style="margin-bottom:4px">
+                    <div class="section-title">经典卷积核预设</div>
+                    <button class="btn-sm compare-kernel-trigger" (click)="openKernelCompareModal()">对比效果</button>
+                  </div>
                   <div class="preset-chips">
                     @for (p of kernelPresets; track p.label) {
                       <button class="preset-chip" (click)="applyKernelPreset(p)">{{ p.label }}</button>
@@ -590,6 +593,56 @@
               </div>
             }
           </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showKernelCompareModal) {
+    <div class="modal-mask" (click)="closeKernelCompareModal()">
+      <div class="modal-card kernel-compare-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">卷积核对比</div>
+            <div class="modal-subtitle">当前 Conv 层 · Out {{ selectedKernelOutChannel }} · 同一输入图的真实前向结果</div>
+          </div>
+          <button class="btn-ghost" (click)="closeKernelCompareModal()">{{ kernelCompareBusy ? '取消' : '关闭' }}</button>
+        </div>
+        <div class="modal-body kernel-compare-body">
+          @if (kernelCompareBusy) {
+            <div class="compare-loading">
+              <div class="spinner"></div>
+              <span>正在分别套用经典卷积核并调用后端前向传播...</span>
+            </div>
+          }
+          @if (kernelCompareError) {
+            <div class="error-box">{{ kernelCompareError }}</div>
+          }
+          @if (!kernelCompareBusy && kernelCompareItems.length) {
+            <div class="compare-grid">
+              @for (item of kernelCompareItems; track item.label) {
+                <div class="compare-card">
+                  <div class="compare-card-head">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.outputShapeLabel }}</span>
+                  </div>
+                  <img class="compare-image zoomable-image" [src]="item.imageUrl" [alt]="item.label" (click)="openImageViewer(item.label + ' 卷积输出', item.imageUrl, item.outputShapeLabel)" />
+                  <div class="compare-matrix" [style.--size]="item.matrix.length">
+                    @for (row of item.matrix; track $index) {
+                      @for (cell of row; track $index) {
+                        <span>{{ cell | number:'1.2-2' }}</span>
+                      }
+                    }
+                  </div>
+                  <div class="compare-stats">
+                    <span>min {{ item.stats.min.toFixed(2) }}</span>
+                    <span>mean {{ item.stats.mean.toFixed(2) }}</span>
+                    <span>max {{ item.stats.max.toFixed(2) }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
         </div>
       </div>
     </div>

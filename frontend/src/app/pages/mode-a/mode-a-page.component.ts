@@ -20,7 +20,7 @@ import {
   ConvKernelSpec,
   ForwardInputAsset, ForwardLayerResult, ForwardPassResult,
   ForwardTensor, InputLayer, LayerType,
-  LayerValidationIssue, ModelTemplate, NetworkLayer, TensorShape
+  LayerValidationIssue, ModelTemplate, NetworkLayer, TensorShape, TensorStats
 } from '../../sim-models';
 
 /** 上传图片显示预览最大边长（保留较高分辨率） */
@@ -55,6 +55,14 @@ interface LayerFormulaView {
   title: string;
   expressionHtml: string;
   detail: string;
+}
+
+interface KernelCompareItem {
+  label: string;
+  matrix: number[][];
+  imageUrl: string;
+  outputShapeLabel: string;
+  stats: TensorStats;
 }
 
 export const KERNEL_PRESETS: KernelPreset[] = [
@@ -148,6 +156,11 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
   showChannelModal = false;
   channelModalTitle = '';
   channelModalPreviews: ChannelPreviewItem[] = [];
+  showKernelCompareModal = false;
+  kernelCompareBusy = false;
+  kernelCompareError = '';
+  kernelCompareItems: KernelCompareItem[] = [];
+  private kernelCompareRequestSeq = 0;
 
   private subs = new Subscription();
   private tensorPreviewCache = new WeakMap<ForwardTensor, { mode: 'rgb' | 'gray'; width: number; height: number; colors?: string[]; values?: number[] }>();
@@ -926,6 +939,70 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
     this.channelModalTitle = '';
   }
 
+  async openKernelCompareModal(): Promise<void> {
+    if (!this.selectedConvLayer) return;
+    this.showKernelCompareModal = true;
+    await this.runKernelCompare();
+  }
+
+  closeKernelCompareModal(): void {
+    this.kernelCompareRequestSeq += 1;
+    this.kernelCompareBusy = false;
+    this.showKernelCompareModal = false;
+    this.kernelCompareError = '';
+  }
+
+  async runKernelCompare(): Promise<void> {
+    const layer = this.selectedConvLayer;
+    const inputTensor = this.currentInputAsset?.prepared.tensor;
+    if (!layer || !inputTensor) {
+      this.kernelCompareError = '请先选择一个卷积层并准备输入图片。';
+      return;
+    }
+
+    const requestSeq = ++this.kernelCompareRequestSeq;
+    this.kernelCompareBusy = true;
+    this.kernelCompareError = '';
+    this.kernelCompareItems = [];
+    const presets = this.kernelPresets.filter(preset =>
+      ['Identity', 'Edge Detect', 'Sharpen', 'Box Blur', 'Sobel X', 'Sobel Y'].includes(preset.label)
+    );
+
+    try {
+      const items = await Promise.all(presets.map(async preset => {
+        const layers = this.layersForKernelCompare(layer.id, preset.matrix);
+        const result = await this.forwardBackend.executeForward({
+          layers,
+          connections: structuredClone(this.connections),
+          inputTensor
+        });
+        const layerResult = result.layerResults.find(item => item.layerId === layer.id);
+        if (!layerResult || layerResult.tensor.shape.length !== 3) {
+          throw new Error(`${preset.label} 未返回可视化卷积输出。`);
+        }
+        const [h, w, c] = layerResult.tensor.shape as [number, number, number];
+        const channel = Math.min(this.selectedKernelOutChannel, c - 1);
+        const values = this.normalizeChannel(this.extractChannel(layerResult.tensor.values, h, w, c, channel));
+        return {
+          label: preset.label,
+          matrix: preset.matrix,
+          imageUrl: this.grayValuesToImageDataUrl(values, w, h),
+          outputShapeLabel: layerResult.outputShapeLabel,
+          stats: layerResult.stats
+        };
+      }));
+      if (requestSeq !== this.kernelCompareRequestSeq || !this.showKernelCompareModal) return;
+      this.kernelCompareItems = items;
+    } catch (err) {
+      if (requestSeq !== this.kernelCompareRequestSeq || !this.showKernelCompareModal) return;
+      this.kernelCompareError = err instanceof Error ? err.message : '卷积核对比计算失败。';
+    } finally {
+      if (requestSeq === this.kernelCompareRequestSeq) {
+        this.kernelCompareBusy = false;
+      }
+    }
+  }
+
   // ── Mode ─────────────────────────────────────────────
   setMode(m: AppMode): void {
     this.mode = m;
@@ -1374,6 +1451,31 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
     });
     l.params.kernelMatrix = l.params.kernels?.[0]?.weights?.[0]?.map(row => [...row]) ?? [];
     this.syncConvKernelSelectors();
+  }
+
+  private layersForKernelCompare(layerId: number, matrix: number[][]): NetworkLayer[] {
+    const layers = structuredClone(this.layers);
+    const layer = layers.find(item => item.id === layerId);
+    if (!layer || layer.type !== 'conv2d') return layers;
+    const k = matrix.length || 3;
+    const outChannels = Math.max(1, layer.params.outChannels);
+    const inChannels = Math.max(1, this.selectedConvInChannels);
+    const selectedOut = Math.min(this.selectedKernelOutChannel, outChannels - 1);
+    const current = layer.params.kernels ?? [];
+    layer.params.kernelSize = k;
+    layer.params.kernels = Array.from({ length: outChannels }, (_, oc) => {
+      const srcWeights = current[oc]?.weights ?? [];
+      const weights = Array.from({ length: inChannels }, (_, ic) => {
+        if (oc === selectedOut) {
+          return matrix.map(row => [...row]);
+        }
+        const src = srcWeights[ic] ?? srcWeights[0] ?? layer.params.kernelMatrix ?? matrix;
+        return Array.from({ length: k }, (_, y) => Array.from({ length: k }, (_, x) => src[y]?.[x] ?? 0));
+      });
+      return { ...current[oc], weights };
+    });
+    layer.params.kernelMatrix = layer.params.kernels[0].weights[0].map(row => [...row]);
+    return layers;
   }
 
   private rebuildInputAsset(): void {

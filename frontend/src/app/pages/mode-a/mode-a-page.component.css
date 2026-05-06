@@ -566,6 +566,13 @@ app-network-overview { display: block; }
   color: var(--text2); font-size: 11px; cursor: pointer; transition: all .15s;
 }
 .preset-chip:hover { border-color: var(--accent2); color: var(--accent2); background: #f5f3ff; }
+.section-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.compare-kernel-trigger {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
 
 .kernel-wrap { margin-top: 4px; }
 .kernel-grid { --size: 3; display: grid; grid-template-columns: repeat(var(--size), 1fr); gap: 4px; margin-top: 6px; }
@@ -748,6 +755,38 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   max-height: 60vh;
   overflow-y: auto;
   padding-right: 4px;
+}
+.kernel-compare-modal { width: min(1120px, calc(100vw - 28px)); }
+.modal-subtitle { margin-top: 3px; color: var(--text3); font-size: 12px; }
+.kernel-compare-body { padding: 14px 16px 16px; }
+.compare-loading {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 120px; color: var(--text2); font-size: 13px;
+}
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.compare-card {
+  display: grid; gap: 8px; min-width: 0;
+  padding: 10px; border: 1px solid #d8dee6; border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .07);
+}
+.compare-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.compare-card-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 13px; }
+.compare-card-head span { flex-shrink: 0; color: var(--text3); font-family: monospace; font-size: 11px; }
+.compare-image {
+  width: 100%; aspect-ratio: 1.1; object-fit: contain;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff;
+}
+.compare-matrix { --size: 3; display: grid; grid-template-columns: repeat(var(--size), 1fr); gap: 3px; }
+.compare-matrix span {
+  display: grid; place-items: center; min-height: 24px;
+  border: 1px solid #e2e8f0; border-radius: 5px; background: #fff;
+  color: var(--text2); font-family: monospace; font-size: 11px;
+}
+.compare-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.compare-stats span {
+  padding: 4px 5px; border-radius: 6px; background: #f1f5f9;
+  color: var(--text3); font-family: monospace; font-size: 10px; text-align: center;
 }
 
 /* ===== 训练工作台 ===== */
