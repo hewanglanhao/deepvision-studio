@@ -10,6 +10,17 @@ interface UiChatMessage {
   text: string;
 }
 
+export interface LlmQuickPrompt {
+  label: string;
+  question: string;
+}
+
+const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
+  { label: '解释当前层', question: '请解释当前选中网络层为什么会产生这样的输出效果。' },
+  { label: '看卷积核', question: '请根据卷积核和输出图，判断这个网络更关注了哪些图像特征。' },
+  { label: '调参建议', question: '如果我想让输出更清晰，应该调整哪些参数？' }
+];
+
 @Component({
   selector: 'app-llm-floating-assistant',
   standalone: true,
@@ -62,9 +73,11 @@ interface UiChatMessage {
           </div>
 
           <div class="quick-row">
-            <button type="button" (click)="askPreset('请解释当前选中网络层为什么会产生这样的输出效果。')">解释当前层</button>
-            <button type="button" (click)="askPreset('请根据卷积核和输出图，判断这个网络更关注了哪些图像特征。')">看卷积核</button>
-            <button type="button" (click)="askPreset('如果我想让输出更清晰，应该调整哪些参数？')">调参建议</button>
+            @for (prompt of quickPrompts; track prompt.label) {
+              <button type="button" [title]="prompt.question" (click)="askPreset(prompt.question)">
+                {{ prompt.label }}
+              </button>
+            }
           </div>
 
           <form class="chat-input-row" (ngSubmit)="send()">
@@ -422,6 +435,7 @@ export class LlmFloatingAssistantComponent {
   @Input() title = 'AI 分析助手';
   @Input() systemPrompt = DEFAULT_LLM_SYSTEM_PROMPT;
   @Input() contextProvider?: () => LlmChatContext;
+  @Input() quickPrompts: LlmQuickPrompt[] = DEFAULT_QUICK_PROMPTS;
 
   open = false;
   includeContext = false;

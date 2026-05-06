@@ -6,7 +6,7 @@ import { Subscription } from 'rxjs';
 import { HelpManualComponent } from '../../components/help-manual.component';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
 import { NETWORK_3D_SESSION_KEY, Network3dPayload } from '../../features/network-3d/network-3d.models';
-import { LlmFloatingAssistantComponent } from '../../features/llm/llm-floating-assistant.component';
+import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '../../features/llm/llm-floating-assistant.component';
 import { LlmChatContext } from '../../features/llm/llm.models';
 import { MODE_A_LLM_SYSTEM_PROMPT } from '../../features/llm/llm-prompts';
 import { AuthUser } from '../../models/auth.models';
@@ -96,6 +96,32 @@ type EditableBiasParams = { bias?: number[] };
 export class ModeAPageComponent implements OnInit, OnDestroy {
   readonly modeALlmSystemPrompt = MODE_A_LLM_SYSTEM_PROMPT;
   readonly modeALlmContextProvider = (): LlmChatContext => this.buildModeALlmContext();
+  readonly modeALlmQuickPrompts: LlmQuickPrompt[] = [
+    {
+      label: '解释当前层',
+      question: '请结合当前 A 模式页面数据，解释当前选中层的输入、输出、公式和可视化结果。'
+    },
+    {
+      label: '卷积核差异',
+      question: '请对比当前卷积核和卷积核对比面板中的 Identity、Edge、Sharpen、Blur、Sobel 结果，说明它们为什么产生不同特征图。'
+    },
+    {
+      label: '输出形状',
+      question: '请逐步说明当前选中层的输出 shape 是如何由输入 shape 和层参数计算出来的。'
+    },
+    {
+      label: '公式讲解',
+      question: '请把当前选中层的前向传播公式用初学者能听懂的话解释一遍，并说明公式里每个符号代表什么。'
+    },
+    {
+      label: '配置诊断',
+      question: '请检查当前网络结构和参数，指出可能导致输出不直观、维度不合理或特征图异常的配置。'
+    },
+    {
+      label: '答辩总结',
+      question: '请用 1 分钟答辩口吻总结 A 模式展示了什么，并说明它为什么是真实前向传播演示而不是训练模拟。'
+    }
+  ];
 
   mode: AppMode = 'forward';
   showHelp = false;
