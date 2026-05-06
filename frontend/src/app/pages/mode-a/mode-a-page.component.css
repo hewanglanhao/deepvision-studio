@@ -676,17 +676,34 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   font-weight: 800;
   color: var(--accent);
 }
-.formula-card code {
+.formula-expression {
   display: block;
-  padding: 7px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #f8fafc;
-  color: #1f2937;
-  font-size: 11px;
+  padding: 10px 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #111827;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
   line-height: 1.45;
   white-space: normal;
   overflow-wrap: anywhere;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
+}
+.formula-expression i {
+  font-style: italic;
+  font-weight: 600;
+}
+.formula-expression sub {
+  font-size: 10px;
+  font-style: italic;
+  line-height: 0;
+}
+.formula-expression .sigma {
+  display: inline-block;
+  margin: 0 2px;
+  font-size: 20px;
+  font-weight: 600;
 }
 .formula-detail {
   margin-top: 7px;
@@ -694,23 +711,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   font-size: 12px;
   line-height: 1.6;
 }
-.formula-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 8px;
-}
-.formula-chips span,
 .param-note {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: #ffffff;
   color: var(--text3);
   font-size: 11px;
-}
-.formula-chips span {
-  padding: 3px 7px;
-  font-family: monospace;
 }
 .param-note {
   margin-top: 8px;

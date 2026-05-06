@@ -443,13 +443,8 @@
                 <div class="formula-head">
                   <span>{{ formula.title }}</span>
                 </div>
-                <code>{{ formula.expression }}</code>
+                <div class="formula-expression" [innerHTML]="formula.expressionHtml"></div>
                 <div class="formula-detail">{{ formula.detail }}</div>
-                <div class="formula-chips">
-                  @for (chip of formula.chips; track chip) {
-                    <span>{{ chip }}</span>
-                  }
-                </div>
               </div>
             }
           </div>

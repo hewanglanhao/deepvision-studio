@@ -53,9 +53,8 @@ interface LocalImageSample {
 
 interface LayerFormulaView {
   title: string;
-  expression: string;
+  expressionHtml: string;
   detail: string;
-  chips: string[];
 }
 
 export const KERNEL_PRESETS: KernelPreset[] = [
@@ -606,8 +605,6 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
     const params = layer?.params as Record<string, any> | undefined;
     const input = result.inputShapes[0] ?? [];
     const output = result.outputShape ?? [];
-    const shapeChip = `${result.inputShapeLabel} -> ${result.outputShapeLabel}`;
-
     if (result.layerType === 'conv2d') {
       const k = this.numParam(params, 'kernelSize', 3);
       const stride = this.numParam(params, 'stride', 1);
@@ -618,9 +615,8 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
       const w = input[1] ?? '?';
       return {
         title: '卷积层计算',
-        expression: 'Y[o, y, x] = sum(X[c, y + i, x + j] * K[o, c, i, j]) + b[o]',
-        detail: `空间尺寸按 floor((输入 + 2P - D*(K-1) - 1) / S + 1) 计算；每个输出通道使用一组卷积核在输入特征图上滑动求和。当前输入 ${h}x${w}，输出 ${result.outputShapeLabel}。`,
-        chips: [`K=${k}`, `S=${stride}`, `P=${pad}`, `D=${dilation}`, `Out=${outChannels}`, shapeChip]
+        expressionHtml: '<i>Y</i><sub>o,y,x</sub> = <span class="sigma">Σ</span><sub>c,i,j</sub> <i>X</i><sub>c,y+i,x+j</sub><i>K</i><sub>o,c,i,j</sub> + <i>b</i><sub>o</sub>',
+        detail: `空间尺寸按 floor((输入 + 2P - D*(K-1) - 1) / S + 1) 计算；每个输出通道使用一组卷积核在输入特征图上滑动求和。当前输入 ${h}x${w}，输出 ${result.outputShapeLabel}。`
       };
     }
 
@@ -631,9 +627,10 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
       const mode = String(params?.['mode'] ?? 'max');
       return {
         title: mode === 'avg' ? '平均池化计算' : '最大池化计算',
-        expression: mode === 'avg' ? 'Y[y, x, c] = mean(window(X))' : 'Y[y, x, c] = max(window(X))',
-        detail: `池化不学习参数，只在每个通道内用 ${k}x${k} 窗口压缩空间尺寸；shape 仍按卷积类窗口公式计算。`,
-        chips: [`mode=${mode}`, `K=${k}`, `S=${stride}`, `P=${pad}`, shapeChip]
+        expressionHtml: mode === 'avg'
+          ? '<i>Y</i><sub>y,x,c</sub> = mean(window(<i>X</i>))'
+          : '<i>Y</i><sub>y,x,c</sub> = max(window(<i>X</i>))',
+        detail: `池化不学习参数，只在每个通道内用 ${k}x${k} 窗口压缩空间尺寸；shape 仍按卷积类窗口公式计算。`
       };
     }
 
@@ -641,9 +638,8 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
       const size = input.reduce((acc, v) => acc * v, 1);
       return {
         title: '展平计算',
-        expression: 'Y[index] = reshape(X[h, w, c])',
-        detail: `Flatten 只改变张量排列方式，不改变数值本身；${result.inputShapeLabel} 被拉平成长度 ${Number.isFinite(size) ? size : result.outputShapeLabel} 的向量。`,
-        chips: ['no parameters', shapeChip]
+        expressionHtml: '<i>Y</i><sub>index</sub> = reshape(<i>X</i><sub>h,w,c</sub>)',
+        detail: `Flatten 只改变张量排列方式，不改变数值本身；${result.inputShapeLabel} 被拉平成长度 ${Number.isFinite(size) ? size : result.outputShapeLabel} 的向量。`
       };
     }
 
@@ -652,28 +648,28 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
       const activation = String(params?.['activation'] ?? 'none');
       return {
         title: result.layerType === 'output' ? '输出层计算' : '全连接层计算',
-        expression: activation && activation !== 'none' ? 'Y = activation(Wx + b)' : 'Y = Wx + b',
-        detail: 'Dense/Output 使用真实矩阵乘法完成前向传播。当前模式不做训练，权重由系统按层 ID 生成确定性演示权重，偏置可在左侧手动设置。',
-        chips: [`units=${units}`, `activation=${activation}`, shapeChip]
+        expressionHtml: activation && activation !== 'none'
+          ? '<i>Y</i> = activation(<i>W</i><i>x</i> + <i>b</i>)'
+          : '<i>Y</i> = <i>W</i><i>x</i> + <i>b</i>',
+        detail: 'Dense/Output 使用真实矩阵乘法完成前向传播。当前模式不做训练，权重由系统按层 ID 生成确定性演示权重，偏置可在左侧手动设置。'
       };
     }
 
     if (result.layerType === 'activation') {
       const activation = String(params?.['activationType'] ?? params?.['activation'] ?? 'relu');
-      const expression = activation === 'relu'
-        ? 'Y = max(0, X)'
+      const expressionHtml = activation === 'relu'
+        ? '<i>Y</i> = max(0, <i>X</i>)'
         : activation === 'sigmoid'
-          ? 'Y = 1 / (1 + exp(-X))'
+          ? '<i>Y</i> = 1 / (1 + exp(-<i>X</i>))'
           : activation === 'tanh'
-            ? 'Y = tanh(X)'
+            ? '<i>Y</i> = tanh(<i>X</i>)'
             : activation === 'softmax'
-              ? 'Y_i = exp(X_i) / sum(exp(X_j))'
-              : `Y = ${activation}(X)`;
+              ? '<i>Y</i><sub>i</sub> = exp(<i>X</i><sub>i</sub>) / <span class="sigma">Σ</span><sub>j</sub> exp(<i>X</i><sub>j</sub>)'
+              : `<i>Y</i> = ${activation}(<i>X</i>)`;
       return {
         title: '激活函数计算',
-        expression,
-        detail: '激活层逐元素改变数值分布，通常不改变 shape；它负责引入非线性，让网络不只是线性变换的叠加。',
-        chips: [`activation=${activation}`, shapeChip]
+        expressionHtml,
+        detail: '激活层逐元素改变数值分布，通常不改变 shape；它负责引入非线性，让网络不只是线性变换的叠加。'
       };
     }
 
@@ -682,19 +678,19 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
       const enabled = !!params?.['training'];
       return {
         title: 'Dropout 前向演示',
-        expression: enabled ? 'Y = X * mask / (1 - rate)' : 'Y = X',
+        expressionHtml: enabled
+          ? '<i>Y</i> = <i>X</i> · mask / (1 - rate)'
+          : '<i>Y</i> = <i>X</i>',
         detail: enabled
           ? '当前启用了随机丢弃演示，会按比例遮蔽部分激活值；这是前向传播中的随机算子展示，不代表 A 模式在训练模型。'
-          : '当前未启用随机丢弃，Dropout 在前向传播中保持输入不变。',
-        chips: [`rate=${rate}`, enabled ? 'dropout on' : 'dropout off', shapeChip]
+          : '当前未启用随机丢弃，Dropout 在前向传播中保持输入不变。'
       };
     }
 
     return {
       title: '输入层',
-      expression: 'Y = X',
-      detail: '输入层负责把预处理后的图片张量送入网络，不改变数值。',
-      chips: [shapeChip]
+      expressionHtml: '<i>Y</i> = <i>X</i>',
+      detail: '输入层负责把预处理后的图片张量送入网络，不改变数值。'
     };
   }
 
