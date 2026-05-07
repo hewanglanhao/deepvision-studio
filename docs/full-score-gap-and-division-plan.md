@@ -1081,3 +1081,7 @@ $env:ARK_MODEL="doubao-seed-2-0-pro-260215"
 - [ ] Docker compose 可启动，或至少部署文档完整。
 - [ ] 公有云地址可访问。
 - [ ] 演示脚本不依赖现场临时下载大文件。
+
+
+写各自的开发文档
+C和D的feature换个位置。
