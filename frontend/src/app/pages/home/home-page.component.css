@@ -285,7 +285,7 @@ h1 {
 
 .entry-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -377,10 +377,17 @@ h1 {
   --accent: #7c3aed;
 }
 
+.accent-teal {
+  --accent: #0f766e;
+}
+
 @media (max-width: 980px) {
-  .hero-band,
-  .entry-grid {
+  .hero-band {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .entry-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero-copy {

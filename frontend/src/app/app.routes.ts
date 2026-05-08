@@ -41,6 +41,11 @@ export const routes: Routes = [
       .then(m => m.ModeDPageComponent)
   },
   {
+    path: 'mode-e',
+    loadComponent: () => import('./pages/mode-e/mode-e-page.component')
+      .then(m => m.ModeEPageComponent)
+  },
+  {
     path: 'network-3d',
     loadComponent: () => import('./features/network-3d/network-3d-viewer.component')
       .then(m => m.Network3dViewerComponent)
