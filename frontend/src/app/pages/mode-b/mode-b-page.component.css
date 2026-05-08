@@ -1,15 +1,15 @@
 /* ===== DeepVision Studio — 浅色主题 ===== */
 :root {
-  --bg:        #f0f2f5;
+  --bg:        #f8fbff;
   --bg2:       #ffffff;
-  --bg3:       #f7f8fa;
-  --border:    #e2e6ea;
-  --border2:   #d0d7de;
-  --text:      #1a2332;
-  --text2:     #4a5568;
-  --text3:     #8a9ab0;
-  --accent:    #2563eb;
-  --accent2:   #0ea5e9;
+  --bg3:       #f8fafc;
+  --border:    #dbe3ee;
+  --border2:   #cbd5e1;
+  --text:      #0f172a;
+  --text2:     #475569;
+  --text3:     #64748b;
+  --accent:    #1d4ed8;
+  --accent2:   #0f766e;
   --green:     #059669;
   --red:       #dc2626;
   --yellow:    #d97706;
@@ -1251,6 +1251,132 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 999px; }
 
 /* ===== 响应式 ===== */
+/* ===== Platform visual alignment ===== */
+.app-shell {
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, .1), transparent 28%),
+    linear-gradient(180deg, #eef4ff 0%, #f8fafc 46%, #eef2f7 100%);
+  font-family: 'Inter', 'Segoe UI', 'Noto Sans SC', sans-serif;
+  color: #0f172a;
+}
+
+.workspace,
+.training-workspace,
+.training-mode-workspace {
+  background: transparent;
+}
+
+.pane-title,
+.dataset-title,
+.editor-title,
+.modal-title,
+.picker-title,
+.task-name,
+.dataset-option-name,
+.network-selected-layer strong,
+.test-result-head strong,
+.checkpoint-head strong {
+  color: #0f172a;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.section-title,
+.canvas-title,
+.chart-label,
+.stat-label,
+.dataset-option-meta,
+.dataset-desc,
+.muted,
+.task-desc,
+.checkpoint-meta span {
+  color: #64748b;
+  letter-spacing: 0;
+}
+
+label,
+.info-chip,
+.info-k,
+.network-selected-layer,
+.modal-body,
+.chart-legend,
+.runtime-list span,
+.test-result-head,
+.checkpoint-head {
+  color: #475569;
+}
+
+button,
+.btn-link,
+.btn-primary,
+.btn-ghost,
+.icon-btn,
+.ds-tab,
+.preset-chip,
+.palette-chip,
+.task-item,
+.dataset-option {
+  font-family: inherit;
+  font-weight: 750;
+}
+
+.btn-primary,
+.ds-tab.active,
+.dataset-option.active,
+.task-item.active {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+
+.pane,
+.canvas-container,
+.layer-editor-bar,
+.dataset-board,
+.test-result-panel,
+.checkpoint-panel,
+.chart-wrap,
+.sample-picker,
+.record-drawer,
+.record-item,
+.image-viewer-card {
+  border-color: rgba(148, 163, 184, .24);
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .07);
+}
+
+.pane,
+.canvas-container,
+.layer-editor-bar,
+.dataset-board,
+.test-result-panel,
+.checkpoint-panel {
+  backdrop-filter: blur(8px);
+}
+
+.canvas-header,
+.shape-trail-bar,
+.record-drawer-head,
+.image-viewer-head,
+.picker-header,
+.test-result-head,
+.checkpoint-head {
+  background: rgba(248, 250, 252, .88);
+}
+
+.dataset-collection-card,
+.info-chip,
+.info-row,
+.stat-cell,
+.topk-item,
+.channel-card,
+.task-item,
+.runtime-list div,
+.sample-tile,
+.checkpoint-meta span {
+  background: rgba(248, 250, 252, .82);
+}
+
 @media (max-width: 1100px) {
   .topbar {
     grid-template-columns: 1fr;
