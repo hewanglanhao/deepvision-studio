@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import type { AuthUser } from '../../../../models/auth.models';
+import { PlatformTopbarComponent } from '../../../../components/platform-topbar.component';
 import { ModeDOverviewComponent } from '../overview/mode-d-overview.component';
 import { ModeDDetailPanelComponent } from '../detail-panel/mode-d-detail-panel.component';
 import { ModeDControlPanelComponent } from '../control-panel/mode-d-control-panel.component';
@@ -12,7 +12,7 @@ import { ModeDStateService } from '../../services/mode-d-state.service';
   selector: 'app-mode-d-explainer-shell',
   imports: [
     CommonModule,
-    RouterLink,
+    PlatformTopbarComponent,
     ModeDOverviewComponent,
     ModeDDetailPanelComponent,
     ModeDControlPanelComponent,
@@ -37,6 +37,10 @@ export class ModeDExplainerShellComponent implements OnInit, OnDestroy {
 
   get isLoggedIn(): boolean {
     return !!this.user;
+  }
+
+  get statusPills(): string[] {
+    return [this.state.readableStatus()];
   }
 
   requestLogout(): void {

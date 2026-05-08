@@ -11,90 +11,10 @@
   min-height: 100vh;
 }
 
-.portal-topbar {
-  height: 68px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 0 clamp(20px, 4vw, 56px);
-  background: rgba(255, 255, 255, .86);
-  border-bottom: 1px solid rgba(203, 213, 225, .72);
-  backdrop-filter: blur(18px);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.brand,
-nav a,
 .entry-card,
 .hero-actions a {
   color: inherit;
   text-decoration: none;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-logo {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: #1d4ed8;
-  color: #fff;
-  font-weight: 900;
-  box-shadow: 0 10px 24px rgba(29, 78, 216, .24);
-}
-
-.brand strong,
-.brand small {
-  display: block;
-}
-
-.brand strong {
-  font-size: 15px;
-  letter-spacing: 0;
-}
-
-.brand small {
-  margin-top: 2px;
-  color: #64748b;
-  font-size: 12px;
-}
-
-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-nav a {
-  min-width: 64px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 750;
-}
-
-nav a:hover {
-  background: #eaf2ff;
-  color: #1d4ed8;
-}
-
-.primary-link {
-  background: #1d4ed8;
-  color: #fff !important;
-  box-shadow: 0 8px 18px rgba(29, 78, 216, .2);
 }
 
 .portal-main {
@@ -396,13 +316,6 @@ h1 {
 }
 
 @media (max-width: 680px) {
-  .portal-topbar {
-    height: auto;
-    padding: 14px 18px;
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .portal-main {
     width: min(100% - 28px, 1180px);
     padding-top: 22px;

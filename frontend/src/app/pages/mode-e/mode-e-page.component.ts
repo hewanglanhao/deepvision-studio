@@ -1,16 +1,16 @@
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { Subscription, interval } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
+import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
 import type { AuthUser } from '../../models/auth.models';
 import { MODE_E_VOCABULARY, runTransformerBlock } from './mode-e-transformer.engine';
 import type { AttentionHeadTrace, Matrix, TransformerPreset, TransformerTrace } from './mode-e.types';
 
 @Component({
   selector: 'app-mode-e-page',
-  imports: [CommonModule, FormsModule, RouterLink, DecimalPipe],
+  imports: [CommonModule, FormsModule, DecimalPipe, PlatformTopbarComponent],
   templateUrl: './mode-e-page.component.html',
   styleUrl: './mode-e-page.component.css',
 })

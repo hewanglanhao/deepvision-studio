@@ -1,0 +1,225 @@
+:host {
+  display: block;
+}
+
+.platform-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 20px;
+  border-bottom: 1px solid #e2e6ea;
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: blur(12px);
+  color: #1a2332;
+  font-family: 'Inter', 'Segoe UI', 'Noto Sans SC', sans-serif;
+}
+
+.brand-wrap {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, .85), transparent 18%),
+    linear-gradient(135deg, #1d4ed8 0%, #0f766e 100%);
+  box-shadow: 0 10px 22px rgba(29, 78, 216, .22);
+}
+
+.brand-logo svg {
+  width: 28px;
+  height: 28px;
+}
+
+.brand-logo .logo-ring,
+.brand-logo .logo-path {
+  fill: none;
+  stroke: rgba(255, 255, 255, .92);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.brand-logo circle {
+  fill: #ffffff;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-copy strong,
+.brand-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-copy strong {
+  color: #1a2332;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.brand-copy small {
+  margin-top: 1px;
+  color: #8a9ab0;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.mode-identity {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  justify-self: center;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  max-width: 440px;
+  padding: 3px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.mode-label {
+  padding: 5px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.mode-title {
+  padding: 0 12px 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.topbar-right,
+:host ::ng-deep [topbar-actions] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar-right {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.meta-pill,
+.user-pill,
+.topbar-link,
+.topbar-button,
+:host ::ng-deep [topbar-actions] a,
+:host ::ng-deep [topbar-actions] button,
+:host ::ng-deep [topbar-actions] label {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.meta-pill,
+.user-pill {
+  padding: 3px 10px;
+  border: 1px solid #e2e6ea;
+  background: #f7f8fa;
+  color: #4a5568;
+}
+
+.user-pill {
+  border-color: #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.topbar-link,
+.topbar-button,
+:host ::ng-deep [topbar-actions] a,
+:host ::ng-deep [topbar-actions] button {
+  padding: 0 10px;
+  border: 1px solid #d0d7de;
+  background: #eff6ff;
+  color: #1a2332;
+  text-decoration: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+
+.topbar-link:hover,
+.topbar-button:hover,
+:host ::ng-deep [topbar-actions] a:hover,
+:host ::ng-deep [topbar-actions] button:hover {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  color: #111827;
+}
+
+.topbar-link.primary {
+  border-color: #bfdbfe;
+}
+
+:host ::ng-deep [topbar-actions] label {
+  gap: 6px;
+  color: #4a5568;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .platform-topbar {
+    position: sticky;
+    height: auto;
+    padding: 10px 14px;
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .mode-identity,
+  .topbar-right {
+    position: static;
+    transform: none;
+    justify-self: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+}

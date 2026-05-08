@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
 
 interface PortalEntry {
   id: string;
@@ -14,7 +15,7 @@ interface PortalEntry {
 
 @Component({
   selector: 'app-home-page',
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, PlatformTopbarComponent],
   templateUrl: './home-page.component.html',
   styleUrl: './home-page.component.css',
 })

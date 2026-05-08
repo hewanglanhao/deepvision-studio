@@ -1,0 +1,44 @@
+<header class="platform-topbar">
+  <a class="brand-wrap" routerLink="/" aria-label="返回首页">
+    <span class="brand-logo" aria-hidden="true">
+      <svg viewBox="0 0 36 36" focusable="false">
+        <path class="logo-ring" d="M18 4.5 29.7 11.2v13.6L18 31.5 6.3 24.8V11.2L18 4.5Z" />
+        <path class="logo-path" d="M12 22.2 18 13.8l6 8.4" />
+        <circle cx="12" cy="22.2" r="2.7" />
+        <circle cx="18" cy="13.8" r="2.7" />
+        <circle cx="24" cy="22.2" r="2.7" />
+      </svg>
+    </span>
+    <span class="brand-copy">
+      <strong>DeepVision Studio</strong>
+      <small>深度学习可视化学习平台</small>
+    </span>
+  </a>
+
+  @if (modeLabel || modeTitle) {
+    <div class="mode-identity" aria-label="当前工作台">
+      @if (modeLabel) {
+        <span class="mode-label">{{ modeLabel }}</span>
+      }
+      @if (modeTitle) {
+        <span class="mode-title">{{ modeTitle }}</span>
+      }
+    </div>
+  }
+
+  <div class="topbar-right">
+    <ng-content select="[topbar-actions]"></ng-content>
+
+    @for (pill of statusPills; track pill) {
+      <span class="meta-pill">{{ pill }}</span>
+    }
+
+    @if (user) {
+      <span class="user-pill">{{ user.displayName }}</span>
+      <button type="button" class="topbar-button" (click)="logout()">退出</button>
+    } @else {
+      <a class="topbar-link" routerLink="/login">登录</a>
+      <a class="topbar-link primary" routerLink="/register">注册</a>
+    }
+  </div>
+</header>

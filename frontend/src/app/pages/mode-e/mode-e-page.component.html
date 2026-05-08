@@ -1,31 +1,10 @@
 <div class="mode-e-shell">
-  <header class="topbar">
-    <a class="brand" routerLink="/">
-      <span class="brand-logo">D</span>
-      <span>
-        <strong>DeepVision Studio</strong>
-        <small>模式 E · Transformer 架构解剖台</small>
-      </span>
-    </a>
-
-    <nav aria-label="模式导航">
-      <a routerLink="/">首页</a>
-      <a routerLink="/mode-a">模式 A</a>
-      <a routerLink="/mode-b">模式 B</a>
-      <a routerLink="/mode-c">模式 C</a>
-      <a routerLink="/mode-d">模式 D</a>
-    </nav>
-
-    <div class="auth-slot">
-      @if (user) {
-        <span class="user-pill">{{ user.displayName }}</span>
-        <button type="button" (click)="logout()">退出</button>
-      } @else {
-        <a routerLink="/login">登录</a>
-        <a class="primary-link" routerLink="/register">注册</a>
-      }
-    </div>
-  </header>
+  <app-platform-topbar
+    modeLabel="模式 E"
+    modeTitle="Transformer 架构解剖台"
+    [user]="user"
+    (logoutRequested)="logout()"
+  />
 
   <section class="module-header" aria-labelledby="mode-e-title">
     <div>

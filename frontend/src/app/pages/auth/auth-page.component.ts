@@ -3,6 +3,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
 import { AuthUser } from '../../models/auth.models';
 import { AuthService } from '../../services/auth.service';
 
@@ -10,9 +11,9 @@ type AuthPageMode = 'login' | 'register';
 
 @Component({
   selector: 'app-auth-page',
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PlatformTopbarComponent],
   templateUrl: './auth-page.component.html',
-  styleUrl: './auth-page.component.css'
+  styleUrl: './auth-page.component.css',
 })
 export class AuthPageComponent implements OnInit, OnDestroy {
   mode: AuthPageMode = 'login';
@@ -26,7 +27,7 @@ export class AuthPageComponent implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private authSvc: AuthService
+    private authSvc: AuthService,
   ) {}
 
   ngOnInit(): void {
@@ -34,7 +35,7 @@ export class AuthPageComponent implements OnInit, OnDestroy {
       this.mode = (data['mode'] as AuthPageMode | undefined) ?? 'login';
       this.error = '';
     }));
-    this.subs.add(this.authSvc.user$.subscribe(user => this.user = user));
+    this.subs.add(this.authSvc.user$.subscribe(user => { this.user = user; }));
   }
 
   ngOnDestroy(): void {
@@ -50,7 +51,9 @@ export class AuthPageComponent implements OnInit, OnDestroy {
   }
 
   async submit(): Promise<void> {
-    if (this.busy) return;
+    if (this.busy) {
+      return;
+    }
     this.busy = true;
     this.error = '';
 

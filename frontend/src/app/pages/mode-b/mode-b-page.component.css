@@ -180,23 +180,8 @@
   padding: 10px;
 }
 
-.mode-workspace {
-  animation: mode-enter .22s ease-out both;
-}
-
 .training-mode-workspace {
   grid-template-columns: 290px minmax(0, 1fr);
-}
-
-@keyframes mode-enter {
-  from {
-    opacity: .55;
-    transform: translateX(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 .side-panel {

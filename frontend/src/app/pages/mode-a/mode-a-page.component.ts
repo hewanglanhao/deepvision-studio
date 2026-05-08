@@ -3,8 +3,8 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { HelpManualComponent } from '../../components/help-manual.component';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
+import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
 import { NETWORK_3D_SESSION_KEY, Network3dPayload } from '../../features/network-3d/network-3d.models';
 import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '../../features/llm/llm-floating-assistant.component';
 import { LlmChatContext } from '../../features/llm/llm.models';
@@ -86,8 +86,8 @@ type EditableBiasParams = { bias?: number[] };
     FormsModule,
     DecimalPipe,
     RouterModule,
-    HelpManualComponent,
     NetworkOverviewComponent,
+    PlatformTopbarComponent,
     LlmFloatingAssistantComponent
   ],
   templateUrl: './mode-a-page.component.html',
@@ -124,7 +124,6 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
   ];
 
   mode: AppMode = 'forward';
-  showHelp = false;
   showSamplePicker = false;
   authUser: AuthUser | null = null;
   showAuthModal = false;
@@ -132,6 +131,10 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
   authDraft = { username: '', password: '', displayName: '' };
   authBusy = false;
   authError = '';
+
+  get topbarStatusPills(): string[] {
+    return [`${this.layerCount} 层`, `${this.parameterCount.toLocaleString()} 参数`];
+  }
 
   showSaveRecordModal = false;
   showRecordDrawer = false;

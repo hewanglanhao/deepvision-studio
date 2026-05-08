@@ -1,18 +1,10 @@
 <div class="auth-shell">
-  <header class="auth-topbar">
-    <a class="brand" routerLink="/">
-      <span class="brand-logo">D</span>
-      <span>
-        <strong>DeepVision Studio</strong>
-        <small>账号中心</small>
-      </span>
-    </a>
-    <nav>
-      <a routerLink="/">首页</a>
-      <a routerLink="/mode-a">模式 A</a>
-      <a routerLink="/mode-b">模式 B</a>
-    </nav>
-  </header>
+  <app-platform-topbar
+    modeLabel="Account"
+    [modeTitle]="title"
+    [user]="user"
+    (logoutRequested)="logout()"
+  />
 
   <main class="auth-main">
     <section class="auth-card">
@@ -41,14 +33,14 @@
             name="username"
             [(ngModel)]="draft.username"
             autocomplete="username"
-            placeholder="3-32 位字母/数字/下划线"
+            placeholder="3-32 位字母、数字或下划线"
             required
           />
         </label>
 
         @if (mode === 'register') {
           <label>
-            昵称
+            显示名称
             <input
               name="displayName"
               [(ngModel)]="draft.displayName"

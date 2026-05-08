@@ -3,8 +3,8 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { HelpManualComponent } from '../../components/help-manual.component';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
+import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
 import { AuthUser } from '../../models/auth.models';
 import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from '../../models/forward-record.models';
 import { AuthService } from '../../services/auth.service';
@@ -68,13 +68,14 @@ type TrainingChartFormat = 'number' | 'percent' | 'lr';
 
 @Component({
   selector: 'app-mode-b-page',
-  imports: [CommonModule, FormsModule, DecimalPipe, RouterModule, HelpManualComponent, NetworkOverviewComponent],
+  imports: [CommonModule, FormsModule, DecimalPipe, RouterModule, NetworkOverviewComponent, PlatformTopbarComponent],
   templateUrl: './mode-b-page.component.html',
   styleUrl: './mode-b-page.component.css'
 })
 export class ModeBPageComponent implements OnInit, OnDestroy {
+  readonly topbarModeLabel = '\u6a21\u5f0f B';
+  readonly topbarModeTitle = '\u6a21\u578b\u8bad\u7ec3\u5de5\u4f5c\u53f0';
   mode: AppMode = 'training';
-  showHelp = false;
   showSamplePicker = false;
   authUser: AuthUser | null = null;
   showAuthModal = false;
@@ -82,6 +83,10 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   authDraft = { username: '', password: '', displayName: '' };
   authBusy = false;
   authError = '';
+
+  get topbarStatusPills(): string[] {
+    return [`${this.layerCount} 层`, `${this.parameterCount.toLocaleString()} 参数`];
+  }
 
   showSaveRecordModal = false;
   showRecordDrawer = false;

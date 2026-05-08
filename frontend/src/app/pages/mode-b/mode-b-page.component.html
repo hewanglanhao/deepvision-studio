@@ -1,34 +1,12 @@
 <div class="app-shell">
-  <header class="topbar">
-    <a class="brand-wrap" routerLink="/">
-      <div class="brand-logo">D</div>
-      <div>
-        <div class="brand-name">DeepVision Studio</div>
-        <div class="brand-sub">深度学习可视化仿真平台</div>
-      </div>
-    </a>
-    <div class="topbar-right">
-      @if (mode === 'forward') {
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:0">
-          <input type="checkbox" [(ngModel)]="autoForwardCompute" (ngModelChange)="onAutoForwardComputeToggle()" />
-          自动计算
-        </label>
-        <button class="btn-sm" (click)="triggerForwardCompute()" [disabled]="forwardBusy">开始计算</button>
-        <button class="btn-sm btn-primary" (click)="openSaveRecordModal()" [disabled]="!canSaveForwardRecord">保存记录</button>
-        <button class="btn-sm" (click)="toggleRecordDrawer()">历史记录</button>
-      }
-      <span class="meta-pill">{{ layerCount }} 层</span>
-      <span class="meta-pill">{{ parameterCount | number }} 参数</span>
-      @if (authUser) {
-        <span class="meta-pill">{{ authUser.displayName }}</span>
-        <button class="btn-ghost btn-sm" (click)="logout()">退出</button>
-      } @else {
-        <a class="btn-link btn-sm" routerLink="/login">登录</a>
-        <a class="btn-link btn-primary btn-sm" routerLink="/register">注册</a>
-      }
-      <button class="icon-btn" (click)="showHelp=true">?</button>
-    </div>
-  </header>
+  <app-platform-topbar
+    [modeLabel]="topbarModeLabel"
+    [modeTitle]="topbarModeTitle"
+    [statusPills]="topbarStatusPills"
+    [user]="authUser"
+    (logoutRequested)="logout()"
+  >
+  </app-platform-topbar>
 
   @if (recordError || recordSuccess) {
     <div [class]="recordError ? 'global-error-banner' : 'global-success-banner'">
@@ -1157,5 +1135,4 @@
     </div>
   }
 
-  <app-help-manual [open]="showHelp" (closed)="showHelp=false" />
 </div>
