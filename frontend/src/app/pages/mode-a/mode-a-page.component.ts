@@ -5,7 +5,7 @@ import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
 import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
-import { NETWORK_3D_SESSION_KEY, Network3dPayload } from '../../features/network-3d/network-3d.models';
+import { NETWORK_3D_SESSION_KEY, Network3dLayerSnapshot, Network3dPayload } from '../../features/network-3d/network-3d.models';
 import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '../../features/llm/llm-floating-assistant.component';
 import { LlmChatContext } from '../../features/llm/llm.models';
 import { MODE_A_LLM_SYSTEM_PROMPT } from '../../features/llm/llm-prompts';
@@ -473,9 +473,14 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
       createdAt: new Date().toISOString(),
       inputImageUrl: this.preparedInputImageUrl || this.originalInputImageUrl,
       inputLabel: this.currentInputAsset?.name,
+      datasetName: this.selectedDataset,
+      parameterCount: this.parameterCount,
       layers: structuredClone(this.layers),
       shapeHints: structuredClone(this.forwardLayerShapeMap),
       layerShapes: this.buildNetwork3dLayerShapes(),
+      layerSnapshots: this.buildNetwork3dLayerSnapshots(),
+      shapePath: structuredClone(this.forwardResult?.shapePath ?? []),
+      finalTopK: structuredClone(this.forwardResult?.finalTopK ?? []),
       selectedLayerId: this.selectedLayerId
     };
 
@@ -1457,6 +1462,36 @@ export class ModeAPageComponent implements OnInit, OnDestroy {
       shapes[layer.id] = SimEngine.inferLayerOutputShape(layer, inputShapes);
     }
     return shapes;
+  }
+
+  private buildNetwork3dLayerSnapshots(): Record<number, Network3dLayerSnapshot> {
+    const snapshots: Record<number, Network3dLayerSnapshot> = {};
+    for (const result of this.forwardResult?.layerResults ?? []) {
+      const tensor = result.tensor;
+      const isImageTensor = tensor.shape.length === 3;
+      const previewImageUrl = isImageTensor
+        ? this.tensorToImageDataUrl(tensor, !(tensor.shape[2] === 3 && tensor.colorMode === 'rgb'))
+        : undefined;
+      snapshots[result.layerId] = {
+        layerId: result.layerId,
+        inputShapeLabel: result.inputShapeLabel,
+        outputShapeLabel: result.outputShapeLabel,
+        transitionNote: result.transitionNote,
+        paramsSummary: structuredClone(result.paramsSummary),
+        warnings: structuredClone(result.warnings),
+        stats: structuredClone(result.stats),
+        visualizationMode: result.visualization.mode,
+        previewImageUrl,
+        channelPreviews: (result.visualization.channelPreviews ?? []).slice(0, 8).map(channel => ({
+          channel: channel.channel,
+          width: channel.width,
+          height: channel.height,
+          imageUrl: this.grayValuesToImageDataUrl(channel.values, channel.width, channel.height)
+        })),
+        topK: structuredClone(result.stats.topK.slice(0, 5))
+      };
+    }
+    return snapshots;
   }
 
   private syncKernelShape(): void {
