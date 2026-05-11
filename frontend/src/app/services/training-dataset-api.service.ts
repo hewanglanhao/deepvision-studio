@@ -49,6 +49,17 @@ export class TrainingDatasetApiService {
     return { ...result, detail: this.normalizeDatasetDetail(result.detail) };
   }
 
+  async deleteDataset(datasetId: string, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`${this.api.baseUrl}${this.basePath}/${encodeURIComponent(datasetId)}`, {
+      method: 'DELETE',
+      signal
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+  }
+
   private normalizeDatasetDetail(detail: TrainingDatasetDetail): TrainingDatasetDetail {
     return {
       ...detail,

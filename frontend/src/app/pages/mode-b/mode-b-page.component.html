@@ -682,6 +682,9 @@
             <div class="dataset-board-head">
               <div><div class="dataset-title">{{ ds.name }}</div><div class="dataset-desc">{{ ds.description }}</div></div>
               <span [class]="ds.hasLabels ? 'dataset-state ok' : 'dataset-state warn'">{{ ds.hasLabels ? '标签可用' : '缺少标签' }}</span>
+              @if (ds.source === 'upload') {
+                <button class="btn-danger btn-sm" (click)="deleteUploadedTrainingDataset(ds)" [disabled]="trainingDatasetLoading || trainingStatus==='running'">删除</button>
+              }
             </div>
             <div class="dataset-stat-grid">
               <div class="dataset-stat"><span>样本数量</span><strong>{{ ds.sampleCount }}</strong></div>

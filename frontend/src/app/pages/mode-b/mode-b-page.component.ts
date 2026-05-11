@@ -1568,6 +1568,46 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       : [option, ...this.builtinTrainingDatasets];
   }
 
+  async deleteUploadedTrainingDataset(detail: TrainingDatasetDetail): Promise<void> {
+    if (detail.source !== 'upload') {
+      this.trainingDatasetError = '内置数据集不能删除。';
+      return;
+    }
+    const ok = window.confirm(`确定删除上传数据集“${detail.name}”吗？该操作会同时删除后端保存的文件。`);
+    if (!ok) return;
+
+    this.trainingDatasetLoading = true;
+    try {
+      await this.trainingDatasetApi.deleteDataset(detail.id);
+      this.builtinTrainingDatasets = this.builtinTrainingDatasets.filter(item => item.id !== detail.id);
+      if (this.datasetImportDraft.detail?.id === detail.id) {
+        this.datasetImportDraft = {
+          status: 'idle',
+          message: '尚未导入自定义数据。',
+          files: [],
+          detectedKind: null,
+          detail: null,
+          csvHeaders: [],
+          selectedLabelColumn: '',
+          selectedClassCount: null
+        };
+      }
+      this.trainingDatasetError = '';
+      this.trainingBackendNotice = '已删除上传数据集。';
+      const fallback = this.builtinTrainingDatasets.find(item => item.source === 'builtin') ?? this.builtinTrainingDatasets[0];
+      if (fallback) {
+        await this.selectTrainingDataset(fallback.id);
+      } else {
+        this.trainingDatasetDetail = null;
+        this.selectedTrainingDatasetId = '';
+      }
+    } catch (err) {
+      this.trainingDatasetError = err instanceof Error ? err.message : '删除上传数据集失败。';
+    } finally {
+      this.trainingDatasetLoading = false;
+    }
+  }
+
   async startTraining(): Promise<void> {
     if (!this.trainingDatasetDetail) {
       this.trainingDatasetError = '请先选择或导入一个训练数据集。';

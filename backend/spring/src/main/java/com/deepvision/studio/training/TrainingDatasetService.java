@@ -96,6 +96,21 @@ public class TrainingDatasetService {
     return datasets.existsById(datasetId);
   }
 
+  public void deleteUploadedDataset(String datasetId) {
+    TrainingDataset row = datasets.findById(datasetId)
+        .orElseThrow(() -> new IllegalArgumentException("Dataset not found."));
+    if (!"upload".equals(row.getSource())) {
+      throw new IllegalArgumentException("Built-in datasets cannot be deleted.");
+    }
+    Path datasetDir = uploadDatasetDir(datasetId);
+    try {
+      deleteDirectoryIfExists(datasetDir);
+      datasets.delete(row);
+    } catch (IOException ex) {
+      throw new IllegalArgumentException("Failed to delete uploaded dataset files.");
+    }
+  }
+
   public DatasetImportResponse importDataset(MultipartFile[] files, String labelColumn, Integer requestedClassCount) {
     if (files == null || files.length == 0) {
       throw new IllegalArgumentException("No dataset files uploaded.");
@@ -870,6 +885,19 @@ public class TrainingDatasetService {
   private void ensureUnder(Path root, Path target) {
     if (!target.normalize().startsWith(root.normalize())) {
       throw new IllegalArgumentException("Invalid dataset path.");
+    }
+  }
+
+  private void deleteDirectoryIfExists(Path directory) throws IOException {
+    Path uploadRoot = datasetsRoot.resolve("upload").normalize();
+    ensureUnder(uploadRoot, directory);
+    if (!Files.exists(directory)) {
+      return;
+    }
+    try (var paths = Files.walk(directory)) {
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        Files.deleteIfExists(path);
+      }
     }
   }
 
