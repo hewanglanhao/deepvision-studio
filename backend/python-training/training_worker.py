@@ -96,6 +96,35 @@ class AutoFlatten(nn.Module):
         return x
 
 
+class ResidualBlock(nn.Module):
+    def __init__(
+        self,
+        out_channels: int,
+        kernel_size: int,
+        stride: int,
+        padding: int,
+        activation: Any,
+        use_projection: bool,
+    ) -> None:
+        super().__init__()
+        self.conv1 = nn.LazyConv2d(out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.act = activation_module(activation)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding)
+        self.projection = nn.LazyConv2d(out_channels, kernel_size=1, stride=stride) if use_projection else None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        shortcut = x if self.projection is None else self.projection(x)
+        out = self.conv1(x)
+        out = self.act(out)
+        out = self.conv2(out)
+        if out.shape != shortcut.shape:
+            raise ValueError(
+                f"Residual add shape mismatch: main={tuple(out.shape)}, shortcut={tuple(shortcut.shape)}"
+            )
+        out = out + shortcut
+        return self.act(out)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", required=True)
@@ -280,6 +309,14 @@ def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any
         return CsvClassificationDataset(dataset_root / "builtin" / "iris" / "iris.csv")
     if dataset_id == "points-2d":
         return CsvClassificationDataset(dataset_root / "builtin" / "points-2d" / "points.csv")
+    upload_root = dataset_root / "upload" / dataset_id
+    if upload_root.exists():
+        image_root = upload_root / "images"
+        csv_path = upload_root / "data.csv"
+        if image_root.exists():
+            return ImageClassificationDataset(image_root, input_shape[0], input_shape[1], input_shape[2])
+        if csv_path.exists():
+            return CsvClassificationDataset(csv_path)
     raise ValueError(f"Dataset {dataset_id} is not available to the Python trainer.")
 
 
@@ -330,6 +367,19 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
             else:
                 modules.append(nn.MaxPool2d(kernel_size=kernel_size, stride=stride, padding=padding))
             spatial = True
+        elif layer_type == "residual":
+            if not spatial:
+                raise ValueError(f"Residual block {layer.get('name') or layer.get('id')} requires image-like feature maps.")
+            modules.append(ResidualBlock(
+                out_channels=max(1, int(params.get("outChannels") or 8)),
+                kernel_size=max(1, int(params.get("kernelSize") or 3)),
+                stride=max(1, int(params.get("stride") or 1)),
+                padding=max(0, int(params.get("padding") or 0)),
+                activation=params.get("activation"),
+                use_projection=bool(params.get("useProjection")),
+            ))
+            spatial = True
+            saw_trainable = True
         elif layer_type == "flatten":
             modules.append(AutoFlatten())
             spatial = False
@@ -366,16 +416,24 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
 
 
 def append_activation(modules: list[nn.Module], activation: Any) -> None:
-    if activation in {None, "none", "softmax"}:
+    module = activation_module(activation)
+    if isinstance(module, nn.Identity):
         return
+    modules.append(module)
+
+
+def activation_module(activation: Any) -> nn.Module:
+    if activation in {None, "none", "softmax"}:
+        return nn.Identity()
     if activation == "relu":
-        modules.append(nn.ReLU())
-    elif activation == "tanh":
-        modules.append(nn.Tanh())
-    elif activation == "gelu":
-        modules.append(nn.GELU())
-    elif activation == "sigmoid":
-        modules.append(nn.Sigmoid())
+        return nn.ReLU()
+    if activation == "tanh":
+        return nn.Tanh()
+    if activation == "gelu":
+        return nn.GELU()
+    if activation == "sigmoid":
+        return nn.Sigmoid()
+    return nn.Identity()
 
 
 def build_optimizer(parameters, config: dict[str, Any]):

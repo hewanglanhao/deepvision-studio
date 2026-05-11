@@ -13,9 +13,14 @@ export class TrainingDatasetApiService {
 
   constructor(private api: ApiClientService) {}
 
-  async listBuiltinDatasets(signal?: AbortSignal): Promise<TrainingDatasetOption[]> {
-    const response = await fetch(`${this.api.baseUrl}${this.basePath}/builtin`, { signal });
+  async listDatasets(source?: string, signal?: AbortSignal): Promise<TrainingDatasetOption[]> {
+    const query = source ? `?source=${encodeURIComponent(source)}` : '';
+    const response = await fetch(`${this.api.baseUrl}${this.basePath}${query}`, { signal });
     return this.readJson<TrainingDatasetOption[]>(response);
+  }
+
+  async listBuiltinDatasets(signal?: AbortSignal): Promise<TrainingDatasetOption[]> {
+    return this.listDatasets('builtin', signal);
   }
 
   async getDatasetDetail(datasetId: string, signal?: AbortSignal): Promise<TrainingDatasetDetail> {

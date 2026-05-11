@@ -4,12 +4,12 @@ import { NetworkLayer } from '../sim-models';
 
 const LAYER_COLOR: Record<string, string> = {
   input: '#6366f1', conv2d: '#0ea5e9', pool2d: '#10b981',
-  flatten: '#f59e0b', dense: '#8b5cf6', activation: '#ec4899',
+  residual: '#14b8a6', flatten: '#f59e0b', dense: '#8b5cf6', activation: '#ec4899',
   dropout: '#94a3b8', output: '#ef4444'
 };
 const LAYER_ICON: Record<string, string> = {
   input: '⬛', conv2d: '⊞', pool2d: '⊟', flatten: '≡',
-  dense: '◉', activation: 'ƒ', dropout: '⊘', output: '▶'
+  residual: '+', dense: '◉', activation: 'ƒ', dropout: '⊘', output: '▶'
 };
 
 @Component({
@@ -54,6 +54,9 @@ const LAYER_ICON: Record<string, string> = {
             }
             @if (layer.type === 'pool2d') {
               <div class="card-badge">{{ layer.params.mode }} · k{{ layer.params.kernelSize }}</div>
+            }
+            @if (layer.type === 'residual') {
+              <div class="card-badge">{{ layer.params.outChannels }}ch · {{ layer.params.useProjection ? 'proj' : 'skip' }}</div>
             }
           </div>
 
@@ -165,7 +168,7 @@ export class NetworkOverviewComponent {
   typeLabel(type: string): string {
     const m: Record<string, string> = {
       input: 'Input', conv2d: 'Conv2D', pool2d: 'Pool2D', flatten: 'Flatten',
-      dense: 'Dense', activation: 'Activation', dropout: 'Dropout', output: 'Output'
+      residual: 'Residual', dense: 'Dense', activation: 'Activation', dropout: 'Dropout', output: 'Output'
     };
     return m[type] ?? type;
   }

@@ -7,14 +7,18 @@ import com.deepvision.studio.training.TrainingDtos.PointPreviewItem;
 import com.deepvision.studio.training.TrainingDtos.TablePreview;
 import com.deepvision.studio.training.TrainingDtos.TrainingDatasetDetail;
 import com.deepvision.studio.training.TrainingDtos.TrainingDatasetOption;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -25,6 +29,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import javax.imageio.ImageIO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -38,15 +44,25 @@ public class TrainingDatasetService {
   );
   private static final Set<String> IMAGE_EXTENSIONS = Set.of("png", "jpg", "jpeg", "gif", "bmp");
   private static final DateTimeFormatter UPLOAD_ID_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+  private static final long MAX_UPLOAD_BYTES = 200L * 1024L * 1024L;
+  private static final int MAX_IMAGE_COUNT = 5000;
+  private static final int MIN_CLASS_COUNT = 2;
+  private static final int MIN_ROWS = 10;
+  private static final int MIN_SAMPLES_PER_IMAGE_CLASS = 2;
 
-  private final Map<String, TrainingDatasetDetail> datasets = new LinkedHashMap<>();
+  private final TrainingDatasetRepository datasets;
+  private final ObjectMapper objectMapper;
   private final Path uploadsRoot;
   private final Path datasetsRoot;
 
   public TrainingDatasetService(
+      TrainingDatasetRepository datasets,
+      ObjectMapper objectMapper,
       @Value("${deepvision.uploads.root}") String uploadsRoot,
       @Value("${deepvision.datasets.root}") String datasetsRoot
   ) {
+    this.datasets = datasets;
+    this.objectMapper = objectMapper;
     this.uploadsRoot = Path.of(uploadsRoot).toAbsolutePath().normalize();
     this.datasetsRoot = Path.of(datasetsRoot).toAbsolutePath().normalize();
   }
@@ -56,28 +72,31 @@ public class TrainingDatasetService {
     registerBuiltinDatasets();
   }
 
-  public synchronized List<TrainingDatasetOption> listBuiltin() {
-    return datasets.values().stream()
-        .filter(detail -> "builtin".equals(detail.source()))
+  public List<TrainingDatasetOption> listDatasets(String source) {
+    List<TrainingDataset> rows = source == null || source.isBlank()
+        ? datasets.findAllByOrderBySourceAscNameAsc()
+        : datasets.findBySourceOrderByNameAsc(source);
+    return rows.stream()
+        .map(this::toDetail)
         .map(TrainingDatasetDetail::toOption)
         .toList();
   }
 
-  public synchronized TrainingDatasetDetail getDetail(String datasetId) {
-    TrainingDatasetDetail detail = datasets.get(datasetId);
-    if (detail == null) {
-      throw new IllegalArgumentException("Dataset not found.");
-    }
-    return detail;
+  public List<TrainingDatasetOption> listBuiltin() {
+    return listDatasets("builtin");
+  }
+
+  public TrainingDatasetDetail getDetail(String datasetId) {
+    return datasets.findById(datasetId)
+        .map(this::toDetail)
+        .orElseThrow(() -> new IllegalArgumentException("Dataset not found."));
   }
 
   public boolean exists(String datasetId) {
-    synchronized (this) {
-      return datasets.containsKey(datasetId);
-    }
+    return datasets.existsById(datasetId);
   }
 
-  public synchronized DatasetImportResponse importDataset(MultipartFile[] files) {
+  public DatasetImportResponse importDataset(MultipartFile[] files) {
     if (files == null || files.length == 0) {
       throw new IllegalArgumentException("No dataset files uploaded.");
     }
@@ -88,22 +107,36 @@ public class TrainingDatasetService {
       throw new IllegalArgumentException("No dataset files uploaded.");
     }
 
+    long totalBytes = nonEmpty.stream().mapToLong(MultipartFile::getSize).sum();
+    if (totalBytes > MAX_UPLOAD_BYTES) {
+      throw new IllegalArgumentException("Dataset upload is too large. Please keep it under 200MB.");
+    }
+
+    List<MultipartFile> zipFiles = nonEmpty.stream().filter(this::isZipFile).toList();
     List<MultipartFile> csvFiles = nonEmpty.stream().filter(this::isCsvFile).toList();
     List<MultipartFile> imageFiles = nonEmpty.stream().filter(this::isImageFile).toList();
+    if (!zipFiles.isEmpty() && nonEmpty.size() > zipFiles.size()) {
+      throw new IllegalArgumentException("Please upload either one ZIP file, one CSV file, or image files, not mixed files.");
+    }
+    if (zipFiles.size() > 1) {
+      throw new IllegalArgumentException("Only one ZIP dataset is supported per import.");
+    }
     if (!csvFiles.isEmpty() && !imageFiles.isEmpty()) {
       throw new IllegalArgumentException("Please upload either one CSV file or image files, not both.");
     }
     if (csvFiles.size() > 1) {
       throw new IllegalArgumentException("Only one CSV file is supported per import.");
     }
-    if (csvFiles.isEmpty() && imageFiles.isEmpty()) {
-      throw new IllegalArgumentException("Only CSV files or image files are supported.");
+    if (zipFiles.isEmpty() && csvFiles.isEmpty() && imageFiles.isEmpty()) {
+      throw new IllegalArgumentException("Only ZIP, CSV, or image files are supported.");
     }
 
-    TrainingDatasetDetail detail = csvFiles.size() == 1
+    TrainingDatasetDetail detail = zipFiles.size() == 1
+        ? importImageZip(zipFiles.get(0))
+        : csvFiles.size() == 1
         ? importCsv(csvFiles.get(0))
         : importImages(imageFiles);
-    datasets.put(detail.id(), detail);
+    datasets.save(toEntity(detail));
     return new DatasetImportResponse(detail.id(), detail);
   }
 
@@ -127,9 +160,18 @@ public class TrainingDatasetService {
   }
 
   private TrainingDatasetDetail importCsv(MultipartFile file) {
+    String datasetId = nextUploadId();
+    Path datasetDir = uploadDatasetDir(datasetId);
+    Path csvTarget = datasetDir.resolve("data.csv").normalize();
+    if (!csvTarget.startsWith(datasetDir)) {
+      throw new IllegalArgumentException("Invalid CSV path.");
+    }
+
+    byte[] bytes;
     List<String> lines;
     try {
-      String text = new String(file.getBytes(), StandardCharsets.UTF_8);
+      bytes = file.getBytes();
+      String text = new String(bytes, StandardCharsets.UTF_8);
       lines = text.lines().map(String::trim).filter(line -> !line.isBlank()).toList();
     } catch (IOException ex) {
       throw new IllegalArgumentException("Failed to read CSV file.");
@@ -140,34 +182,66 @@ public class TrainingDatasetService {
 
     List<String> headers = parseCsvLine(lines.get(0));
     List<List<String>> rows = lines.stream().skip(1).map(this::parseCsvLine).filter(row -> !row.isEmpty()).toList();
+    if (rows.size() < MIN_ROWS) {
+      throw new IllegalArgumentException("CSV dataset requires at least " + MIN_ROWS + " data rows.");
+    }
+    long malformedRows = rows.stream().filter(row -> row.size() != headers.size()).count();
+    if (malformedRows > 0) {
+      throw new IllegalArgumentException("CSV row column count must match the header. Found " + malformedRows + " malformed rows.");
+    }
     int labelIndex = detectLabelColumn(headers);
-    boolean hasLabels = labelIndex >= 0 && rows.stream().anyMatch(row -> labelIndex < row.size() && !row.get(labelIndex).isBlank());
+    if (labelIndex < 0) {
+      throw new IllegalArgumentException("CSV must include a label/class/target/category/y/标签/类别 column.");
+    }
     Map<String, Integer> labelCounts = new LinkedHashMap<>();
     int missingValues = 0;
+    int invalidNumericValues = 0;
+    int blankLabelRows = 0;
     for (List<String> row : rows) {
       for (int i = 0; i < headers.size(); i += 1) {
         if (i >= row.size() || row.get(i).isBlank()) {
           missingValues += 1;
+          continue;
+        }
+        if (i != labelIndex && !isNumeric(row.get(i))) {
+          invalidNumericValues += 1;
         }
       }
-      if (hasLabels) {
-        String label = labelIndex < row.size() && !row.get(labelIndex).isBlank() ? row.get(labelIndex).trim() : "未标注";
+      String label = row.get(labelIndex).trim();
+      if (label.isBlank()) {
+        blankLabelRows += 1;
+      } else {
         labelCounts.merge(label, 1, Integer::sum);
       }
     }
 
-    List<String> labels = hasLabels ? new ArrayList<>(labelCounts.keySet()) : List.of();
-    List<String> warnings = new ArrayList<>();
-    if (!hasLabels) {
-      warnings.add("未检测到 label/class/target/标签/类别 列，监督训练会被阻止。");
+    if (labelCounts.isEmpty()) {
+      throw new IllegalArgumentException("CSV label column cannot be empty.");
     }
+    if (blankLabelRows > 0) {
+      throw new IllegalArgumentException("CSV label column has " + blankLabelRows + " empty labels.");
+    }
+    List<String> labels = new ArrayList<>(labelCounts.keySet());
+    if (labels.size() < MIN_CLASS_COUNT) {
+      throw new IllegalArgumentException("CSV classification dataset requires at least two classes.");
+    }
+    if (invalidNumericValues > 0) {
+      throw new IllegalArgumentException("CSV feature columns must be numeric. Found " + invalidNumericValues + " invalid values.");
+    }
+    try {
+      Files.createDirectories(datasetDir);
+      Files.write(csvTarget, bytes);
+    } catch (IOException ex) {
+      throw new IllegalArgumentException("Failed to save CSV dataset.");
+    }
+
+    List<String> warnings = new ArrayList<>();
     if (missingValues > 0) {
       warnings.add("发现 " + missingValues + " 个缺失值，训练前建议清洗或填补。");
     }
     warnings.addAll(imbalanceWarnings(labelCounts));
 
-    String datasetId = nextUploadId();
-    int featureColumns = Math.max(0, headers.size() - (hasLabels ? 1 : 0));
+    int featureColumns = Math.max(0, headers.size() - 1);
     return new TrainingDatasetDetail(
         datasetId,
         file.getOriginalFilename() == null ? "uploaded.csv" : file.getOriginalFilename(),
@@ -179,7 +253,7 @@ public class TrainingDatasetService {
         featureColumns + " columns",
         "70% / 15% / 15%",
         labels,
-        hasLabels,
+        true,
         0.7,
         0.15,
         0.15,
@@ -192,48 +266,53 @@ public class TrainingDatasetService {
   }
 
   private TrainingDatasetDetail importImages(List<MultipartFile> files) {
-    String datasetId = nextUploadId();
-    Path previewDir = uploadsRoot.resolve("b-datasets").resolve(datasetId).normalize();
-    if (!previewDir.startsWith(uploadsRoot)) {
-      throw new IllegalArgumentException("Invalid upload path.");
+    if (files.size() > MAX_IMAGE_COUNT) {
+      throw new IllegalArgumentException("Image dataset has too many files. Please keep it under " + MAX_IMAGE_COUNT + " images.");
     }
+    String datasetId = nextUploadId();
+    Path imageRoot = uploadDatasetDir(datasetId).resolve("images").normalize();
+    ensureUnder(uploadDatasetDir(datasetId), imageRoot);
 
     Map<String, Integer> labelCounts = new LinkedHashMap<>();
     List<ImagePreviewItem> previews = new ArrayList<>();
     Set<String> sizes = new java.util.LinkedHashSet<>();
     try {
-      Files.createDirectories(previewDir);
+      Files.createDirectories(imageRoot);
       for (int i = 0; i < files.size(); i += 1) {
         MultipartFile file = files.get(i);
         String originalName = file.getOriginalFilename() == null ? "image-" + i + ".png" : Path.of(file.getOriginalFilename()).getFileName().toString();
         String label = labelFromImageName(file.getOriginalFilename());
+        if ("未标注".equals(label)) {
+          throw new IllegalArgumentException("Image filename must start with a class label, for example cat_001.jpg.");
+        }
         labelCounts.merge(label, 1, Integer::sum);
         ImageInfo imageInfo = readImageInfo(file);
-        if (imageInfo != null) {
-          sizes.add(imageInfo.width() + "x" + imageInfo.height());
+        if (imageInfo == null) {
+          throw new IllegalArgumentException("Invalid image file: " + originalName);
+        }
+        sizes.add(imageInfo.width() + "x" + imageInfo.height());
+        Path labelDir = imageRoot.resolve(sanitizePathSegment(label)).normalize();
+        ensureUnder(imageRoot, labelDir);
+        Files.createDirectories(labelDir);
+        String filename = sanitizeFilename(i + "-" + originalName);
+        Path target = labelDir.resolve(filename).normalize();
+        ensureUnder(labelDir, target);
+        try (InputStream input = file.getInputStream()) {
+          Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
         }
         if (previews.size() < 12) {
-          String filename = sanitizeFilename(i + "-" + originalName);
-          Path target = previewDir.resolve(filename).normalize();
-          if (!target.startsWith(previewDir)) {
-            throw new IllegalArgumentException("Invalid image filename.");
-          }
-          try (InputStream input = file.getInputStream()) {
-            Files.copy(input, target);
-          }
-          previews.add(new ImagePreviewItem(originalName, label, "/uploads/b-datasets/" + datasetId + "/" + filename));
+          previews.add(new ImagePreviewItem(originalName, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + filename));
         }
       }
     } catch (IOException ex) {
       throw new IllegalArgumentException("Failed to save uploaded image previews.");
     }
 
+    validateImageLabels(labelCounts);
+
     List<String> labels = labelCounts.keySet().stream().filter(label -> !"未标注".equals(label)).toList();
-    boolean hasLabels = !labels.isEmpty() && !labelCounts.containsKey("未标注");
+    boolean hasLabels = true;
     List<String> warnings = new ArrayList<>();
-    if (!hasLabels) {
-      warnings.add("图片文件名未形成完整标签，建议使用“类别_序号.jpg”命名。");
-    }
     if (sizes.size() > 1) {
       warnings.add("检测到图片尺寸不一致，训练前需要统一 resize。");
     }
@@ -263,8 +342,104 @@ public class TrainingDatasetService {
     );
   }
 
+  private TrainingDatasetDetail importImageZip(MultipartFile file) {
+    String datasetId = nextUploadId();
+    Path imageRoot = uploadDatasetDir(datasetId).resolve("images").normalize();
+    ensureUnder(uploadDatasetDir(datasetId), imageRoot);
+
+    Map<String, Integer> labelCounts = new LinkedHashMap<>();
+    List<ImagePreviewItem> previews = new ArrayList<>();
+    Set<String> sizes = new java.util.LinkedHashSet<>();
+    int imageCount = 0;
+    try {
+      Files.createDirectories(imageRoot);
+      try (ZipInputStream zip = new ZipInputStream(file.getInputStream(), StandardCharsets.UTF_8)) {
+        ZipEntry entry;
+        while ((entry = zip.getNextEntry()) != null) {
+          if (entry.isDirectory()) {
+            continue;
+          }
+          String entryName = entry.getName().replace('\\', '/');
+          if (entryName.startsWith("/") || entryName.contains("../")) {
+            throw new IllegalArgumentException("ZIP contains unsafe paths.");
+          }
+          String[] parts = entryName.split("/");
+          String filename = parts.length == 0 ? "" : parts[parts.length - 1].trim();
+          if (filename.isBlank() || !isLocalPreviewImage(filename)) {
+            continue;
+          }
+          if (parts.length < 2) {
+            throw new IllegalArgumentException("ZIP image datasets must use class folders, for example cat/001.jpg.");
+          }
+          String label = parts[parts.length - 2].trim();
+          if (label.isBlank()) {
+            continue;
+          }
+          imageCount += 1;
+          if (imageCount > MAX_IMAGE_COUNT) {
+            throw new IllegalArgumentException("Image dataset has too many files. Please keep it under " + MAX_IMAGE_COUNT + " images.");
+          }
+          byte[] bytes = zip.readAllBytes();
+          ImageInfo imageInfo = readImageInfo(bytes);
+          if (imageInfo == null) {
+            throw new IllegalArgumentException("Invalid image in ZIP: " + entryName);
+          }
+          sizes.add(imageInfo.width() + "x" + imageInfo.height());
+          labelCounts.merge(label, 1, Integer::sum);
+
+          Path labelDir = imageRoot.resolve(sanitizePathSegment(label)).normalize();
+          ensureUnder(imageRoot, labelDir);
+          Files.createDirectories(labelDir);
+          String storedFilename = sanitizeFilename(imageCount + "-" + filename);
+          Path target = labelDir.resolve(storedFilename).normalize();
+          ensureUnder(labelDir, target);
+          Files.write(target, bytes);
+          if (previews.size() < 12) {
+            previews.add(new ImagePreviewItem(filename, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + storedFilename));
+          }
+        }
+      }
+    } catch (IOException ex) {
+      throw new IllegalArgumentException("Failed to read ZIP dataset.");
+    }
+
+    if (imageCount == 0) {
+      throw new IllegalArgumentException("ZIP contains no supported images.");
+    }
+    validateImageLabels(labelCounts);
+
+    List<String> labels = new ArrayList<>(labelCounts.keySet());
+    List<String> warnings = new ArrayList<>();
+    if (sizes.size() > 1) {
+      warnings.add("检测到图片尺寸不一致，训练前会按输入层尺寸统一 resize。");
+    }
+    warnings.addAll(imbalanceWarnings(labelCounts));
+    String inputShape = sizes.size() == 1 ? sizes.iterator().next() + " x 3" : "mixed image sizes";
+    return new TrainingDatasetDetail(
+        datasetId,
+        file.getOriginalFilename() == null ? "ZIP 图片数据集" : file.getOriginalFilename(),
+        "upload",
+        "image",
+        "用户上传 ZIP 图片分类数据集",
+        imageCount,
+        labels.size(),
+        inputShape,
+        "70% / 15% / 15%",
+        labels,
+        true,
+        0.7,
+        0.15,
+        0.15,
+        mapToDistribution(labelCounts),
+        previews,
+        null,
+        null,
+        warnings
+    );
+  }
+
   private void registerBuiltinDatasets() {
-    datasets.put("mnist-1000", builtinImage(
+    saveBuiltinIfMissing(builtinImage(
         "mnist-1000",
         "MNIST 全量",
         "28x28 灰度手写数字，全量训练集与测试集。",
@@ -272,7 +447,7 @@ public class TrainingDatasetService {
         "28 x 28 x 1",
         List.of("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
     ));
-    datasets.put("cifar10-500", builtinImage(
+    saveBuiltinIfMissing(builtinImage(
         "cifar10-500",
         "CIFAR-10 全量",
         "32x32 RGB 彩色图片，全量训练集与测试集，覆盖 10 个常见物体类别。",
@@ -280,7 +455,7 @@ public class TrainingDatasetService {
         "32 x 32 x 3",
         List.of("airplane", "car", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck")
     ));
-    datasets.put("cifar10-5000", builtinImage(
+    saveBuiltinIfMissing(builtinImage(
         "cifar10-5000",
         "CIFAR-10 5000 张",
         "从 CIFAR-10 全量数据中按类别均衡抽取 5000 张图片，适合课堂快速训练演示。",
@@ -290,7 +465,7 @@ public class TrainingDatasetService {
     ));
 
     List<String> irisLabels = List.of("setosa", "versicolor", "virginica");
-    datasets.put("iris", new TrainingDatasetDetail(
+    saveBuiltinIfMissing(new TrainingDatasetDetail(
         "iris",
         "鸢尾花数据集",
         "builtin",
@@ -313,7 +488,7 @@ public class TrainingDatasetService {
     ));
 
     List<String> pointLabels = List.of("class A", "class B");
-    datasets.put("points-2d", new TrainingDatasetDetail(
+    saveBuiltinIfMissing(new TrainingDatasetDetail(
         "points-2d",
         "二维分类数据集",
         "builtin",
@@ -334,6 +509,93 @@ public class TrainingDatasetService {
         makePointPreview(),
         List.of()
     ));
+  }
+
+  private void saveBuiltinIfMissing(TrainingDatasetDetail detail) {
+    if (!datasets.existsById(detail.id())) {
+      datasets.save(toEntity(detail));
+    }
+  }
+
+  private TrainingDataset toEntity(TrainingDatasetDetail detail) {
+    return new TrainingDataset(
+        detail.id(),
+        detail.name(),
+        detail.source(),
+        detail.kind(),
+        detail.description(),
+        detail.sampleCount(),
+        detail.classCount(),
+        detail.inputShape(),
+        detail.recommendedSplit(),
+        writeJson(detail.labels()),
+        detail.hasLabels(),
+        detail.trainRatio(),
+        detail.valRatio(),
+        detail.testRatio(),
+        writeJson(detail.labelDistribution()),
+        writeJson(detail.imagePreview()),
+        writeJson(detail.tablePreview()),
+        writeJson(detail.pointPreview()),
+        writeJson(detail.warnings())
+    );
+  }
+
+  private TrainingDatasetDetail toDetail(TrainingDataset row) {
+    return new TrainingDatasetDetail(
+        row.getId(),
+        row.getName(),
+        row.getSource(),
+        row.getKind(),
+        row.getDescription(),
+        row.getSampleCount(),
+        row.getClassCount(),
+        row.getInputShape(),
+        row.getRecommendedSplit(),
+        readList(row.getLabelsJson(), String.class),
+        row.isHasLabels(),
+        row.getTrainRatio(),
+        row.getValRatio(),
+        row.getTestRatio(),
+        readList(row.getLabelDistributionJson(), LabelDistributionItem.class),
+        readList(row.getImagePreviewJson(), ImagePreviewItem.class),
+        readNullable(row.getTablePreviewJson(), TablePreview.class),
+        readList(row.getPointPreviewJson(), PointPreviewItem.class),
+        readList(row.getWarningsJson(), String.class)
+    );
+  }
+
+  private String writeJson(Object value) {
+    try {
+      return objectMapper.writeValueAsString(value == null ? List.of() : value);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("Failed to serialize dataset metadata.");
+    }
+  }
+
+  private <T> List<T> readList(String json, Class<T> itemType) {
+    if (json == null || json.isBlank() || "null".equals(json)) {
+      return List.of();
+    }
+    try {
+      return objectMapper.readValue(
+          json,
+          objectMapper.getTypeFactory().constructCollectionType(List.class, itemType)
+      );
+    } catch (IOException ex) {
+      return List.of();
+    }
+  }
+
+  private <T> T readNullable(String json, Class<T> itemType) {
+    if (json == null || json.isBlank() || "null".equals(json) || "[]".equals(json)) {
+      return null;
+    }
+    try {
+      return objectMapper.readValue(json, itemType);
+    } catch (IOException ex) {
+      return null;
+    }
   }
 
   private TrainingDatasetDetail builtinImage(
@@ -492,12 +754,54 @@ public class TrainingDatasetService {
     return name.endsWith(".csv") || "text/csv".equals(type) || "application/vnd.ms-excel".equals(type);
   }
 
+  private boolean isZipFile(MultipartFile file) {
+    String name = safeLowerName(file);
+    String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+    return name.endsWith(".zip")
+        || "application/zip".equals(type)
+        || "application/x-zip-compressed".equals(type);
+  }
+
   private boolean isImageFile(MultipartFile file) {
     String name = safeLowerName(file);
     String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
     int dot = name.lastIndexOf('.');
     String extension = dot >= 0 ? name.substring(dot + 1) : "";
     return type.startsWith("image/") || IMAGE_EXTENSIONS.contains(extension);
+  }
+
+  private boolean isNumeric(String value) {
+    try {
+      Double.parseDouble(value.trim());
+      return true;
+    } catch (NumberFormatException ex) {
+      return false;
+    }
+  }
+
+  private void validateImageLabels(Map<String, Integer> labelCounts) {
+    List<String> labels = labelCounts.keySet().stream().filter(label -> !"未标注".equals(label)).toList();
+    if (labels.size() < MIN_CLASS_COUNT) {
+      throw new IllegalArgumentException("Image classification dataset requires at least two class labels.");
+    }
+    for (String label : labels) {
+      int count = labelCounts.getOrDefault(label, 0);
+      if (count < MIN_SAMPLES_PER_IMAGE_CLASS) {
+        throw new IllegalArgumentException("Each image class needs at least " + MIN_SAMPLES_PER_IMAGE_CLASS + " images. Class " + label + " has " + count + ".");
+      }
+    }
+  }
+
+  private Path uploadDatasetDir(String datasetId) {
+    Path dir = datasetsRoot.resolve("upload").resolve(datasetId).normalize();
+    ensureUnder(datasetsRoot, dir);
+    return dir;
+  }
+
+  private void ensureUnder(Path root, Path target) {
+    if (!target.normalize().startsWith(root.normalize())) {
+      throw new IllegalArgumentException("Invalid dataset path.");
+    }
   }
 
   private String safeLowerName(MultipartFile file) {
@@ -586,6 +890,15 @@ public class TrainingDatasetService {
     }
   }
 
+  private ImageInfo readImageInfo(byte[] bytes) {
+    try (InputStream input = new ByteArrayInputStream(bytes)) {
+      BufferedImage image = ImageIO.read(input);
+      return image == null ? null : new ImageInfo(image.getWidth(), image.getHeight());
+    } catch (IOException ex) {
+      return null;
+    }
+  }
+
   private String nextUploadId() {
     return "upload-" + LocalDateTime.now().format(UPLOAD_ID_TIME) + "-" + UUID.randomUUID().toString().substring(0, 8);
   }
@@ -593,6 +906,12 @@ public class TrainingDatasetService {
   private String sanitizeFilename(String filename) {
     String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
     return encoded.replace("%", "_");
+  }
+
+  private String sanitizePathSegment(String value) {
+    String cleaned = value == null || value.isBlank() ? "unknown" : value.trim();
+    cleaned = cleaned.replace('\\', '_').replace('/', '_').replace("..", "_");
+    return sanitizeFilename(cleaned);
   }
 
   private double round(double value, int digits) {

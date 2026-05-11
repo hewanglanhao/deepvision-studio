@@ -329,7 +329,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   // ── Getters ──────────────────────────────────────────
   get layerCount() { return this.layers.length; }
   get parameterCount() { return SimEngine.parameterCount(this.layers, this.connections); }
-  get layerPalette(): LayerType[] { return ['conv2d', 'pool2d', 'flatten', 'dense', 'activation', 'dropout']; }
+  get layerPalette(): LayerType[] { return ['conv2d', 'residual', 'pool2d', 'flatten', 'dense', 'activation', 'dropout']; }
   get selectedTemplate() { return this.modelTemplates.find(t => t.id === this.selectedTemplateId); }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
   get selectedCheckpoint() { return this.trainingCheckpoints.find(item => item.id === this.selectedCheckpointId) ?? null; }
@@ -354,7 +354,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return Math.max(1, ...(this.trainingDatasetDetail?.labelDistribution ?? []).map(i => i.count));
   }
   get importedDatasetSelected(): boolean {
-    return this.selectedTrainingDatasetId === 'custom-upload' && !!this.datasetImportDraft.detail;
+    return !!this.datasetImportDraft.detail && this.selectedTrainingDatasetId === this.datasetImportDraft.detail.id;
   }
   get datasetSplitSumPercent(): number {
     const ds = this.trainingDatasetDetail;
@@ -1331,9 +1331,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   // ── Training ──────────────────────────────────────────
   async loadTrainingDatasets(): Promise<void> {
     this.trainingDatasetLoading = true;
-    this.trainingBackendNotice = '正在从 Spring Boot 后端加载内置数据集...';
+    this.trainingBackendNotice = '正在从 Spring Boot 后端加载训练数据集...';
     try {
-      this.builtinTrainingDatasets = await this.trainingDatasetApi.listBuiltinDatasets();
+      this.builtinTrainingDatasets = await this.trainingDatasetApi.listDatasets();
       this.trainingBackendNotice = '已连接 Spring Boot 后端。';
       await this.selectTrainingDataset(this.selectedTrainingDatasetId);
     } catch (err) {
@@ -1376,12 +1376,13 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
 
   useImportedTrainingDataset(): void {
     if (!this.datasetImportDraft.detail) return;
-    this.selectedTrainingDatasetId = 'custom-upload';
+    this.selectedTrainingDatasetId = this.datasetImportDraft.detail.id;
     this.trainingDatasetDetail = this.datasetImportDraft.detail;
     this.trainingDatasetError = '';
   }
 
   clearImportedTrainingDataset(): void {
+    const importedId = this.datasetImportDraft.detail?.id;
     this.datasetImportDraft = {
       status: 'idle',
       message: '尚未导入自定义数据。',
@@ -1389,7 +1390,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       detectedKind: null,
       detail: null
     };
-    if (this.selectedTrainingDatasetId === 'custom-upload') {
+    if (this.selectedTrainingDatasetId === 'custom-upload' || this.selectedTrainingDatasetId === importedId) {
       void this.selectTrainingDataset('mnist-1000');
     }
   }
@@ -1410,18 +1411,26 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
 
     try {
       const csvFiles = files.filter(file => this.isCsvFile(file));
+      const zipFiles = files.filter(file => file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed');
       const imageFiles = files.filter(file => file.type.startsWith('image/'));
+      if (zipFiles.length && files.length > zipFiles.length) {
+        throw new Error('请不要混合上传 ZIP 和其他文件；ZIP 数据集一次只上传 1 个。');
+      }
+      if (zipFiles.length > 1) {
+        throw new Error('图片 ZIP 数据集当前一次只支持上传 1 个 ZIP 文件。');
+      }
       if (csvFiles.length && imageFiles.length) {
         throw new Error('请不要混合上传 CSV 和图片；一次导入只对应一种数据集类型。');
       }
       if (csvFiles.length > 1) {
         throw new Error('表格数据当前一次只支持上传 1 个 CSV 文件。');
       }
-      if (!csvFiles.length && !imageFiles.length) {
-        throw new Error('仅支持 CSV 文件或少量图片文件。');
+      if (!zipFiles.length && !csvFiles.length && !imageFiles.length) {
+        throw new Error('仅支持 ZIP 图片数据集、CSV 文件或少量图片文件。');
       }
       const imported = await this.trainingDatasetApi.importDataset(files);
       const detail = imported.detail;
+      this.upsertTrainingDatasetOption(detail);
 
       this.datasetImportDraft = {
         status: detail.hasLabels ? 'ready' : 'error',
@@ -1431,7 +1440,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
         detail
       };
       this.trainingDatasetDetail = detail;
-      this.selectedTrainingDatasetId = 'custom-upload';
+      this.selectedTrainingDatasetId = detail.id;
       this.trainingDatasetError = detail.hasLabels ? '' : '当前导入数据缺少标签，训练前需要补充标签列或按类别命名图片。';
     } catch (err) {
       this.datasetImportDraft = {
@@ -1443,6 +1452,25 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       };
       this.trainingDatasetError = this.datasetImportDraft.message;
     }
+  }
+
+  private upsertTrainingDatasetOption(detail: TrainingDatasetDetail): void {
+    const option: TrainingDatasetOption = {
+      id: detail.id,
+      name: detail.name,
+      source: detail.source,
+      kind: detail.kind,
+      description: detail.description,
+      sampleCount: detail.sampleCount,
+      classCount: detail.classCount,
+      inputShape: detail.inputShape,
+      recommendedSplit: detail.recommendedSplit,
+      labels: detail.labels
+    };
+    const exists = this.builtinTrainingDatasets.some(item => item.id === option.id);
+    this.builtinTrainingDatasets = exists
+      ? this.builtinTrainingDatasets.map(item => item.id === option.id ? option : item)
+      : [option, ...this.builtinTrainingDatasets];
   }
 
   async startTraining(): Promise<void> {
@@ -1663,6 +1691,35 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
           }
           currentShape = nextShape;
         }
+      } else if (layer.type === 'residual') {
+        if (currentShape.length !== 3) {
+          addIssue(layer, 'error', `残差块需要 3D 图像或特征图输入，当前输入为 ${SimEngine.formatShapeLabel(currentShape)}。`);
+          currentShape = [];
+        } else {
+          if (!isIntAtLeast(layer.params.outChannels, 1)) addIssue(layer, 'error', '输出通道必须是大于 0 的整数。', 'outChannels');
+          if (!isIntAtLeast(layer.params.kernelSize, 1)) addIssue(layer, 'error', '卷积核大小必须是大于 0 的整数。', 'kernelSize');
+          if (!isIntAtLeast(layer.params.stride, 1)) addIssue(layer, 'error', '步长必须是大于 0 的整数。', 'stride');
+          if (!isIntAtLeast(layer.params.padding, 0)) addIssue(layer, 'error', '填充必须是非负整数。', 'padding');
+
+          const nextShape = SimEngine.inferLayerOutputShape(layer, [currentShape]);
+          if (!nextShape.length) {
+            addIssue(layer, 'error', '残差主分支输出尺寸小于 1，请减小核大小/步长或调整填充。', 'kernelSize');
+            currentShape = [];
+          } else {
+            const projectionShape = this.residualProjectionShape(currentShape, Math.max(1, Math.floor(intValue(layer.params.stride))), Math.max(1, Math.floor(intValue(layer.params.outChannels))));
+            const skipShape = layer.params.useProjection ? projectionShape : currentShape;
+            if (!this.sameShape(skipShape, nextShape)) {
+              const shortcutLabel = layer.params.useProjection ? '1x1 投影分支' : 'shortcut 分支';
+              addIssue(
+                layer,
+                'error',
+                `${shortcutLabel}为 ${SimEngine.formatShapeLabel(skipShape)}，主分支为 ${SimEngine.formatShapeLabel(nextShape)}，两路相加前维度必须一致。`,
+                'useProjection'
+              );
+            }
+            currentShape = nextShape;
+          }
+        }
       } else if (layer.type === 'flatten') {
         if (!currentShape.length) addIssue(layer, 'error', '上一层输出形状无效，无法展开。');
         currentShape = SimEngine.inferLayerOutputShape(layer, [currentShape]);
@@ -1687,6 +1744,19 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
 
     return { issues, shapeMap };
+  }
+
+  private residualProjectionShape(inputShape: TensorShape, stride: number, outChannels: number): TensorShape {
+    if (inputShape.length !== 3) return [];
+    const [h, w] = inputShape;
+    const safeStride = Math.max(1, stride);
+    const outH = Math.floor((h - 1) / safeStride) + 1;
+    const outW = Math.floor((w - 1) / safeStride) + 1;
+    return outH > 0 && outW > 0 ? [outH, outW, Math.max(1, outChannels)] : [];
+  }
+
+  private sameShape(a: TensorShape, b: TensorShape): boolean {
+    return a.length === b.length && a.every((value, index) => value === b[index]);
   }
 
   private trainingInputShape(): TensorShape {
@@ -2298,6 +2368,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     const map: Record<string, NetworkLayer> = {
       conv2d:     { id, type: 'conv2d',     name: `Conv ${id}`,       inputs: [], params: { outChannels: 8, kernelSize: 3, stride: 1, padding: 1, dilation: 1, kernelMatrix: [[0,-1,0],[-1,5,-1],[0,-1,0]], activation: 'relu' } },
       pool2d:     { id, type: 'pool2d',     name: `Pool ${id}`,       inputs: [], params: { mode: 'max', kernelSize: 2, stride: 2, padding: 0 } },
+      residual:   { id, type: 'residual',   name: `Residual ${id}`,   inputs: [], params: { outChannels: 8, kernelSize: 3, stride: 1, padding: 1, activation: 'relu', useProjection: true } },
       flatten:    { id, type: 'flatten',    name: `Flatten ${id}`,    inputs: [], params: {} },
       dense:      { id, type: 'dense',      name: `Dense ${id}`,      inputs: [], params: { units: 64, activation: 'relu' } },
       activation: { id, type: 'activation', name: `Activation ${id}`, inputs: [], params: { activationType: 'relu' } },

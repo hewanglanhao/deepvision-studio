@@ -233,8 +233,8 @@ def validate_layer_params(layer: Dict[str, Any], input_shapes: List[List[int]]) 
         issue("error", "Layer has no input tensor.")
         return issues
 
-    if layer["type"] in ("conv2d", "pool2d") and len(input_shape) != 3:
-        issue("error", "Conv/Pool requires an image-like input shape [H, W, C].", "inputShape")
+    if layer["type"] in ("conv2d", "pool2d", "residual") and len(input_shape) != 3:
+        issue("error", "Conv/Pool/Residual requires an image-like input shape [H, W, C].", "inputShape")
 
     if layer["type"] == "conv2d":
         p = layer["params"]
@@ -257,6 +257,26 @@ def validate_layer_params(layer: Dict[str, Any], input_shapes: List[List[int]]) 
         out_shape = infer_layer_output_shape(layer, input_shapes)
         if len(out_shape) == 0:
             issue("error", "Invalid pool output shape. Check kernel/stride/padding.", "padding")
+
+    if layer["type"] == "residual":
+        p = layer["params"]
+        if p.get("kernelSize", 0) <= 0:
+            issue("error", "kernelSize must be > 0.", "kernelSize")
+        if p.get("stride", 0) <= 0:
+            issue("error", "stride must be > 0.", "stride")
+        if p.get("outChannels", 0) <= 0:
+            issue("error", "outChannels must be > 0.", "outChannels")
+        out_shape = infer_layer_output_shape(layer, input_shapes)
+        if len(out_shape) == 0:
+            issue("error", "Invalid residual branch shape. Check kernel/stride/padding.", "padding")
+        elif len(input_shape) == 3:
+            skip_shape = residual_projection_shape(input_shape, p) if p.get("useProjection") else input_shape
+            if skip_shape != out_shape:
+                issue(
+                    "error",
+                    f"Residual add shape mismatch: main={format_shape_label(out_shape)}, shortcut={format_shape_label(skip_shape)}.",
+                    "useProjection",
+                )
 
     if layer["type"] in ("dense", "output"):
         p = layer["params"]
@@ -303,6 +323,19 @@ def infer_layer_output_shape(layer: Dict[str, Any], input_shapes: List[List[int]
         out_h = math.floor((h + pad * 2 - k) / s) + 1
         out_w = math.floor((w + pad * 2 - k) / s) + 1
         return [out_h, out_w, c] if out_h > 0 and out_w > 0 else []
+    if ltype == "residual":
+        if len(input_shape) != 3:
+            return []
+        h, w, _ = input_shape
+        p = layer["params"]
+        k = max(1, int(p["kernelSize"]))
+        s = max(1, int(p["stride"]))
+        pad = max(0, int(p["padding"]))
+        mid_h = math.floor((h + pad * 2 - k) / s) + 1
+        mid_w = math.floor((w + pad * 2 - k) / s) + 1
+        out_h = math.floor((mid_h + pad * 2 - k) / 1) + 1
+        out_w = math.floor((mid_w + pad * 2 - k) / 1) + 1
+        return [out_h, out_w, max(1, int(p["outChannels"]))] if mid_h > 0 and mid_w > 0 and out_h > 0 and out_w > 0 else []
     if ltype == "flatten":
         return [shape_element_count(input_shape)]
     if ltype in ("dense", "output"):
@@ -320,6 +353,8 @@ def execute_operator(layer: Dict[str, Any], inputs: List[Dict[str, Any]], input_
         return run_conv2d_operator(layer, inputs[0])
     if ltype == "pool2d":
         return run_pool2d_operator(layer, inputs[0])
+    if ltype == "residual":
+        return run_residual_operator(layer, inputs[0])
     if ltype == "flatten":
         return run_flatten_operator(inputs[0])
     if ltype == "dense":
@@ -446,6 +481,93 @@ def run_pool2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> 
             f"kernelSize={k}",
             f"stride={stride}",
             f"padding={pad}",
+        ],
+    }
+
+
+def run_residual_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
+    shape = input_tensor["shape"]
+    if len(shape) != 3:
+        raise ValueError("Residual block expects [H, W, C] tensor.")
+    p = layer["params"]
+    out_c = max(1, int(p["outChannels"]))
+    activation = p.get("activation", "relu")
+
+    conv1_layer = {
+        **layer,
+        "type": "conv2d",
+        "name": f"{layer['name']} / conv1",
+        "params": {
+            "outChannels": out_c,
+            "kernelSize": p["kernelSize"],
+            "stride": p["stride"],
+            "padding": p["padding"],
+            "dilation": 1,
+            "activation": activation,
+        },
+    }
+    conv1 = run_conv2d_operator(conv1_layer, input_tensor)["tensor"]
+
+    conv2_layer = {
+        **layer,
+        "type": "conv2d",
+        "name": f"{layer['name']} / conv2",
+        "params": {
+            "outChannels": out_c,
+            "kernelSize": p["kernelSize"],
+            "stride": 1,
+            "padding": p["padding"],
+            "dilation": 1,
+            "activation": "none",
+        },
+    }
+    main = run_conv2d_operator(conv2_layer, conv1)["tensor"]
+
+    if p.get("useProjection"):
+        skip_layer = {
+            **layer,
+            "type": "conv2d",
+            "name": f"{layer['name']} / projection",
+            "params": {
+                "outChannels": out_c,
+                "kernelSize": 1,
+                "stride": p["stride"],
+                "padding": 0,
+                "dilation": 1,
+                "activation": "none",
+            },
+        }
+        skip = run_conv2d_operator(skip_layer, input_tensor)["tensor"]
+    else:
+        skip = {
+            **input_tensor,
+            "shape": list(input_tensor["shape"]),
+            "values": list(input_tensor["values"]),
+        }
+
+    if main["shape"] != skip["shape"]:
+        raise ValueError(
+            f"Residual add shape mismatch: main={format_shape_label(main['shape'])}, shortcut={format_shape_label(skip['shape'])}."
+        )
+
+    main_arr = np.asarray(main["values"], dtype=np.float64)
+    skip_arr = np.asarray(skip["values"], dtype=np.float64)
+    out_arr = apply_activation_array(main_arr + skip_arr, activation)
+
+    return {
+        "tensor": {
+            "kind": "tensor3d",
+            "shape": list(main["shape"]),
+            "values": out_arr.tolist(),
+            "colorMode": "grayscale" if out_c == 1 else None,
+        },
+        "transitionNote": f"residual: Conv -> {activation} -> Conv + {'projection' if p.get('useProjection') else 'identity'}",
+        "paramsSummary": [
+            f"outChannels={out_c}",
+            f"kernelSize={max(1, int(p['kernelSize']))}",
+            f"stride={max(1, int(p['stride']))}",
+            f"padding={max(0, int(p['padding']))}",
+            f"projection={bool(p.get('useProjection'))}",
         ],
     }
 
@@ -651,6 +773,17 @@ def format_shape_label(shape: List[int]) -> str:
     if len(shape) == 0:
         return "[]"
     return "[" + ", ".join([str(v) for v in shape]) + "]"
+
+
+def residual_projection_shape(input_shape: List[int], params: Dict[str, Any]) -> List[int]:
+    if len(input_shape) != 3:
+        return []
+    h, w, _ = input_shape
+    stride = max(1, int(params.get("stride", 1)))
+    out_channels = max(1, int(params.get("outChannels", 1)))
+    out_h = math.floor((h - 1) / stride) + 1
+    out_w = math.floor((w - 1) / stride) + 1
+    return [out_h, out_w, out_channels] if out_h > 0 and out_w > 0 else []
 
 
 def shape_element_count(shape: List[int]) -> int:

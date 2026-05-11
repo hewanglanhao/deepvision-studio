@@ -276,6 +276,54 @@
                 </div>
               }
 
+              @if (layer.type === 'residual') {
+                <div class="row-3">
+                  <label>输出通道
+                    <input type="number" min="1" [(ngModel)]="layer.params.outChannels" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'outChannels')" />
+                    @if (hasFieldError(layer.id, 'outChannels')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'outChannels') }}</div>
+                    }
+                  </label>
+                  <label>核大小
+                    <input type="number" min="1" max="9" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
+                    @if (hasFieldError(layer.id, 'kernelSize')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div>
+                    }
+                  </label>
+                  <label>激活函数
+                    <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                      <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row-2">
+                  <label>主分支步长
+                    <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'stride')" />
+                    @if (hasFieldError(layer.id, 'stride')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div>
+                    }
+                  </label>
+                  <label>填充
+                    <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()"
+                      [class.field-error]="hasFieldError(layer.id, 'padding')" />
+                    @if (hasFieldError(layer.id, 'padding')) {
+                      <div class="field-error-msg">{{ fieldErrorText(layer.id, 'padding') }}</div>
+                    }
+                  </label>
+                </div>
+                <label class="checkbox-row">
+                  <input type="checkbox" [(ngModel)]="layer.params.useProjection" (ngModelChange)="onLayerConfigChange()" />
+                  使用 1x1 投影匹配 shortcut 维度
+                </label>
+                @if (hasFieldError(layer.id, 'useProjection')) {
+                  <div class="field-error-msg">{{ fieldErrorText(layer.id, 'useProjection') }}</div>
+                }
+                <div class="muted">残差块会计算 F(x) + x；两路相加前的 H、W、C 必须完全一致。</div>
+              }
+
               @if (layer.type === 'pool2d') {
                 <div class="row-3">
                   <label>池化方式
@@ -529,32 +577,33 @@
           <div [class]="trainingDatasetError && trainingBackendNotice.includes('暂不可用') ? 'warn-box' : 'success-box'" style="margin-bottom:8px">
             {{ trainingBackendNotice }}
           </div>
-          <label>内置数据集
+          <label>训练数据集
             <select [ngModel]="selectedTrainingDatasetId" (ngModelChange)="selectTrainingDataset($event)" [disabled]="trainingDatasetLoading">
               @for (ds of builtinTrainingDatasets; track ds.id) {
-                <option [value]="ds.id">{{ ds.name }}</option>
+                <option [value]="ds.id">{{ ds.name }} · {{ ds.source }}</option>
               }
-              @if (datasetImportDraft.detail) { <option value="custom-upload">自定义导入数据</option> }
             </select>
           </label>
           <div class="dataset-option-list">
             @for (ds of builtinTrainingDatasets; track ds.id) {
               <button class="dataset-option" [class.active]="selectedTrainingDatasetId===ds.id" (click)="selectTrainingDataset(ds.id)">
                 <span class="dataset-option-name">{{ ds.name }}</span>
-                <span class="dataset-option-meta">{{ ds.sampleCount }} 样本 · {{ ds.classCount }} 类 · {{ ds.kind }}</span>
+                <span class="dataset-option-meta">{{ ds.sampleCount }} 样本 · {{ ds.classCount }} 类 · {{ ds.kind }} · {{ ds.source }}</span>
               </button>
             }
           </div>
           <label style="margin-top:8px">自定义导入
-            <input type="file" multiple accept=".csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" [disabled]="trainingDatasetLoading" />
+            <input type="file" multiple accept=".zip,application/zip,.csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" [disabled]="trainingDatasetLoading" />
           </label>
-          <div class="muted">通过 Spring Boot 导入：支持 1 个 CSV，或按“类别_序号.jpg”命名的图片文件。</div>
+          <div class="muted">通过 Spring Boot 导入：支持 1 个 CSV，1 个“类别目录/图片”的 ZIP，或按“类别_序号.jpg”命名的图片文件。</div>
           @if (datasetImportDraft.status !== 'idle') {
             <div [class]="datasetImportDraft.status === 'ready' ? 'success-box' : 'warn-box'" style="margin-top:6px">
               {{ datasetImportDraft.message }}
-              @if (datasetImportDraft.detail && selectedTrainingDatasetId !== 'custom-upload') {
+              @if (datasetImportDraft.detail) {
                 <div class="btn-row" style="margin-top:6px">
-                  <button class="btn-sm" (click)="useImportedTrainingDataset()">使用导入数据</button>
+                  @if (selectedTrainingDatasetId !== datasetImportDraft.detail.id) {
+                    <button class="btn-sm" (click)="useImportedTrainingDataset()">使用导入数据</button>
+                  }
                   <button class="btn-ghost btn-sm" (click)="clearImportedTrainingDataset()">清除</button>
                 </div>
               }
@@ -701,6 +750,40 @@
                           @if (hasFieldError(layer.id, 'dilation')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'dilation') }}</div> }
                         </label>
                       </div>
+                    }
+
+                    @if (layer.type === 'residual') {
+                      <div class="row-3">
+                        <label>输出通道
+                          <input type="number" min="1" [(ngModel)]="layer.params.outChannels" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'outChannels')" />
+                          @if (hasFieldError(layer.id, 'outChannels')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'outChannels') }}</div> }
+                        </label>
+                        <label>核大小
+                          <input type="number" min="1" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
+                          @if (hasFieldError(layer.id, 'kernelSize')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div> }
+                        </label>
+                        <label>激活函数
+                          <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
+                            <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div class="row-2">
+                        <label>主分支步长
+                          <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'stride')" />
+                          @if (hasFieldError(layer.id, 'stride')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div> }
+                        </label>
+                        <label>填充
+                          <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'padding')" />
+                          @if (hasFieldError(layer.id, 'padding')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'padding') }}</div> }
+                        </label>
+                      </div>
+                      <label class="checkbox-row">
+                        <input type="checkbox" [(ngModel)]="layer.params.useProjection" (ngModelChange)="onLayerConfigChange()" />
+                        使用 1x1 投影匹配 shortcut 维度
+                      </label>
+                      @if (hasFieldError(layer.id, 'useProjection')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'useProjection') }}</div> }
+                      <div class="muted">残差块会计算 F(x) + x；两路相加前的 H、W、C 必须完全一致。</div>
                     }
 
                     @if (layer.type === 'pool2d') {

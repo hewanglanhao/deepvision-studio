@@ -2,6 +2,7 @@ export type LayerType =
   | 'input'
   | 'conv2d'
   | 'pool2d'
+  | 'residual'
   | 'flatten'
   | 'dense'
   | 'activation'
@@ -81,6 +82,15 @@ export interface Pool2DLayerParams {
   padding: number;
 }
 
+export interface ResidualBlockLayerParams {
+  outChannels: number;
+  kernelSize: number;
+  stride: number;
+  padding: number;
+  activation: Exclude<ActivationType, 'softmax'>;
+  useProjection: boolean;
+}
+
 export interface FlattenLayerParams {}
 
 export interface DenseLayerParams {
@@ -120,6 +130,7 @@ export interface BaseLayer<TType extends LayerType, TParams> {
 export type InputLayer = BaseLayer<'input', InputLayerParams>;
 export type Conv2DLayer = BaseLayer<'conv2d', Conv2DLayerParams>;
 export type Pool2DLayer = BaseLayer<'pool2d', Pool2DLayerParams>;
+export type ResidualBlockLayer = BaseLayer<'residual', ResidualBlockLayerParams>;
 export type FlattenLayer = BaseLayer<'flatten', FlattenLayerParams>;
 export type DenseLayer = BaseLayer<'dense', DenseLayerParams>;
 export type ActivationLayer = BaseLayer<'activation', ActivationLayerParams>;
@@ -130,6 +141,7 @@ export type NetworkLayer =
   | InputLayer
   | Conv2DLayer
   | Pool2DLayer
+  | ResidualBlockLayer
   | FlattenLayer
   | DenseLayer
   | ActivationLayer

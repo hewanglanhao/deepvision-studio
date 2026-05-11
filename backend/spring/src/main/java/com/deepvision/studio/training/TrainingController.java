@@ -40,6 +40,11 @@ public class TrainingController {
     this.jobService = jobService;
   }
 
+  @GetMapping("/datasets")
+  public List<TrainingDatasetOption> listDatasets(@RequestParam(value = "source", required = false) String source) {
+    return datasetService.listDatasets(source);
+  }
+
   @GetMapping("/datasets/builtin")
   public List<TrainingDatasetOption> listBuiltinDatasets() {
     return datasetService.listBuiltin();

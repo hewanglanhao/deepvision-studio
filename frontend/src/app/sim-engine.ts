@@ -117,6 +117,68 @@ export class SimEngine {
         ]
       },
       {
+        id: 'residual-cnn',
+        name: 'Residual CNN',
+        description: 'Conv stem -> Residual Block -> Pool -> Residual Block -> Output',
+        layers: [
+          inputDraft('Image Input'),
+          {
+            type: 'conv2d',
+            name: 'Stem Conv',
+            inputs: [],
+            params: {
+              outChannels: 16,
+              kernelSize: 3,
+              stride: 1,
+              padding: 1,
+              dilation: 1,
+              kernelMatrix: SimEngine.edgeKernel3x3.map((row) => [...row]),
+              activation: 'relu'
+            }
+          },
+          {
+            type: 'residual',
+            name: 'Residual Block 1',
+            inputs: [],
+            params: {
+              outChannels: 16,
+              kernelSize: 3,
+              stride: 1,
+              padding: 1,
+              activation: 'relu',
+              useProjection: false
+            }
+          },
+          {
+            type: 'pool2d',
+            name: 'Downsample',
+            inputs: [],
+            params: {
+              mode: 'max',
+              kernelSize: 2,
+              stride: 2,
+              padding: 0
+            }
+          },
+          {
+            type: 'residual',
+            name: 'Residual Block 2',
+            inputs: [],
+            params: {
+              outChannels: 32,
+              kernelSize: 3,
+              stride: 2,
+              padding: 1,
+              activation: 'relu',
+              useProjection: true
+            }
+          },
+          { type: 'flatten', name: 'Flatten', inputs: [], params: {} },
+          { type: 'dense', name: 'Dense 1', inputs: [], params: { units: 96, activation: 'relu' } },
+          { type: 'output', name: 'Output', inputs: [], params: { units: 10, activation: 'softmax' } }
+        ]
+      },
+      {
         id: 'analyzer-lite',
         name: 'Analyzer Lite',
         description: 'Conv -> Activation -> Pool -> Flatten -> Output',
@@ -290,6 +352,22 @@ export class SimEngine {
       const outW = Math.floor((w + p * 2 - k) / s) + 1;
       return outH > 0 && outW > 0 ? [outH, outW, c] : [];
     }
+    if (layer.type === 'residual') {
+      if (inputShape.length !== 3) {
+        return [];
+      }
+      const [h, w] = inputShape;
+      const k = Math.max(1, layer.params.kernelSize);
+      const s = Math.max(1, layer.params.stride);
+      const p = Math.max(0, layer.params.padding);
+      const midH = Math.floor((h + p * 2 - k) / s) + 1;
+      const midW = Math.floor((w + p * 2 - k) / s) + 1;
+      const outH = Math.floor((midH + p * 2 - k) / 1) + 1;
+      const outW = Math.floor((midW + p * 2 - k) / 1) + 1;
+      return midH > 0 && midW > 0 && outH > 0 && outW > 0
+        ? [outH, outW, Math.max(1, layer.params.outChannels)]
+        : [];
+    }
     if (layer.type === 'flatten') {
       return [SimEngine.shapeElementCount(inputShape)];
     }
@@ -324,6 +402,17 @@ export class SimEngine {
         total += k * k * inC * Math.max(1, layer.params.outChannels);
         total += Math.max(1, layer.params.outChannels);
       }
+      if (layer.type === 'residual') {
+        const inputShape = shapeById.get(layer.inputs[0] ?? -1);
+        const inC = inputShape && inputShape.length === 3 ? inputShape[2] : 1;
+        const outC = Math.max(1, layer.params.outChannels);
+        const k = Math.max(1, layer.params.kernelSize);
+        total += k * k * inC * outC + outC;
+        total += k * k * outC * outC + outC;
+        if (layer.params.useProjection) {
+          total += inC * outC + outC;
+        }
+      }
       if (layer.type === 'dense' || layer.type === 'output') {
         const inputShape = shapeById.get(layer.inputs[0] ?? -1);
         const inDim = Math.max(1, SimEngine.shapeElementCount(inputShape ?? []));
@@ -339,6 +428,7 @@ export class SimEngine {
       input: 'Input',
       conv2d: 'Conv2D',
       pool2d: 'Pool2D',
+      residual: 'Residual',
       flatten: 'Flatten',
       dense: 'Dense',
       activation: 'Activation',
@@ -874,6 +964,9 @@ export class SimEngine {
     }
     if (layer.type === 'pool2d') {
       return layer.params.kernelSize;
+    }
+    if (layer.type === 'residual') {
+      return layer.params.outChannels;
     }
     if (layer.type === 'dense') {
       return layer.params.units;
