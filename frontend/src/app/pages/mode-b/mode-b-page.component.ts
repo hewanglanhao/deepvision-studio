@@ -1704,6 +1704,13 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   layerTypeLabel(t: LayerType): string { return SimEngine.layerTypeLabel(t); }
   cellColor(v: number): string { return SimEngine.cellColor(v); }
   labelPercent(count: number): number { return Math.max(5, (count / this.trainingDatasetMaxLabelCount) * 100); }
+  imagePreviewGroups(ds: TrainingDatasetDetail): Array<{ label: string; images: ImagePreviewItem[] }> {
+    const images = ds.imagePreview ?? [];
+    const labels = ds.labels?.length ? ds.labels : [...new Set(images.map(image => image.label))];
+    return labels
+      .map(label => ({ label, images: images.filter(image => image.label === label) }))
+      .filter(group => group.images.length > 0);
+  }
   pointSvgX(point: PointPreviewItem): number { return 12 + ((point.x + 1) / 2) * 176; }
   pointSvgY(point: PointPreviewItem): number { return 108 - ((point.y + 1) / 2) * 96; }
   formatDuration(seconds: number): string {
@@ -2291,22 +2298,26 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (option.id === 'mnist-1000') {
       return {
         ...base,
-        imagePreview: option.labels.slice(0, 8).map((label, i) => ({
-          name: `mnist_${label}_${i}.png`,
-          label,
-          url: this.svgThumb(label, '#111827', '#f8fafc')
-        }))
+        imagePreview: option.labels.flatMap(label =>
+          Array.from({ length: 3 }, (_, i) => ({
+            name: `mnist_${label}_${i}.png`,
+            label,
+            url: this.svgThumb(label, '#111827', '#f8fafc')
+          }))
+        )
       };
     }
 
     if (option.id === 'cifar10-500' || option.id === 'cifar10-5000') {
       return {
         ...base,
-        imagePreview: option.labels.slice(0, 8).map((label, i) => ({
-          name: `${label}_${i}.png`,
-          label,
-          url: this.svgThumb(label.slice(0, 2).toUpperCase(), DATASET_COLORS[i % DATASET_COLORS.length], '#e0f2fe')
-        }))
+        imagePreview: option.labels.flatMap((label, labelIndex) =>
+          Array.from({ length: 3 }, (_, i) => ({
+            name: `${label}_${i}.png`,
+            label,
+            url: this.svgThumb(label.slice(0, 2).toUpperCase(), DATASET_COLORS[labelIndex % DATASET_COLORS.length], '#e0f2fe')
+          }))
+        )
       };
     }
 

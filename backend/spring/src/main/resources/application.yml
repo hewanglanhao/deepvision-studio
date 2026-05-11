@@ -2,6 +2,10 @@ server:
   port: 8080
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: ${DEEPVISION_MULTIPART_MAX_FILE_SIZE:200MB}
+      max-request-size: ${DEEPVISION_MULTIPART_MAX_REQUEST_SIZE:220MB}
   datasource:
     url: ${DEEPVISION_DB_URL:jdbc:h2:file:./data/deepvision;AUTO_SERVER=TRUE}
     username: ${DEEPVISION_DB_USERNAME:sa}

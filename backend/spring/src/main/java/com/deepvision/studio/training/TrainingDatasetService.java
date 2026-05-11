@@ -49,6 +49,7 @@ public class TrainingDatasetService {
   private static final int MIN_CLASS_COUNT = 2;
   private static final int MIN_ROWS = 10;
   private static final int MIN_SAMPLES_PER_IMAGE_CLASS = 2;
+  private static final int PREVIEW_IMAGES_PER_CLASS = 3;
 
   private final TrainingDatasetRepository datasets;
   private final ObjectMapper objectMapper;
@@ -162,8 +163,9 @@ public class TrainingDatasetService {
     }
     int safeIndex = Math.max(0, index - 1);
     List<String> labels = detail.labels();
-    String label = labels.get(safeIndex % labels.size());
-    String foreground = "mnist-1000".equals(datasetId) ? "#111827" : COLORS.get(safeIndex % COLORS.size());
+    int labelIndex = (safeIndex / PREVIEW_IMAGES_PER_CLASS) % labels.size();
+    String label = labels.get(labelIndex);
+    String foreground = "mnist-1000".equals(datasetId) ? "#111827" : COLORS.get(labelIndex % COLORS.size());
     String background = "mnist-1000".equals(datasetId) ? "#f8fafc" : "#e0f2fe";
     String text = "mnist-1000".equals(datasetId) ? label : label.substring(0, Math.min(2, label.length())).toUpperCase(Locale.ROOT);
     return """
@@ -305,7 +307,7 @@ public class TrainingDatasetService {
     ensureUnder(uploadDatasetDir(datasetId), imageRoot);
 
     Map<String, Integer> labelCounts = new LinkedHashMap<>();
-    List<ImagePreviewItem> previews = new ArrayList<>();
+    Map<String, List<ImagePreviewItem>> previewsByLabel = new LinkedHashMap<>();
     Set<String> sizes = new java.util.LinkedHashSet<>();
     try {
       Files.createDirectories(imageRoot);
@@ -331,9 +333,11 @@ public class TrainingDatasetService {
         try (InputStream input = file.getInputStream()) {
           Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
         }
-        if (previews.size() < 12) {
-          previews.add(new ImagePreviewItem(originalName, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + filename));
-        }
+        addImagePreview(
+            previewsByLabel,
+            label,
+            new ImagePreviewItem(originalName, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + filename)
+        );
       }
     } catch (IOException ex) {
       throw new IllegalArgumentException("Failed to save uploaded image previews.");
@@ -366,7 +370,7 @@ public class TrainingDatasetService {
         0.15,
         0.15,
         mapToDistribution(labelCounts),
-        previews,
+        flattenPreviewGroups(previewsByLabel),
         null,
         null,
         warnings
@@ -379,7 +383,7 @@ public class TrainingDatasetService {
     ensureUnder(uploadDatasetDir(datasetId), imageRoot);
 
     Map<String, Integer> labelCounts = new LinkedHashMap<>();
-    List<ImagePreviewItem> previews = new ArrayList<>();
+    Map<String, List<ImagePreviewItem>> previewsByLabel = new LinkedHashMap<>();
     Set<String> sizes = new java.util.LinkedHashSet<>();
     int imageCount = 0;
     try {
@@ -393,6 +397,9 @@ public class TrainingDatasetService {
           String entryName = entry.getName().replace('\\', '/');
           if (entryName.startsWith("/") || entryName.contains("../")) {
             throw new IllegalArgumentException("ZIP contains unsafe paths.");
+          }
+          if (isIgnoredZipEntry(entryName)) {
+            continue;
           }
           String[] parts = entryName.split("/");
           String filename = parts.length == 0 ? "" : parts[parts.length - 1].trim();
@@ -425,9 +432,11 @@ public class TrainingDatasetService {
           Path target = labelDir.resolve(storedFilename).normalize();
           ensureUnder(labelDir, target);
           Files.write(target, bytes);
-          if (previews.size() < 12) {
-            previews.add(new ImagePreviewItem(filename, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + storedFilename));
-          }
+          addImagePreview(
+              previewsByLabel,
+              label,
+              new ImagePreviewItem(filename, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + storedFilename)
+          );
         }
       }
     } catch (IOException ex) {
@@ -462,7 +471,7 @@ public class TrainingDatasetService {
         0.15,
         0.15,
         mapToDistribution(labelCounts),
-        previews,
+        flattenPreviewGroups(previewsByLabel),
         null,
         null,
         warnings
@@ -543,9 +552,7 @@ public class TrainingDatasetService {
   }
 
   private void saveBuiltinIfMissing(TrainingDatasetDetail detail) {
-    if (!datasets.existsById(detail.id())) {
-      datasets.save(toEntity(detail));
-    }
+    datasets.save(toEntity(detail));
   }
 
   private TrainingDataset toEntity(TrainingDatasetDetail detail) {
@@ -659,13 +666,18 @@ public class TrainingDatasetService {
     List<ImagePreviewItem> localPreviews = localImagePreviews(id);
     if (!localPreviews.isEmpty()) {
       previews.addAll(localPreviews);
+      return new TrainingDatasetDetail(
+          id, name, "builtin", "image", description, sampleCount, labels.size(), inputShape,
+          "70% / 15% / 15%", labels, true, 0.7, 0.15, 0.15,
+          evenDistribution(labels, sampleCount), previews, null, null, List.of()
+      );
     }
-    for (int i = 0; i < Math.min(8, labels.size()); i += 1) {
-      if (previews.size() >= 8) {
-        break;
-      }
+    for (int i = 0; i < labels.size(); i += 1) {
       String label = labels.get(i);
-      previews.add(new ImagePreviewItem(label + "_" + i + ".png", label, "/api/training/datasets/" + id + "/preview/" + (i + 1)));
+      for (int sample = 0; sample < PREVIEW_IMAGES_PER_CLASS; sample += 1) {
+        int previewIndex = i * PREVIEW_IMAGES_PER_CLASS + sample + 1;
+        previews.add(new ImagePreviewItem(label + "_" + sample + ".png", label, "/api/training/datasets/" + id + "/preview/" + previewIndex));
+      }
     }
     return new TrainingDatasetDetail(
         id, name, "builtin", "image", description, sampleCount, labels.size(), inputShape,
@@ -692,7 +704,7 @@ public class TrainingDatasetService {
               .filter(Files::isRegularFile)
               .filter(path -> isLocalPreviewImage(path.getFileName().toString()))
               .sorted()
-              .limit(2)
+              .limit(PREVIEW_IMAGES_PER_CLASS)
               .toList();
           for (Path image : images) {
             String filename = image.getFileName().toString();
@@ -701,9 +713,6 @@ public class TrainingDatasetService {
                 label,
                 "/datasets/builtin/" + datasetId + "/images/" + label + "/" + filename
             ));
-            if (previews.size() >= 8) {
-              return previews;
-            }
           }
         }
       }
@@ -713,12 +722,38 @@ public class TrainingDatasetService {
     return previews;
   }
 
+  private void addImagePreview(Map<String, List<ImagePreviewItem>> previewsByLabel, String label, ImagePreviewItem item) {
+    List<ImagePreviewItem> items = previewsByLabel.computeIfAbsent(label, ignored -> new ArrayList<>());
+    if (items.size() < PREVIEW_IMAGES_PER_CLASS) {
+      items.add(item);
+    }
+  }
+
+  private List<ImagePreviewItem> flattenPreviewGroups(Map<String, List<ImagePreviewItem>> previewsByLabel) {
+    return previewsByLabel.values().stream()
+        .flatMap(List::stream)
+        .toList();
+  }
+
   private boolean isLocalPreviewImage(String filename) {
     int dot = filename.lastIndexOf('.');
     if (dot < 0) {
       return false;
     }
     return IMAGE_EXTENSIONS.contains(filename.substring(dot + 1).toLowerCase(Locale.ROOT));
+  }
+
+  private boolean isIgnoredZipEntry(String entryName) {
+    String normalized = entryName.replace('\\', '/');
+    if (normalized.startsWith("__MACOSX/") || normalized.contains("/__MACOSX/")) {
+      return true;
+    }
+    for (String part : normalized.split("/")) {
+      if (part.equals(".DS_Store") || part.startsWith("._") || part.equals("Thumbs.db")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private List<PointPreviewItem> makePointPreview() {

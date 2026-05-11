@@ -8,6 +8,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -33,5 +34,11 @@ public class ApiExceptionHandler {
         .map(FieldError::getDefaultMessage)
         .orElse("Invalid request.");
     return ResponseEntity.badRequest().body(Map.of("error", message));
+  }
+
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  ResponseEntity<Map<String, String>> uploadTooLarge(MaxUploadSizeExceededException ex) {
+    return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+        .body(Map.of("error", "Uploaded dataset is too large. Please keep one file under 200MB and the whole request under 220MB."));
   }
 }

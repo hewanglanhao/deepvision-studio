@@ -947,7 +947,18 @@
               <div>
                 <div class="section-title" style="margin-bottom:6px">{{ ds.imagePreview?.length ? '图片预览' : ds.tablePreview ? '表格预览' : ds.pointPreview?.length ? '散点预览' : '数据预览' }}</div>
                 @if (ds.imagePreview?.length) {
-                  <div class="image-preview-grid">@for (img of ds.imagePreview; track img.name) { <div class="image-preview-card"><img [src]="img.url" [alt]="img.label" /><span>{{ img.label }}</span></div> }</div>
+                  <div class="image-preview-groups">
+                    @for (group of imagePreviewGroups(ds); track group.label) {
+                      <div class="image-preview-group">
+                        <div class="image-preview-group-title">{{ group.label }}</div>
+                        <div class="image-preview-grid">
+                          @for (img of group.images; track img.url) {
+                            <div class="image-preview-card"><img [src]="img.url" [alt]="img.label" /><span>{{ img.name }}</span></div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
                 } @else if (ds.tablePreview; as table) {
                   <div class="table-preview-wrap"><table class="table-preview"><thead><tr>@for (h of table.headers; track h) { <th>{{ h }}</th> }</tr></thead><tbody>@for (row of table.rows; track $index) { <tr>@for (cell of row; track $index) { <td>{{ cell || '-' }}</td> }</tr> }</tbody></table></div>
                 } @else if (ds.pointPreview?.length) {
