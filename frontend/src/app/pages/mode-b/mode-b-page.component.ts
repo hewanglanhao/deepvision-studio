@@ -336,6 +336,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get selectedTemplate() { return this.modelTemplates.find(t => t.id === this.selectedTemplateId); }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
   get selectedCheckpoint() { return this.trainingCheckpoints.find(item => item.id === this.selectedCheckpointId) ?? null; }
+  get datasetCheckpointHistory(): TrainingCheckpointSummary[] {
+    const datasetId = this.trainingDatasetDetail?.id;
+    if (!datasetId) return [];
+    return this.trainingCheckpoints.filter(item => item.datasetId === datasetId);
+  }
   get inputLayer(): InputLayer | undefined { const l = this.layers.find(l => l.type === 'input'); return l?.type === 'input' ? l : undefined; }
   get outputLayer() { const l = this.layers.find(l => l.type === 'output'); return l?.type === 'output' ? l : undefined; }
   get datasetSamples() { return this.datasets[this.selectedDataset] ?? []; }
@@ -1365,6 +1370,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   async selectTrainingDataset(id: string): Promise<void> {
     if (id === 'custom-upload') {
       this.useImportedTrainingDataset();
+      if (this.authUser) void this.loadTrainingCheckpoints();
       return;
     }
     const option = this.builtinTrainingDatasets.find(d => d.id === id);
@@ -1382,6 +1388,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     } finally {
       this.trainingDatasetLoading = false;
     }
+    if (this.authUser) void this.loadTrainingCheckpoints();
   }
 
   private selectTrainingDatasetLocal(id: string): void {
@@ -1667,13 +1674,14 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   async runSelectedCheckpointTest(): Promise<void> {
-    if (!this.selectedCheckpointId || !this.trainingDatasetDetail) return;
+    const checkpoint = this.selectedCheckpoint;
+    if (!checkpoint) return;
     this.checkpointBusy = true;
     this.checkpointError = '';
     try {
-      await this.trainingSvc.testCheckpoint(this.selectedCheckpointId, {
-        datasetId: this.trainingDatasetDetail.id,
-        layers: this.layers
+      await this.trainingSvc.testCheckpoint(checkpoint.id, {
+        datasetId: checkpoint.datasetId,
+        layers: checkpoint.layers ?? []
       });
     } catch (err) {
       this.checkpointError = err instanceof Error ? err.message : 'Checkpoint 测试失败。';
@@ -1704,6 +1712,30 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   layerTypeLabel(t: LayerType): string { return SimEngine.layerTypeLabel(t); }
   cellColor(v: number): string { return SimEngine.cellColor(v); }
   labelPercent(count: number): number { return Math.max(5, (count / this.trainingDatasetMaxLabelCount) * 100); }
+  checkpointPercent(value: number | null | undefined): string {
+    return value === null || value === undefined ? 'N/A' : `${(value * 100).toFixed(1)}%`;
+  }
+  checkpointBarWidth(value: number | null | undefined): number {
+    return Math.max(0, Math.min(100, (value ?? 0) * 100));
+  }
+  checkpointConfigText(ckpt: TrainingCheckpointSummary): string {
+    const config = ckpt.config;
+    if (!config) return '超参数 N/A';
+    const lr = Number(config.learningRate);
+    const lrText = Number.isFinite(lr) ? lr.toString() : 'N/A';
+    return `${config.optimizer ?? 'Optimizer'} · lr=${lrText} · batch=${config.batchSize ?? 'N/A'} · epoch=${config.totalEpochs ?? ckpt.totalEpochs} · loss=${config.lossFunction ?? 'N/A'}`;
+  }
+  checkpointSplitText(ckpt: TrainingCheckpointSummary): string {
+    const split = ckpt.split;
+    if (!split) return '划分 N/A';
+    const train = Math.round((split.train ?? 0) * 100);
+    const val = Math.round((split.val ?? 0) * 100);
+    const test = Math.round((split.test ?? 0) * 100);
+    return `训练/验证/测试 ${train}%/${val}%/${test}%`;
+  }
+  checkpointLayerText(ckpt: TrainingCheckpointSummary): string {
+    return ckpt.networkDescription || (ckpt.layerSummary ?? []).join(' -> ') || '暂无结构描述';
+  }
   imagePreviewGroups(ds: TrainingDatasetDetail): Array<{ label: string; images: ImagePreviewItem[] }> {
     const images = ds.imagePreview ?? [];
     const labels = ds.labels?.length ? ds.labels : [...new Set(images.map(image => image.label))];

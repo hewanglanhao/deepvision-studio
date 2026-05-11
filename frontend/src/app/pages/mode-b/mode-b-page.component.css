@@ -933,6 +933,29 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   font-size: 12px;
 }
 
+.checkpoint-detail {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.checkpoint-detail-title {
+  margin: 2px 0 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #334155;
+}
+
+.checkpoint-structure {
+  margin-bottom: 7px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .charts-area { flex: 1; overflow-y: auto; padding: 16px 18px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; align-content: start; }
 .chart-wrap { position: relative; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
 .chart-wrap svg { display: block; width: 100%; }
@@ -1012,12 +1035,78 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .task-desc { font-size: 11px; color: var(--text3); margin-top: 2px; }
 .task-tag { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 700; text-transform: uppercase; background: #f5f3ff; color: var(--accent2); margin-top: 4px; border: 1px solid #ddd6fe; }
 
+.side-action-link {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #065f46;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.side-action-link span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.side-action-link small {
+  color: #047857;
+  font-size: 11px;
+}
+
+.side-action-link:hover {
+  border-color: #34d399;
+  background: #d1fae5;
+}
+
 /* ===== 实验对比 ===== */
 .exp-row { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; margin-bottom: 5px; }
 .exp-name { flex: 1; font-size: 13px; color: var(--text); }
 .exp-acc { font-family: monospace; font-size: 13px; font-weight: 700; color: var(--green); flex-shrink: 0; }
 .exp-bar-wrap { width: 60px; height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; flex-shrink: 0; }
 .exp-bar { height: 100%; background: var(--green); border-radius: 999px; }
+.experiment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.checkpoint-exp-row {
+  align-items: flex-start;
+}
+.exp-main {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.exp-sub,
+.exp-structure {
+  color: var(--text3);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.exp-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  width: min(260px, 32%);
+}
+.exp-metrics span {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text2);
+  font-size: 11px;
+  white-space: nowrap;
+}
 
 /* ===== 弹窗 ===== */
 .modal-mask { position: fixed; inset: 0; background: rgba(245, 247, 250, 0.78); display: grid; place-items: center; z-index: 1400; }

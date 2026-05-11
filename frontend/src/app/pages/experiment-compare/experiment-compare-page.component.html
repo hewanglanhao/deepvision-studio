@@ -1,0 +1,156 @@
+<div class="compare-shell">
+  <app-platform-topbar
+    modeLabel="B Mode"
+    modeTitle="实验对比"
+    [statusPills]="topbarStatusPills"
+    [user]="authUser"
+    (logoutRequested)="logout()"
+  />
+
+  <div class="compare-workspace">
+    <aside class="dataset-sidebar">
+      <a class="back-link" routerLink="/mode-b">返回 B 端训练</a>
+
+      <section class="panel">
+        <div class="panel-title">历史数据集</div>
+        @if (!authUser) {
+          <div class="empty-box">
+            <strong>需要登录</strong>
+            <span>登录后才能读取你的训练历史。</span>
+            <a routerLink="/login">去登录</a>
+          </div>
+        } @else {
+          <button class="refresh-btn" (click)="loadCheckpoints()" [disabled]="loading">
+            {{ loading ? '加载中...' : '刷新实验记录' }}
+          </button>
+          @if (datasetOptions.length) {
+            <label class="dataset-select">选择数据集
+              <select [(ngModel)]="selectedDatasetId" (ngModelChange)="selectDataset($event)">
+                @for (dataset of datasetOptions; track dataset.id) {
+                  <option [value]="dataset.id">{{ dataset.name }}</option>
+                }
+              </select>
+            </label>
+            <div class="dataset-list">
+              @for (dataset of datasetOptions; track dataset.id) {
+                <button class="dataset-card" [class.active]="dataset.id === selectedDatasetId" (click)="selectDataset(dataset.id)">
+                  <span class="dataset-name">{{ dataset.name }}</span>
+                  <span class="dataset-meta">{{ dataset.count }} 次训练 · 最佳 {{ checkpointPercent(dataset.bestAccuracy) }}</span>
+                  <span class="dataset-time">{{ dataset.latestCreatedAt | date:'yyyy-MM-dd HH:mm' }}</span>
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="empty-box">
+              <strong>暂无实验记录</strong>
+              <span>完成一次 B 端训练后，这里会按数据集汇总 checkpoint。</span>
+            </div>
+          }
+        }
+      </section>
+    </aside>
+
+    <main class="compare-main">
+      <section class="summary-band">
+        <div>
+          <div class="eyebrow">Dataset Experiment History</div>
+          <h1>{{ selectedDatasetName }}</h1>
+          <p>查看该数据集每次训练保存的网络结构、超参数、数据划分和准确率。</p>
+        </div>
+        <div class="summary-stats">
+          <div><span>训练次数</span><strong>{{ selectedDatasetCheckpoints.length }}</strong></div>
+          <div><span>最佳测试准确率</span><strong>{{ checkpointPercent(selectedDatasetOption?.bestAccuracy) }}</strong></div>
+        </div>
+      </section>
+
+      @if (error) {
+        <div class="error-box">{{ error }}</div>
+      }
+
+      @if (selectedDatasetCheckpoints.length) {
+        <section class="records-grid">
+          @for (checkpoint of selectedDatasetCheckpoints; track checkpoint.id) {
+            <article class="record-panel" [class.active]="checkpoint.id === selectedCheckpoint?.id" (click)="selectCheckpoint(checkpoint.id)">
+              <header class="record-head">
+                <div>
+                  <div class="record-title">{{ checkpoint.name }}</div>
+                  <div class="record-sub">{{ checkpoint.createdAt | date:'yyyy-MM-dd HH:mm' }} · Epoch {{ checkpoint.epoch }} / {{ checkpoint.totalEpochs }}</div>
+                </div>
+                <div class="record-actions">
+                  <span class="signature">#{{ checkpoint.modelSignature.slice(0, 10) }}</span>
+                </div>
+              </header>
+
+              <div class="metric-grid">
+                <div [class]="'metric-card ' + metricTone(checkpoint.trainAccuracy)">
+                  <span>训练准确率</span>
+                  <strong>{{ checkpointPercent(checkpoint.trainAccuracy) }}</strong>
+                  <small>loss {{ checkpoint.trainLoss === null ? 'N/A' : (checkpoint.trainLoss | number:'1.4-4') }}</small>
+                </div>
+                <div [class]="'metric-card ' + metricTone(checkpoint.valAccuracy)">
+                  <span>验证准确率</span>
+                  <strong>{{ checkpointPercent(checkpoint.valAccuracy) }}</strong>
+                  <small>loss {{ checkpoint.valLoss === null ? 'N/A' : (checkpoint.valLoss | number:'1.4-4') }}</small>
+                </div>
+                <div [class]="'metric-card ' + metricTone(checkpoint.testAccuracy)">
+                  <span>测试准确率</span>
+                  <strong>{{ checkpointPercent(checkpoint.testAccuracy) }}</strong>
+                  <small>{{ checkpoint.testSampleCount }} samples</small>
+                </div>
+              </div>
+
+              <div class="accuracy-track">
+                <div [style.width.%]="checkpointBarWidth(checkpoint.testAccuracy)"></div>
+              </div>
+
+              <div class="config-grid">
+                <div><span>超参数</span><strong>{{ checkpointConfigText(checkpoint) }}</strong></div>
+                <div><span>数据划分</span><strong>{{ checkpointSplitText(checkpoint) }}</strong></div>
+              </div>
+
+              <section class="network-editor-shell">
+                <div class="network-editor-head">
+                  <div>
+                    <span class="network-title">网络结构</span>
+                    <span class="network-meta">{{ checkpointLayers(checkpoint).length }} 层</span>
+                  </div>
+                  <span class="read-only">只读</span>
+                </div>
+                <app-network-overview
+                  [layers]="checkpointLayers(checkpoint)"
+                  [selectedLayerId]="checkpoint.id === selectedCheckpoint?.id ? (selectedLayerId ?? -1) : -1"
+                  [shapeHints]="{}"
+                  [errorLayerIds]="[]"
+                  (layerSelected)="selectNetworkLayer(checkpoint, $event)"
+                />
+                <div class="structure-text">{{ checkpointLayerText(checkpoint) }}</div>
+                @if (selectedLayerFor(checkpoint); as layer) {
+                  <div class="layer-param-panel">
+                    <div class="layer-param-head">
+                      <span>{{ layer.name }}</span>
+                      <strong>{{ layerTypeLabel(layer.type) }}</strong>
+                    </div>
+                    <div class="layer-param-grid">
+                      @for (row of layerParamRows(layer); track row.label) {
+                        <div class="layer-param-row">
+                          <span>{{ row.label }}</span>
+                          <strong>{{ row.value }}</strong>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </section>
+            </article>
+          }
+        </section>
+      } @else if (authUser && !loading) {
+        <div class="empty-large">
+          <strong>这个数据集还没有训练记录</strong>
+          <span>回到 B 端选择该数据集完成训练后，保存的 checkpoint 会出现在这里。</span>
+          <a routerLink="/mode-b">去训练</a>
+        </div>
+      }
+    </main>
+  </div>
+</div>

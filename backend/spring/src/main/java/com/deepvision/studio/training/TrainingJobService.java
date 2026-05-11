@@ -177,10 +177,13 @@ public class TrainingJobService {
     return new TrainingControlResponse(jobId, job.status(), "Checkpoint saved: " + checkpoint.getName());
   }
 
-  public List<TrainingCheckpointSummary> listCheckpoints(String username) {
+  public List<TrainingCheckpointSummary> listCheckpoints(String username, String datasetId) {
     requireUser(username);
-    return checkpoints.findByUserUsernameOrderByCreatedAtDesc(username).stream()
-        .map(TrainingCheckpointSummary::from)
+    List<TrainingCheckpoint> rows = datasetId == null || datasetId.isBlank()
+        ? checkpoints.findByUserUsernameOrderByCreatedAtDesc(username)
+        : checkpoints.findByUserUsernameAndDatasetIdOrderByCreatedAtDesc(username, datasetId);
+    return rows.stream()
+        .map(this::toCheckpointSummary)
         .toList();
   }
 
@@ -188,10 +191,6 @@ public class TrainingJobService {
     requireUser(username);
     TrainingCheckpoint checkpoint = checkpoints.findByIdAndUserUsername(checkpointId, username)
         .orElseThrow(() -> new IllegalArgumentException("Checkpoint not found."));
-    String requestedSignature = modelSignature(request.datasetId(), request.layers());
-    if (!checkpoint.getModelSignature().equals(requestedSignature)) {
-      throw new IllegalArgumentException("当前模型结构或数据集与 checkpoint 不一致，不能用该 checkpoint 跑测试集。");
-    }
     return runCheckpointTest(checkpoint);
   }
 
@@ -409,6 +408,7 @@ public class TrainingJobService {
       String configJson = objectMapper.writeValueAsString(job.request().config());
       String splitJson = objectMapper.writeValueAsString(job.request().split());
       String testResultJson = objectMapper.writeValueAsString(testResult);
+      TrainingMetricMessage metric = job.latestMetric();
       TrainingCheckpoint checkpoint = new TrainingCheckpoint(
           user,
           dataset.name() + " · " + job.jobId(),
@@ -421,8 +421,13 @@ public class TrainingJobService {
           configJson,
           splitJson,
           testResultJson,
+          describeNetwork(job.request().layers()),
           job.epoch(),
           job.totalEpochs(),
+          metric == null ? null : metric.loss(),
+          metric == null ? null : metric.accuracy(),
+          metric == null ? null : metric.valLoss(),
+          metric == null ? null : metric.valAccuracy(),
           testResult.path("testLoss").isNull() || testResult.path("testLoss").isMissingNode() ? null : testResult.path("testLoss").asDouble(),
           testResult.path("testAccuracy").isNull() || testResult.path("testAccuracy").isMissingNode() ? null : testResult.path("testAccuracy").asDouble(),
           testResult.path("sampleCount").asInt(0)
@@ -431,6 +436,95 @@ public class TrainingJobService {
     } catch (JsonProcessingException ex) {
       throw new IllegalArgumentException("Failed to serialize checkpoint metadata.");
     }
+  }
+
+  private TrainingCheckpointSummary toCheckpointSummary(TrainingCheckpoint checkpoint) {
+    JsonNode layers = readCheckpointJson(checkpoint.getLayersJson(), objectMapper.createArrayNode());
+    JsonNode config = readCheckpointJson(checkpoint.getConfigJson(), objectMapper.createObjectNode());
+    JsonNode split = readCheckpointJson(checkpoint.getSplitJson(), objectMapper.createObjectNode());
+    JsonNode testResult = readCheckpointJson(checkpoint.getTestResultJson(), objectMapper.createObjectNode());
+    List<String> layerSummary = summarizeLayers(layers);
+    String description = checkpoint.getNetworkDescription();
+    if (description == null || description.isBlank()) {
+      description = String.join(" -> ", layerSummary);
+    }
+    return new TrainingCheckpointSummary(
+        checkpoint.getId(),
+        checkpoint.getName(),
+        checkpoint.getJobId(),
+        checkpoint.getDatasetId(),
+        checkpoint.getDatasetName(),
+        checkpoint.getModelSignature(),
+        description,
+        layerSummary,
+        layers,
+        config,
+        split,
+        testResult,
+        checkpoint.getEpoch(),
+        checkpoint.getTotalEpochs(),
+        checkpoint.getTrainLoss(),
+        checkpoint.getTrainAccuracy(),
+        checkpoint.getValLoss(),
+        checkpoint.getValAccuracy(),
+        checkpoint.getTestLoss(),
+        checkpoint.getTestAccuracy(),
+        checkpoint.getTestSampleCount(),
+        checkpoint.getCreatedAt()
+    );
+  }
+
+  private JsonNode readCheckpointJson(String raw, JsonNode fallback) {
+    if (raw == null || raw.isBlank()) {
+      return fallback;
+    }
+    try {
+      return objectMapper.readTree(raw);
+    } catch (JsonProcessingException ex) {
+      return fallback;
+    }
+  }
+
+  private String describeNetwork(List<JsonNode> layers) {
+    List<String> parts = summarizeLayers(layers == null ? objectMapper.createArrayNode() : objectMapper.valueToTree(layers));
+    return String.join(" -> ", parts);
+  }
+
+  private List<String> summarizeLayers(JsonNode layers) {
+    List<String> summary = new ArrayList<>();
+    if (layers == null || !layers.isArray()) {
+      return summary;
+    }
+    for (JsonNode layer : layers) {
+      if (layer.path("enabled").isBoolean() && !layer.path("enabled").asBoolean()) {
+        continue;
+      }
+      summary.add(summarizeLayer(layer));
+    }
+    return summary;
+  }
+
+  private String summarizeLayer(JsonNode layer) {
+    String type = layer.path("type").asText("layer");
+    JsonNode params = layer.path("params");
+    return switch (type) {
+      case "input" -> {
+        String inputKind = params.path("inputKind").asText("image");
+        if ("table".equals(inputKind)) {
+          yield "CSV输入(" + params.path("featureCount").asInt(0) + "维)";
+        }
+        yield "图像输入(" + params.path("width").asInt(0) + "x" + params.path("height").asInt(0) + "x" + params.path("channels").asInt(0) + ")";
+      }
+      case "conv2d" -> "卷积(" + params.path("outChannels").asInt(0) + "通道,k" + params.path("kernelSize").asInt(0) + ",s" + params.path("stride").asInt(1) + ")";
+      case "residual" -> "残差块(" + params.path("outChannels").asInt(0) + "通道,k" + params.path("kernelSize").asInt(0) + ",投影" + (params.path("useProjection").asBoolean(false) ? "开" : "关") + ")";
+      case "pool2d" -> "池化(" + params.path("mode").asText("max") + ",k" + params.path("kernelSize").asInt(0) + ")";
+      case "flatten" -> "展平";
+      case "dense" -> "全连接(" + params.path("units").asInt(0) + "," + params.path("activation").asText("none") + ")";
+      case "activation" -> "激活(" + params.path("activationType").asText("none") + ")";
+      case "dropout" -> "Dropout(" + String.format(java.util.Locale.US, "%.0f%%", params.path("rate").asDouble(0) * 100) + ")";
+      case "output" -> "输出(" + params.path("units").asInt(0) + "类," + params.path("activation").asText("softmax") + ")";
+      default -> layer.path("name").asText(type);
+    };
   }
 
   private CheckpointTestResult runCheckpointTest(TrainingCheckpoint checkpoint) {

@@ -169,30 +169,23 @@ public final class TrainingDtos {
       String datasetId,
       String datasetName,
       String modelSignature,
+      String networkDescription,
+      List<String> layerSummary,
+      JsonNode layers,
+      JsonNode config,
+      JsonNode split,
+      JsonNode testResult,
       int epoch,
       int totalEpochs,
+      Double trainLoss,
+      Double trainAccuracy,
+      Double valLoss,
+      Double valAccuracy,
       Double testLoss,
       Double testAccuracy,
       int testSampleCount,
       Instant createdAt
-  ) {
-    static TrainingCheckpointSummary from(TrainingCheckpoint checkpoint) {
-      return new TrainingCheckpointSummary(
-          checkpoint.getId(),
-          checkpoint.getName(),
-          checkpoint.getJobId(),
-          checkpoint.getDatasetId(),
-          checkpoint.getDatasetName(),
-          checkpoint.getModelSignature(),
-          checkpoint.getEpoch(),
-          checkpoint.getTotalEpochs(),
-          checkpoint.getTestLoss(),
-          checkpoint.getTestAccuracy(),
-          checkpoint.getTestSampleCount(),
-          checkpoint.getCreatedAt()
-      );
-    }
-  }
+  ) {}
 
   public record TestCheckpointRequest(
       @NotBlank(message = "datasetId is required.")

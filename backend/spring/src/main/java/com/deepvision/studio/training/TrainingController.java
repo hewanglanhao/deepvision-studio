@@ -84,8 +84,11 @@ public class TrainingController {
   }
 
   @GetMapping("/checkpoints")
-  public List<TrainingCheckpointSummary> checkpoints(Principal principal) {
-    return jobService.listCheckpoints(principal == null ? null : principal.getName());
+  public List<TrainingCheckpointSummary> checkpoints(
+      Principal principal,
+      @RequestParam(value = "datasetId", required = false) String datasetId
+  ) {
+    return jobService.listCheckpoints(principal == null ? null : principal.getName(), datasetId);
   }
 
   @PostMapping("/checkpoints/{checkpointId}/test")

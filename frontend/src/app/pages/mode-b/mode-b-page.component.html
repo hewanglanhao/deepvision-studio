@@ -656,6 +656,11 @@
           </div>
         </div>
 
+        <a class="side-action-link" routerLink="/training/experiments">
+          <span>实验对比页面</span>
+          <small>查看历史数据集、网络结构和准确率</small>
+        </a>
+
       </aside>
 
       <main class="training-center">
@@ -1067,8 +1072,16 @@
               <div class="checkpoint-meta">
                 <span>{{ ckpt.datasetName }}</span>
                 <span>Epoch {{ ckpt.epoch }} / {{ ckpt.totalEpochs }}</span>
-                <span>测试准确率 {{ ckpt.testAccuracy === null ? 'N/A' : ((ckpt.testAccuracy * 100) | number:'1.1-1') + '%' }}</span>
+                <span>训练 {{ checkpointPercent(ckpt.trainAccuracy) }}</span>
+                <span>验证 {{ checkpointPercent(ckpt.valAccuracy) }}</span>
+                <span>测试 {{ checkpointPercent(ckpt.testAccuracy) }}</span>
                 <span>签名 {{ ckpt.modelSignature.slice(0, 10) }}</span>
+              </div>
+              <div class="checkpoint-detail">
+                <div class="checkpoint-detail-title">网络结构</div>
+                <div class="checkpoint-structure">{{ checkpointLayerText(ckpt) }}</div>
+                <div class="checkpoint-detail-title">训练设置</div>
+                <div class="checkpoint-structure">{{ checkpointConfigText(ckpt) }} · {{ checkpointSplitText(ckpt) }}</div>
               </div>
             }
           } @else {
@@ -1137,7 +1150,34 @@
             <div class="chart-legend"><span>Norm: {{ trainingGradientNorm | number:'1.4-4' }}</span><span [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">{{ gradientAlert }}</span></div>
           </div>
           <div class="chart-wrap parameter-panel"><div class="chart-label">权重分布直方图</div><div class="weight-histogram">@for (bin of weightHistogramBins; track bin.label) { <div class="weight-bin" [style.height.%]="(bin.value / maxWeightBin) * 100" [title]="bin.label"></div> }</div><div class="chart-legend"><span>Mean {{ trainingWeightMean | number:'1.3-3' }}</span><span>Std {{ trainingWeightStd | number:'1.3-3' }}</span></div></div>
-          <div style="grid-column:1/-1"><div class="section-title" style="margin-bottom:6px">实验对比 <span class="muted">（前端辅助模拟）</span></div>@for (exp of experimentResults; track exp.name) { <div class="exp-row"><span class="exp-name">{{ exp.name }}</span><div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="exp.finalAccuracy*100"></div></div><span class="exp-acc">{{ (exp.finalAccuracy*100).toFixed(1) }}%</span></div> }<button style="margin-top:5px;font-size:12px" (click)="runExperiments()">运行实验对比</button></div>
+          <div class="experiment-history" style="grid-column:1/-1">
+            <div class="experiment-head">
+              <div class="section-title">实验对比 <span class="muted">（当前数据集历史训练）</span></div>
+              <button class="btn-sm" (click)="loadTrainingCheckpoints()" [disabled]="!authUser || checkpointBusy">刷新</button>
+            </div>
+            @if (!authUser) {
+              <div class="muted">登录后可查看当前数据集曾训练过的网络和指标。</div>
+            } @else if (datasetCheckpointHistory.length) {
+              @for (ckpt of datasetCheckpointHistory; track ckpt.id) {
+                <div class="exp-row checkpoint-exp-row">
+                  <div class="exp-main">
+                    <span class="exp-name">{{ ckpt.name }}</span>
+                    <span class="exp-sub">{{ checkpointConfigText(ckpt) }}</span>
+                    <span class="exp-structure">{{ checkpointLayerText(ckpt) }}</span>
+                  </div>
+                  <div class="exp-metrics">
+                    <span>训练 {{ checkpointPercent(ckpt.trainAccuracy) }}</span>
+                    <span>验证 {{ checkpointPercent(ckpt.valAccuracy) }}</span>
+                    <span>测试 {{ checkpointPercent(ckpt.testAccuracy) }}</span>
+                  </div>
+                  <div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="checkpointBarWidth(ckpt.testAccuracy)"></div></div>
+                  <span class="exp-acc">{{ checkpointPercent(ckpt.testAccuracy) }}</span>
+                </div>
+              }
+            } @else {
+              <div class="muted">当前选中的数据集还没有保存过训练记录。</div>
+            }
+          </div>
         </div>
       </main>
     </div>

@@ -31,6 +31,11 @@ export const routes: Routes = [
     data: { mode: 'training' }
   },
   {
+    path: 'training/experiments',
+    loadComponent: () => import('./pages/experiment-compare/experiment-compare-page.component')
+      .then(m => m.ExperimentComparePageComponent)
+  },
+  {
     path: 'mode-c',
     loadComponent: () => import('./pages/mode-c/mode-c-page.component')
       .then(m => m.ModeCPageComponent)

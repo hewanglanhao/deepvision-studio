@@ -50,8 +50,18 @@ export interface TrainingCheckpointSummary {
   datasetId: string;
   datasetName: string;
   modelSignature: string;
+  networkDescription: string;
+  layerSummary: string[];
+  layers: NetworkLayer[];
+  config: (TrainingConfig & { lossFunction?: string }) | null;
+  split: { train?: number; val?: number; test?: number } | null;
+  testResult: unknown;
   epoch: number;
   totalEpochs: number;
+  trainLoss: number | null;
+  trainAccuracy: number | null;
+  valLoss: number | null;
+  valAccuracy: number | null;
   testLoss: number | null;
   testAccuracy: number | null;
   testSampleCount: number;
@@ -216,8 +226,9 @@ export class TrainingRuntimeService implements OnDestroy {
     }
   }
 
-  async listCheckpoints(): Promise<TrainingCheckpointSummary[]> {
-    return this.api.request<TrainingCheckpointSummary[]>('/api/training/checkpoints');
+  async listCheckpoints(datasetId?: string): Promise<TrainingCheckpointSummary[]> {
+    const query = datasetId ? `?datasetId=${encodeURIComponent(datasetId)}` : '';
+    return this.api.request<TrainingCheckpointSummary[]>(`/api/training/checkpoints${query}`);
   }
 
   async testCheckpoint(checkpointId: number, request: Pick<BackendTrainingStartRequest, 'datasetId' | 'layers'>): Promise<TrainingTestResult> {

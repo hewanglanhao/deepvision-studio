@@ -62,11 +62,22 @@ public class TrainingCheckpoint {
   @Column(nullable = false)
   private String testResultJson;
 
+  @Lob
+  private String networkDescription;
+
   @Column(nullable = false)
   private int epoch;
 
   @Column(nullable = false)
   private int totalEpochs;
+
+  private Double trainLoss;
+
+  private Double trainAccuracy;
+
+  private Double valLoss;
+
+  private Double valAccuracy;
 
   private Double testLoss;
 
@@ -92,8 +103,13 @@ public class TrainingCheckpoint {
       String configJson,
       String splitJson,
       String testResultJson,
+      String networkDescription,
       int epoch,
       int totalEpochs,
+      Double trainLoss,
+      Double trainAccuracy,
+      Double valLoss,
+      Double valAccuracy,
       Double testLoss,
       Double testAccuracy,
       int testSampleCount
@@ -109,8 +125,13 @@ public class TrainingCheckpoint {
     this.configJson = configJson;
     this.splitJson = splitJson;
     this.testResultJson = testResultJson;
+    this.networkDescription = networkDescription;
     this.epoch = epoch;
     this.totalEpochs = totalEpochs;
+    this.trainLoss = trainLoss;
+    this.trainAccuracy = trainAccuracy;
+    this.valLoss = valLoss;
+    this.valAccuracy = valAccuracy;
     this.testLoss = testLoss;
     this.testAccuracy = testAccuracy;
     this.testSampleCount = testSampleCount;
@@ -128,8 +149,13 @@ public class TrainingCheckpoint {
   public String getConfigJson() { return configJson; }
   public String getSplitJson() { return splitJson; }
   public String getTestResultJson() { return testResultJson; }
+  public String getNetworkDescription() { return networkDescription; }
   public int getEpoch() { return epoch; }
   public int getTotalEpochs() { return totalEpochs; }
+  public Double getTrainLoss() { return trainLoss; }
+  public Double getTrainAccuracy() { return trainAccuracy; }
+  public Double getValLoss() { return valLoss; }
+  public Double getValAccuracy() { return valAccuracy; }
   public Double getTestLoss() { return testLoss; }
   public Double getTestAccuracy() { return testAccuracy; }
   public int getTestSampleCount() { return testSampleCount; }
