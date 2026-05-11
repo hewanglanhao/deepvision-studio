@@ -96,7 +96,7 @@ public class TrainingDatasetService {
     return datasets.existsById(datasetId);
   }
 
-  public DatasetImportResponse importDataset(MultipartFile[] files) {
+  public DatasetImportResponse importDataset(MultipartFile[] files, String labelColumn, Integer requestedClassCount) {
     if (files == null || files.length == 0) {
       throw new IllegalArgumentException("No dataset files uploaded.");
     }
@@ -134,7 +134,7 @@ public class TrainingDatasetService {
     TrainingDatasetDetail detail = zipFiles.size() == 1
         ? importImageZip(zipFiles.get(0))
         : csvFiles.size() == 1
-        ? importCsv(csvFiles.get(0))
+        ? importCsv(csvFiles.get(0), labelColumn, requestedClassCount)
         : importImages(imageFiles);
     datasets.save(toEntity(detail));
     return new DatasetImportResponse(detail.id(), detail);
@@ -159,7 +159,7 @@ public class TrainingDatasetService {
         """.formatted(background, foreground, escapeXml(text));
   }
 
-  private TrainingDatasetDetail importCsv(MultipartFile file) {
+  private TrainingDatasetDetail importCsv(MultipartFile file, String labelColumn, Integer requestedClassCount) {
     String datasetId = nextUploadId();
     Path datasetDir = uploadDatasetDir(datasetId);
     Path csvTarget = datasetDir.resolve("data.csv").normalize();
@@ -189,14 +189,15 @@ public class TrainingDatasetService {
     if (malformedRows > 0) {
       throw new IllegalArgumentException("CSV row column count must match the header. Found " + malformedRows + " malformed rows.");
     }
-    int labelIndex = detectLabelColumn(headers);
+    int labelIndex = resolveRequiredLabelColumn(headers, labelColumn);
     if (labelIndex < 0) {
-      throw new IllegalArgumentException("CSV must include a label/class/target/category/y/标签/类别 column.");
+      throw new IllegalArgumentException("CSV label column is required.");
     }
+    int classCount = resolveRequiredClassCount(requestedClassCount);
     Map<String, Integer> labelCounts = new LinkedHashMap<>();
     int missingValues = 0;
-    int invalidNumericValues = 0;
     int blankLabelRows = 0;
+    Set<Integer> categoricalColumns = new java.util.LinkedHashSet<>();
     for (List<String> row : rows) {
       for (int i = 0; i < headers.size(); i += 1) {
         if (i >= row.size() || row.get(i).isBlank()) {
@@ -204,7 +205,7 @@ public class TrainingDatasetService {
           continue;
         }
         if (i != labelIndex && !isNumeric(row.get(i))) {
-          invalidNumericValues += 1;
+          categoricalColumns.add(i);
         }
       }
       String label = row.get(labelIndex).trim();
@@ -218,19 +219,22 @@ public class TrainingDatasetService {
     if (labelCounts.isEmpty()) {
       throw new IllegalArgumentException("CSV label column cannot be empty.");
     }
-    if (blankLabelRows > 0) {
-      throw new IllegalArgumentException("CSV label column has " + blankLabelRows + " empty labels.");
-    }
     List<String> labels = new ArrayList<>(labelCounts.keySet());
     if (labels.size() < MIN_CLASS_COUNT) {
       throw new IllegalArgumentException("CSV classification dataset requires at least two classes.");
     }
-    if (invalidNumericValues > 0) {
-      throw new IllegalArgumentException("CSV feature columns must be numeric. Found " + invalidNumericValues + " invalid values.");
+    if (labels.size() > classCount) {
+      throw new IllegalArgumentException("CSV label column has " + labels.size() + " distinct labels, which exceeds the configured class count " + classCount + ".");
+    }
+    int usableRows = rows.size() - blankLabelRows;
+    if (usableRows < MIN_ROWS) {
+      throw new IllegalArgumentException("CSV dataset requires at least " + MIN_ROWS + " labeled data rows.");
     }
     try {
       Files.createDirectories(datasetDir);
       Files.write(csvTarget, bytes);
+      Files.writeString(datasetDir.resolve("label-column.txt"), headers.get(labelIndex), StandardCharsets.UTF_8);
+      Files.writeString(datasetDir.resolve("class-count.txt"), String.valueOf(classCount), StandardCharsets.UTF_8);
     } catch (IOException ex) {
       throw new IllegalArgumentException("Failed to save CSV dataset.");
     }
@@ -239,18 +243,30 @@ public class TrainingDatasetService {
     if (missingValues > 0) {
       warnings.add("发现 " + missingValues + " 个缺失值，训练前建议清洗或填补。");
     }
+    if (blankLabelRows > 0) {
+      warnings.add("标签列中有 " + blankLabelRows + " 行为空，训练时会自动跳过这些样本。");
+    }
+    if (!categoricalColumns.isEmpty()) {
+      warnings.add("检测到 " + categoricalColumns.size() + " 个非数值特征列，训练时会进行简单类别编码。");
+    }
+    if (classCount > labels.size()) {
+      warnings.add("用户设置类别数为 " + classCount + "，当前 CSV 中实际出现 " + labels.size() + " 个标签值。");
+    }
     warnings.addAll(imbalanceWarnings(labelCounts));
 
-    int featureColumns = Math.max(0, headers.size() - 1);
+    int featureColumns = encodedCsvFeatureCount(headers, rows, labelIndex);
+    if (featureColumns <= 0) {
+      throw new IllegalArgumentException("CSV must contain at least one usable feature column.");
+    }
     return new TrainingDatasetDetail(
         datasetId,
         file.getOriginalFilename() == null ? "uploaded.csv" : file.getOriginalFilename(),
         "upload",
         "table",
         "用户上传 CSV 数据集",
-        rows.size(),
-        labels.size(),
-        featureColumns + " columns",
+        usableRows,
+        classCount,
+        featureColumns + " encoded features",
         "70% / 15% / 15%",
         labels,
         true,
@@ -542,6 +558,10 @@ public class TrainingDatasetService {
   }
 
   private TrainingDatasetDetail toDetail(TrainingDataset row) {
+    int classCount = row.getClassCount();
+    if ("upload".equals(row.getSource()) && "table".equals(row.getKind())) {
+      classCount = readUploadClassCount(row.getId()).orElse(classCount);
+    }
     return new TrainingDatasetDetail(
         row.getId(),
         row.getName(),
@@ -549,7 +569,7 @@ public class TrainingDatasetService {
         row.getKind(),
         row.getDescription(),
         row.getSampleCount(),
-        row.getClassCount(),
+        classCount,
         row.getInputShape(),
         row.getRecommendedSplit(),
         readList(row.getLabelsJson(), String.class),
@@ -563,6 +583,20 @@ public class TrainingDatasetService {
         readList(row.getPointPreviewJson(), PointPreviewItem.class),
         readList(row.getWarningsJson(), String.class)
     );
+  }
+
+  private java.util.Optional<Integer> readUploadClassCount(String datasetId) {
+    Path path = uploadDatasetDir(datasetId).resolve("class-count.txt").normalize();
+    ensureUnder(uploadDatasetDir(datasetId), path);
+    if (!Files.isRegularFile(path)) {
+      return java.util.Optional.empty();
+    }
+    try {
+      int value = Integer.parseInt(Files.readString(path, StandardCharsets.UTF_8).trim());
+      return value >= MIN_CLASS_COUNT ? java.util.Optional.of(value) : java.util.Optional.empty();
+    } catch (IOException | NumberFormatException ex) {
+      return java.util.Optional.empty();
+    }
   }
 
   private String writeJson(Object value) {
@@ -748,6 +782,41 @@ public class TrainingDatasetService {
     return List.of();
   }
 
+  private int encodedCsvFeatureCount(List<String> headers, List<List<String>> rows, int labelIndex) {
+    int count = 0;
+    for (int i = 0; i < headers.size(); i += 1) {
+      if (i == labelIndex || isIgnoredCsvFeatureColumn(headers.get(i))) {
+        continue;
+      }
+      Set<String> values = new java.util.LinkedHashSet<>();
+      boolean numeric = true;
+      for (List<String> row : rows) {
+        String value = i < row.size() ? row.get(i).trim() : "";
+        if (value.isBlank()) {
+          continue;
+        }
+        values.add(value);
+        if (!isNumeric(value)) {
+          numeric = false;
+        }
+      }
+      if (values.isEmpty()) {
+        continue;
+      }
+      count += numeric ? 1 : values.size();
+    }
+    return count;
+  }
+
+  private boolean isIgnoredCsvFeatureColumn(String header) {
+    String normalized = header == null ? "" : header.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9\\p{IsHan}]", "");
+    return normalized.equals("id")
+        || normalized.equals("studentid")
+        || normalized.equals("name")
+        || normalized.equals("姓名")
+        || normalized.endsWith("id");
+  }
+
   private boolean isCsvFile(MultipartFile file) {
     String name = safeLowerName(file);
     String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
@@ -833,21 +902,37 @@ public class TrainingDatasetService {
     return cells;
   }
 
-  private int detectLabelColumn(List<String> headers) {
-    List<String> candidates = List.of("label", "labels", "class", "category", "target", "y", "标签", "类别");
-    List<String> names = headers.stream().map(name -> name.trim().toLowerCase(Locale.ROOT)).toList();
-    for (int i = 0; i < names.size(); i += 1) {
-      if (candidates.contains(names.get(i))) {
+  private int resolveRequiredLabelColumn(List<String> headers, String labelColumn) {
+    if (labelColumn == null || labelColumn.isBlank()) {
+      throw new IllegalArgumentException("Please choose a CSV label column before importing.");
+    }
+    String requested = labelColumn.trim();
+    for (int i = 0; i < headers.size(); i += 1) {
+      if (headers.get(i).trim().equals(requested)) {
         return i;
       }
     }
-    for (int i = 0; i < names.size(); i += 1) {
-      String name = names.get(i);
-      if (candidates.stream().anyMatch(name::contains)) {
+    String normalizedRequested = normalizeColumnName(requested);
+    for (int i = 0; i < headers.size(); i += 1) {
+      if (normalizeColumnName(headers.get(i)).equals(normalizedRequested)) {
         return i;
       }
     }
-    return -1;
+    throw new IllegalArgumentException("Selected CSV label column does not exist: " + requested);
+  }
+
+  private int resolveRequiredClassCount(Integer classCount) {
+    if (classCount == null) {
+      throw new IllegalArgumentException("Please enter CSV class count before importing.");
+    }
+    if (classCount < MIN_CLASS_COUNT) {
+      throw new IllegalArgumentException("CSV class count must be at least " + MIN_CLASS_COUNT + ".");
+    }
+    return classCount;
+  }
+
+  private String normalizeColumnName(String value) {
+    return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
   }
 
   private String labelFromImageName(String originalName) {

@@ -247,7 +247,10 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     message: '尚未导入自定义数据。',
     files: [],
     detectedKind: null,
-    detail: null
+    detail: null,
+    csvHeaders: [],
+    selectedLabelColumn: '',
+    selectedClassCount: null
   };
 
   private subs = new Subscription();
@@ -388,6 +391,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
 
     if (this.inputLayer && ds.kind === 'image') {
+      if (this.inputLayer.params.inputKind === 'table') {
+        issues.push({ level: 'error', message: '图像数据集需要使用图像输入层，请把输入类型改为“图像输入”。' });
+      }
       const shape = ds.inputShape.match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)/i);
       if (shape) {
         const [, h, w, c] = shape.map(Number);
@@ -398,8 +404,18 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (ds.kind !== 'image') {
-      issues.push({ level: 'warn', message: '表格/二维数据训练时将由后端转换为向量输入。' });
+    if (ds.kind === 'table' || ds.kind === 'points') {
+      if (this.inputLayer?.params.inputKind !== 'table') {
+        issues.push({ level: 'error', message: 'CSV/表格数据是向量输入，请把输入层类型改为“CSV 向量输入”，或选择 CSV / Tabular MLP 模板。' });
+      }
+      const imageOnlyLayers = this.layers.filter(layer => ['conv2d', 'pool2d', 'residual'].includes(layer.type));
+      if (imageOnlyLayers.length > 0) {
+        issues.push({ level: 'error', message: 'CSV/表格数据不能直接使用 Conv2D、池化或残差块，请改用 Dense / Activation / Dropout / Output。' });
+      }
+      if (this.layers.some(layer => layer.type === 'flatten')) {
+        issues.push({ level: 'warn', message: 'CSV/表格数据已经是向量，Flatten 通常不需要。' });
+      }
+      issues.push({ level: 'warn', message: 'CSV/表格数据训练时会由后端进行数值/类别特征编码，并作为向量输入。' });
     }
 
     if (!this.layers.some(l => l.type === 'dense' || l.type === 'conv2d')) {
@@ -963,6 +979,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     } as NetworkLayer));
     this.nextLayerId = this.layers.length + 1;
     this.selectedLayerId = this.layers[1]?.id ?? this.layers[0]?.id ?? -1;
+    this.syncTemplateWithTrainingDataset();
     this.rebuildTopology();
     this.rebuildInputAsset();
     this.runForward();
@@ -1388,7 +1405,10 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       message: '尚未导入自定义数据。',
       files: [],
       detectedKind: null,
-      detail: null
+      detail: null,
+      csvHeaders: [],
+      selectedLabelColumn: '',
+      selectedClassCount: null
     };
     if (this.selectedTrainingDatasetId === 'custom-upload' || this.selectedTrainingDatasetId === importedId) {
       void this.selectTrainingDataset('mnist-1000');
@@ -1406,7 +1426,10 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       message: '正在解析本地文件...',
       files,
       detectedKind: null,
-      detail: null
+      detail: null,
+      csvHeaders: [],
+      selectedLabelColumn: '',
+      selectedClassCount: null
     };
 
     try {
@@ -1428,7 +1451,77 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       if (!zipFiles.length && !csvFiles.length && !imageFiles.length) {
         throw new Error('仅支持 ZIP 图片数据集、CSV 文件或少量图片文件。');
       }
-      const imported = await this.trainingDatasetApi.importDataset(files);
+      if (csvFiles.length === 1) {
+        const headers = await this.readCsvHeaders(csvFiles[0]);
+        if (headers.length < 2) {
+          throw new Error('CSV 至少需要 2 列：特征列和标签列。');
+        }
+        this.datasetImportDraft = {
+          status: 'pending',
+          message: '请选择 CSV 中哪一列作为标签列，然后再导入。',
+          files,
+          detectedKind: 'table',
+          detail: null,
+          csvHeaders: headers,
+          selectedLabelColumn: '',
+          selectedClassCount: null
+        };
+        this.trainingDatasetError = '';
+        return;
+      }
+      await this.importTrainingDatasetFiles(files);
+    } catch (err) {
+      this.datasetImportDraft = {
+        status: 'error',
+        message: err instanceof Error ? err.message : '导入失败。',
+        files,
+        detectedKind: null,
+        detail: null,
+        csvHeaders: [],
+        selectedLabelColumn: '',
+        selectedClassCount: null
+      };
+      this.trainingDatasetError = this.datasetImportDraft.message;
+    }
+  }
+
+  async confirmCsvDatasetImport(): Promise<void> {
+    const files = this.datasetImportDraft.files;
+    const labelColumn = this.datasetImportDraft.selectedLabelColumn;
+    const classCount = Number(this.datasetImportDraft.selectedClassCount);
+    if (!files.length || this.datasetImportDraft.detectedKind !== 'table') {
+      this.trainingDatasetError = '请先选择一个 CSV 文件。';
+      return;
+    }
+    if (!labelColumn) {
+      this.trainingDatasetError = '请选择 CSV 标签列。';
+      this.datasetImportDraft = {
+        ...this.datasetImportDraft,
+        status: 'error',
+        message: '请选择 CSV 标签列后再导入。'
+      };
+      return;
+    }
+    if (!Number.isInteger(classCount) || classCount < 2) {
+      this.trainingDatasetError = '请输入至少为 2 的类别数。';
+      this.datasetImportDraft = {
+        ...this.datasetImportDraft,
+        status: 'error',
+        message: '请输入至少为 2 的类别数后再导入。'
+      };
+      return;
+    }
+    await this.importTrainingDatasetFiles(files, labelColumn, classCount);
+  }
+
+  private async importTrainingDatasetFiles(files: File[], labelColumn?: string, classCount?: number): Promise<void> {
+    try {
+      this.datasetImportDraft = {
+        ...this.datasetImportDraft,
+        status: 'pending',
+        message: '正在上传并校验数据集...'
+      };
+      const imported = await this.trainingDatasetApi.importDataset(files, labelColumn, classCount);
       const detail = imported.detail;
       this.upsertTrainingDatasetOption(detail);
 
@@ -1437,17 +1530,19 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
         message: detail.hasLabels ? '后端已导入自定义数据，可用于训练。' : '后端已解析文件，但缺少可训练标签。',
         files,
         detectedKind: detail.kind,
-        detail
+        detail,
+        csvHeaders: this.datasetImportDraft.csvHeaders,
+        selectedLabelColumn: labelColumn ?? '',
+        selectedClassCount: classCount ?? null
       };
       this.trainingDatasetDetail = detail;
       this.selectedTrainingDatasetId = detail.id;
       this.trainingDatasetError = detail.hasLabels ? '' : '当前导入数据缺少标签，训练前需要补充标签列或按类别命名图片。';
     } catch (err) {
       this.datasetImportDraft = {
+        ...this.datasetImportDraft,
         status: 'error',
         message: err instanceof Error ? err.message : '导入失败。',
-        files,
-        detectedKind: null,
         detail: null
       };
       this.trainingDatasetError = this.datasetImportDraft.message;
@@ -1641,13 +1736,22 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       }
 
       if (layer.type === 'input') {
-        if (!isIntAtLeast(layer.params.height, 1)) addIssue(layer, 'error', '输入高度必须是大于 0 的整数。', 'height');
-        if (!isIntAtLeast(layer.params.width, 1)) addIssue(layer, 'error', '输入宽度必须是大于 0 的整数。', 'width');
-        if (!isIntAtLeast(layer.params.channels, 1)) addIssue(layer, 'error', '输入通道数必须是大于 0 的整数。', 'channels');
         const p = layer.params;
-        currentShape = isIntAtLeast(p.height, 1) && isIntAtLeast(p.width, 1) && isIntAtLeast(p.channels, 1)
-          ? [Math.floor(intValue(p.height)), Math.floor(intValue(p.width)), Math.floor(intValue(p.channels))]
-          : [];
+        if (p.inputKind === 'table') {
+          if (!isIntAtLeast(p.featureCount, 1)) addIssue(layer, 'error', 'CSV 特征数必须是大于 0 的整数。', 'featureCount');
+          const expected = this.trainingInputShape();
+          if (this.trainingDatasetDetail?.kind !== 'image' && expected.length === 1 && isIntAtLeast(p.featureCount, 1) && intValue(p.featureCount) !== expected[0]) {
+            addIssue(layer, 'warning', `当前输入特征数为 ${p.featureCount}，数据集预估为 ${expected[0]} 个特征。`, 'featureCount');
+          }
+          currentShape = isIntAtLeast(p.featureCount, 1) ? [Math.floor(intValue(p.featureCount))] : [];
+        } else {
+          if (!isIntAtLeast(p.height, 1)) addIssue(layer, 'error', '输入高度必须是大于 0 的整数。', 'height');
+          if (!isIntAtLeast(p.width, 1)) addIssue(layer, 'error', '输入宽度必须是大于 0 的整数。', 'width');
+          if (!isIntAtLeast(p.channels, 1)) addIssue(layer, 'error', '输入通道数必须是大于 0 的整数。', 'channels');
+          currentShape = isIntAtLeast(p.height, 1) && isIntAtLeast(p.width, 1) && isIntAtLeast(p.channels, 1)
+            ? [Math.floor(intValue(p.height)), Math.floor(intValue(p.width)), Math.floor(intValue(p.channels))]
+            : [];
+        }
       } else if (layer.type === 'conv2d') {
         if (currentShape.length !== 3) {
           addIssue(layer, 'error', `Conv2D 需要 3D 图像或特征图输入，当前输入为 ${SimEngine.formatShapeLabel(currentShape)}。`);
@@ -1773,6 +1877,31 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (ds?.kind === 'points') return [2];
     const featureMatch = ds?.inputShape.match(/(\d+)/);
     return [featureMatch ? Math.max(1, Number(featureMatch[1])) : 1];
+  }
+
+  private syncTemplateWithTrainingDataset(): void {
+    const ds = this.trainingDatasetDetail;
+    if (!ds) return;
+    const input = this.layers.find((layer): layer is InputLayer => layer.type === 'input');
+    const output = this.layers.find(layer => layer.type === 'output');
+    if (input) {
+      if (ds.kind === 'image') {
+        input.params.inputKind = 'image';
+        const parsed = ds.inputShape.match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)/i);
+        if (parsed) {
+          input.params.height = Number(parsed[1]);
+          input.params.width = Number(parsed[2]);
+          input.params.channels = Number(parsed[3]);
+        }
+      } else {
+        const shape = this.trainingInputShape();
+        input.params.inputKind = 'table';
+        input.params.featureCount = shape.length === 1 ? shape[0] : Math.max(1, input.params.featureCount ?? 1);
+      }
+    }
+    if (output?.type === 'output' && ds.classCount > 0) {
+      output.params.units = ds.classCount;
+    }
   }
 
   private normBars(vals: number[]): number[] {
@@ -2253,6 +2382,13 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return file.type === 'text/csv'
       || file.type === 'application/vnd.ms-excel'
       || file.name.toLowerCase().endsWith('.csv');
+  }
+
+  private async readCsvHeaders(file: File): Promise<string[]> {
+    const text = await file.text();
+    const firstLine = text.split(/\r?\n/).find(line => line.trim().length > 0);
+    if (!firstLine) return [];
+    return this.parseCsvLine(firstLine).filter(header => header.trim().length > 0);
   }
 
   private parseCsvLine(line: string): string[] {

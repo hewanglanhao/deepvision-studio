@@ -160,6 +160,20 @@
               <label>名称 <input [(ngModel)]="layer.name" (ngModelChange)="onLayerConfigChange()" /></label>
 
               @if (layer.type === 'input') {
+                <div class="row-2">
+                  <label>输入类型
+                    <select [(ngModel)]="layer.params.inputKind" (ngModelChange)="onLayerConfigChange()">
+                      <option value="image">图像输入</option>
+                      <option value="table">CSV 向量输入</option>
+                    </select>
+                  </label>
+                  @if (layer.params.inputKind === 'table') {
+                    <label>特征数
+                      <input type="number" min="1" [(ngModel)]="layer.params.featureCount" (ngModelChange)="onLayerConfigChange()" />
+                    </label>
+                  }
+                </div>
+                @if (layer.params.inputKind !== 'table') {
                 <div class="row-3">
                   @if (!uploadedImageUrl) {
                     <label>缩放模式
@@ -195,6 +209,7 @@
                   <input type="checkbox" [(ngModel)]="layer.params.preprocessing.invert" (ngModelChange)="onLayerConfigChange()" />
                   像素值取反
                 </div>
+                }
               }
 
               @if (layer.type === 'conv2d') {
@@ -595,10 +610,27 @@
           <label style="margin-top:8px">自定义导入
             <input type="file" multiple accept=".zip,application/zip,.csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" [disabled]="trainingDatasetLoading" />
           </label>
-          <div class="muted">通过 Spring Boot 导入：支持 1 个 CSV，1 个“类别目录/图片”的 ZIP，或按“类别_序号.jpg”命名的图片文件。</div>
+          <div class="muted">通过 Spring Boot 导入：支持两种数据集：1. 1 个 CSV，2. 1 个“类别目录/图片”的 ZIP，或按“类别_序号.jpg”命名的图片文件。</div>
           @if (datasetImportDraft.status !== 'idle') {
             <div [class]="datasetImportDraft.status === 'ready' ? 'success-box' : 'warn-box'" style="margin-top:6px">
               {{ datasetImportDraft.message }}
+              @if (datasetImportDraft.detectedKind === 'table' && !datasetImportDraft.detail) {
+                <label style="margin-top:8px">CSV 标签列
+                  <select [(ngModel)]="datasetImportDraft.selectedLabelColumn">
+                    <option value="">请选择标签列</option>
+                    @for (header of datasetImportDraft.csvHeaders; track header) {
+                      <option [value]="header">{{ header }}</option>
+                    }
+                  </select>
+                </label>
+                <label style="margin-top:8px">类别数
+                  <input type="number" min="2" step="1" placeholder="例如 10" [(ngModel)]="datasetImportDraft.selectedClassCount" />
+                </label>
+                <div class="btn-row" style="margin-top:6px">
+                  <button class="btn-sm" (click)="confirmCsvDatasetImport()" [disabled]="!datasetImportDraft.selectedLabelColumn || !datasetImportDraft.selectedClassCount">导入 CSV</button>
+                  <button class="btn-ghost btn-sm" (click)="clearImportedTrainingDataset()">取消</button>
+                </div>
+              }
               @if (datasetImportDraft.detail) {
                 <div class="btn-row" style="margin-top:6px">
                   @if (selectedTrainingDatasetId !== datasetImportDraft.detail.id) {
@@ -653,7 +685,10 @@
             </div>
             <div class="dataset-stat-grid">
               <div class="dataset-stat"><span>样本数量</span><strong>{{ ds.sampleCount }}</strong></div>
-              <div class="dataset-stat"><span>类别数量</span><strong>{{ ds.classCount }}</strong></div>
+              <div class="dataset-stat"><span>{{ ds.kind === 'table' ? '配置类别数' : '类别数量' }}</span><strong>{{ ds.classCount }}</strong></div>
+              @if (ds.kind === 'table') {
+                <div class="dataset-stat"><span>标签取值数</span><strong>{{ ds.labels.length }}</strong></div>
+              }
               <div class="dataset-stat"><span>输入维度</span><strong>{{ ds.inputShape }}</strong></div>
               <div class="dataset-stat"><span>划分比例</span><strong>{{ (ds.trainRatio*100) | number:'1.0-0' }} / {{ (ds.valRatio*100) | number:'1.0-0' }} / {{ (ds.testRatio*100) | number:'1.0-0' }}</strong></div>
             </div>
@@ -704,6 +739,21 @@
                     <label>名称 <input [(ngModel)]="layer.name" (ngModelChange)="onLayerConfigChange()" /></label>
 
                     @if (layer.type === 'input') {
+                      <div class="row-2">
+                        <label>输入类型
+                          <select [(ngModel)]="layer.params.inputKind" (ngModelChange)="onLayerConfigChange()">
+                            <option value="image">图像输入</option>
+                            <option value="table">CSV 向量输入</option>
+                          </select>
+                        </label>
+                        @if (layer.params.inputKind === 'table') {
+                          <label>特征数
+                            <input type="number" min="1" [(ngModel)]="layer.params.featureCount" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'featureCount')" />
+                            @if (hasFieldError(layer.id, 'featureCount')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'featureCount') }}</div> }
+                          </label>
+                        }
+                      </div>
+                      @if (layer.params.inputKind !== 'table') {
                       <div class="row-3">
                         <label>输入宽度
                           <input type="number" min="1" [(ngModel)]="layer.params.width" (ngModelChange)="onLayerConfigChange()" [class.field-error]="hasFieldError(layer.id, 'width')" />
@@ -718,6 +768,7 @@
                           @if (hasFieldError(layer.id, 'channels')) { <div class="field-error-msg">{{ fieldErrorText(layer.id, 'channels') }}</div> }
                         </label>
                       </div>
+                      }
                     }
 
                     @if (layer.type === 'conv2d') {

@@ -11,6 +11,7 @@ export type LayerType =
 
 export type ActivationType = 'none' | 'relu' | 'tanh' | 'gelu' | 'sigmoid' | 'softmax';
 export type ColorMode = 'grayscale' | 'rgb';
+export type InputKind = 'image' | 'table';
 export type PoolMode = 'max' | 'avg';
 export type ResizeMode = 'none' | 'fit';
 
@@ -50,9 +51,11 @@ export interface InputPreprocessConfig {
 }
 
 export interface InputLayerParams {
+  inputKind: InputKind;
   width: number;
   height: number;
   channels: number;
+  featureCount: number;
   colorMode: ColorMode;
   preprocessing: InputPreprocessConfig;
 }
@@ -309,7 +312,7 @@ export interface TrainingDataInfo {
 
 export type TrainingDatasetSource = 'builtin' | 'upload';
 export type TrainingDatasetKind = 'image' | 'table' | 'points';
-export type DatasetUploadStatus = 'idle' | 'ready' | 'error';
+export type DatasetUploadStatus = 'idle' | 'pending' | 'ready' | 'error';
 
 export interface TrainingDatasetOption {
   id: string;
@@ -366,6 +369,9 @@ export interface DatasetImportDraft {
   files: File[];
   detectedKind: TrainingDatasetKind | null;
   detail: TrainingDatasetDetail | null;
+  csvHeaders: string[];
+  selectedLabelColumn: string;
+  selectedClassCount: number | null;
 }
 
 export interface PresetTask {

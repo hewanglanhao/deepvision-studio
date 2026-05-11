@@ -56,26 +56,58 @@ class ImageClassificationDataset(Dataset):
 
 
 class CsvClassificationDataset(Dataset):
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, label_column: str, class_count: int | None = None) -> None:
         rows: list[list[str]]
         with path.open("r", encoding="utf-8", newline="") as f:
             reader = csv.reader(f)
             headers = next(reader)
             rows = [row for row in reader if row]
-        label_index = detect_label_column(headers)
+        label_index = resolve_label_column(headers, label_column)
         if label_index < 0:
-            raise ValueError(f"No label/class/target column found in {path}")
-        labels = sorted({row[label_index].strip() for row in rows})
+            raise ValueError(f"Label column {label_column} not found in {path}")
+        normalized_rows: list[list[str]] = []
+        for row in rows:
+            normalized = (row + [""] * len(headers))[:len(headers)]
+            if normalized[label_index].strip():
+                normalized_rows.append(normalized)
+        if not normalized_rows:
+            raise ValueError(f"No labeled rows found in {path}")
+        labels = sorted({row[label_index].strip() for row in normalized_rows})
+        if class_count is not None and class_count < len(labels):
+            raise ValueError(
+                f"Configured class count {class_count} is smaller than {len(labels)} labels found in {path}"
+            )
         self.classes = labels
+        if class_count is not None and class_count > len(labels):
+            self.classes = labels + [f"class {i + 1}" for i in range(len(labels), class_count)]
         label_to_id = {label: i for i, label in enumerate(labels)}
+        feature_indices = [
+            i for i, header in enumerate(headers)
+            if i != label_index and not is_ignored_feature_column(header)
+        ]
+        feature_specs: list[dict[str, Any]] = []
+        for i in feature_indices:
+            values = [row[i].strip() for row in normalized_rows if row[i].strip()]
+            if not values:
+                continue
+            if all(is_float(value) for value in values):
+                feature_specs.append({"kind": "numeric", "index": i})
+            else:
+                categories = sorted(set(values))
+                feature_specs.append({"kind": "categorical", "index": i, "categories": categories})
+        if not feature_specs:
+            raise ValueError(f"No usable feature columns found in {path}")
         features: list[list[float]] = []
         targets: list[int] = []
-        for row in rows:
+        for row in normalized_rows:
             values: list[float] = []
-            for i, cell in enumerate(row):
-                if i == label_index:
-                    continue
-                values.append(float(cell) if cell.strip() else 0.0)
+            for spec in feature_specs:
+                cell = row[int(spec["index"])].strip()
+                if spec["kind"] == "numeric":
+                    values.append(float(cell) if cell else 0.0)
+                else:
+                    categories = list(spec["categories"])
+                    values.extend(1.0 if cell == category else 0.0 for category in categories)
             features.append(values)
             targets.append(label_to_id[row[label_index].strip()])
         self.x = torch.tensor(features, dtype=torch.float32)
@@ -306,9 +338,9 @@ def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any
         image_root = dataset_root / "builtin" / dataset_id / "images"
         return ImageClassificationDataset(image_root, input_shape[0], input_shape[1], input_shape[2])
     if dataset_id == "iris":
-        return CsvClassificationDataset(dataset_root / "builtin" / "iris" / "iris.csv")
+        return CsvClassificationDataset(dataset_root / "builtin" / "iris" / "iris.csv", "label")
     if dataset_id == "points-2d":
-        return CsvClassificationDataset(dataset_root / "builtin" / "points-2d" / "points.csv")
+        return CsvClassificationDataset(dataset_root / "builtin" / "points-2d" / "points.csv", "label")
     upload_root = dataset_root / "upload" / dataset_id
     if upload_root.exists():
         image_root = upload_root / "images"
@@ -316,7 +348,15 @@ def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any
         if image_root.exists():
             return ImageClassificationDataset(image_root, input_shape[0], input_shape[1], input_shape[2])
         if csv_path.exists():
-            return CsvClassificationDataset(csv_path)
+            label_column_path = upload_root / "label-column.txt"
+            if not label_column_path.exists():
+                raise ValueError(f"Uploaded CSV dataset {dataset_id} has no label-column.txt")
+            label_column = label_column_path.read_text(encoding="utf-8").strip()
+            class_count_path = upload_root / "class-count.txt"
+            class_count = None
+            if class_count_path.exists():
+                class_count = int(class_count_path.read_text(encoding="utf-8").strip())
+            return CsvClassificationDataset(csv_path, label_column, class_count)
     raise ValueError(f"Dataset {dataset_id} is not available to the Python trainer.")
 
 
@@ -624,16 +664,33 @@ def default_shape(dataset_id: str) -> tuple[int, int, int]:
     return 28, 28, 1
 
 
-def detect_label_column(headers: list[str]) -> int:
-    candidates = {"label", "labels", "class", "category", "target", "y", "标签", "类别"}
-    lowered = [header.strip().lower() for header in headers]
-    for i, name in enumerate(lowered):
-        if name in candidates:
+def resolve_label_column(headers: list[str], label_column: str) -> int:
+    requested = label_column.strip()
+    for i, header in enumerate(headers):
+        if header.strip() == requested:
             return i
-    for i, name in enumerate(lowered):
-        if any(candidate in name for candidate in candidates):
+    normalized_requested = normalize_column_name(requested)
+    for i, header in enumerate(headers):
+        if normalize_column_name(header) == normalized_requested:
             return i
     return -1
+
+
+def normalize_column_name(name: str) -> str:
+    return "".join(ch for ch in name.lower() if ch.isalnum() or "\u4e00" <= ch <= "\u9fff")
+
+
+def is_float(value: str) -> bool:
+    try:
+        float(value)
+        return True
+    except ValueError:
+        return False
+
+
+def is_ignored_feature_column(header: str) -> bool:
+    normalized = normalize_column_name(header)
+    return normalized in {"id", "studentid", "name", "姓名"} or normalized.endswith("id")
 
 
 def emit(payload: dict[str, Any]) -> None:

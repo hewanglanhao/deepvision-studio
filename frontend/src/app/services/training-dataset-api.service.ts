@@ -28,10 +28,16 @@ export class TrainingDatasetApiService {
     return this.normalizeDatasetDetail(await this.readJson<TrainingDatasetDetail>(response));
   }
 
-  async importDataset(files: File[], signal?: AbortSignal): Promise<DatasetImportResponse> {
+  async importDataset(files: File[], labelColumn?: string, classCount?: number, signal?: AbortSignal): Promise<DatasetImportResponse> {
     const form = new FormData();
     for (const file of files) {
       form.append('files', file, file.name);
+    }
+    if (labelColumn) {
+      form.append('labelColumn', labelColumn);
+    }
+    if (typeof classCount === 'number' && Number.isFinite(classCount)) {
+      form.append('classCount', String(classCount));
     }
 
     const response = await fetch(`${this.api.baseUrl}${this.basePath}/imports`, {

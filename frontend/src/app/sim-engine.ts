@@ -39,9 +39,11 @@ export class SimEngine {
       name,
       inputs: [],
       params: {
+        inputKind: 'image',
         width: 32,
         height: 32,
         channels: 3,
+        featureCount: 4,
         colorMode: 'rgb',
         preprocessing: {
           resizeMode: 'fit',
@@ -53,8 +55,41 @@ export class SimEngine {
         }
       }
     });
+    const tableInputDraft = (name = 'CSV Input', featureCount = 8): LayerDraft => ({
+      type: 'input',
+      name,
+      inputs: [],
+      params: {
+        inputKind: 'table',
+        width: 1,
+        height: 1,
+        channels: 1,
+        featureCount,
+        colorMode: 'grayscale',
+        preprocessing: {
+          resizeMode: 'none',
+          targetWidth: 1,
+          targetHeight: 1,
+          colorMode: 'original',
+          normalize: 'zero-one',
+          invert: false
+        }
+      }
+    });
 
     return [
+      {
+        id: 'csv-mlp',
+        name: 'CSV / Tabular MLP',
+        description: 'CSV Input -> Dense -> Dropout -> Dense -> Output',
+        layers: [
+          tableInputDraft(),
+          { type: 'dense', name: 'Dense 1', inputs: [], params: { units: 64, activation: 'relu' } },
+          { type: 'dropout', name: 'Dropout', inputs: [], params: { rate: 0.2, training: false } },
+          { type: 'dense', name: 'Dense 2', inputs: [], params: { units: 32, activation: 'relu' } },
+          { type: 'output', name: 'Output', inputs: [], params: { units: 2, activation: 'softmax' } }
+        ]
+      },
       {
         id: 'mlp-basic',
         name: 'MLP Basic',
@@ -324,6 +359,9 @@ export class SimEngine {
   static inferLayerOutputShape(layer: NetworkLayer, inputShapes: TensorShape[]): TensorShape {
     const inputShape = inputShapes[0] ?? [];
     if (layer.type === 'input') {
+      if (layer.params.inputKind === 'table') {
+        return [Math.max(1, layer.params.featureCount ?? 1)];
+      }
       return [layer.params.height, layer.params.width, layer.params.channels];
     }
     if (layer.type === 'conv2d') {
@@ -957,6 +995,9 @@ export class SimEngine {
 
   private static layerUnits(layer: NetworkLayer): number {
     if (layer.type === 'input') {
+      if (layer.params.inputKind === 'table') {
+        return Math.max(1, layer.params.featureCount ?? 1);
+      }
       return layer.params.width * layer.params.height * layer.params.channels;
     }
     if (layer.type === 'conv2d') {

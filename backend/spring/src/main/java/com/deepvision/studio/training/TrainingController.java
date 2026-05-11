@@ -63,8 +63,12 @@ public class TrainingController {
   }
 
   @PostMapping(value = "/datasets/imports", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public DatasetImportResponse importDataset(@RequestParam("files") MultipartFile[] files) {
-    return datasetService.importDataset(files);
+  public DatasetImportResponse importDataset(
+      @RequestParam("files") MultipartFile[] files,
+      @RequestParam(value = "labelColumn", required = false) String labelColumn,
+      @RequestParam(value = "classCount", required = false) Integer classCount
+  ) {
+    return datasetService.importDataset(files, labelColumn, classCount);
   }
 
   @PostMapping("/start")
