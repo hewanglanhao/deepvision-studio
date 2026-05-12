@@ -5,10 +5,12 @@ import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
 import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
+import { NETWORK_3D_SESSION_KEY, Network3dPayload } from '../../features/network-3d/network-3d.models';
 import { AuthUser } from '../../models/auth.models';
 import { AuthService } from '../../services/auth.service';
 import { TrainingCheckpointSummary, TrainingRuntimeService } from '../../services/training-runtime.service';
-import { NetworkLayer } from '../../sim-models';
+import { SimEngine } from '../../sim-engine';
+import { NetworkLayer, TensorShape } from '../../sim-models';
 
 interface DatasetHistoryOption {
   id: string;
@@ -199,6 +201,35 @@ export class ExperimentComparePageComponent implements OnInit, OnDestroy {
     return rows;
   }
 
+  openNetwork3dViewer(checkpoint: TrainingCheckpointSummary, event?: MouseEvent): void {
+    event?.stopPropagation();
+    const layers = structuredClone(this.checkpointLayers(checkpoint));
+    if (!layers.length) {
+      this.error = '该 checkpoint 没有可展示的网络结构。';
+      return;
+    }
+    const layerShapes = this.buildNetwork3dLayerShapes(layers);
+    const payload: Network3dPayload = {
+      title: `${checkpoint.datasetName} · 实验网络 3D 展示`,
+      sourceMode: 'Experiment Compare',
+      createdAt: checkpoint.createdAt,
+      inputImageUrl: '',
+      inputLabel: checkpoint.name,
+      datasetName: checkpoint.datasetName,
+      parameterCount: SimEngine.parameterCount(layers),
+      layers,
+      shapeHints: this.buildNetwork3dShapeHints(layerShapes),
+      layerShapes,
+      layerSnapshots: {},
+      shapePath: this.buildNetwork3dShapePath(layers, layerShapes),
+      finalTopK: [],
+      selectedLayerId: this.selectedLayerId ?? layers[0]?.id ?? -1
+    };
+
+    localStorage.setItem(NETWORK_3D_SESSION_KEY, JSON.stringify(payload));
+    window.open('/network-3d', '_blank', 'noopener,noreferrer');
+  }
+
   metricTone(value: number | null | undefined): string {
     if (value === null || value === undefined) return 'metric-empty';
     if (value >= 0.85) return 'metric-good';
@@ -223,6 +254,29 @@ export class ExperimentComparePageComponent implements OnInit, OnDestroy {
     if (left === null) return right;
     if (right === null) return left;
     return Math.max(left, right);
+  }
+
+  private buildNetwork3dLayerShapes(layers: NetworkLayer[]): Record<number, TensorShape> {
+    const shapes: Record<number, TensorShape> = {};
+    for (const layer of layers) {
+      const inputShapes = (layer.inputs ?? [])
+        .map(id => shapes[id])
+        .filter((shape): shape is TensorShape => shape !== undefined);
+      shapes[layer.id] = SimEngine.inferLayerOutputShape(layer, inputShapes);
+    }
+    return shapes;
+  }
+
+  private buildNetwork3dShapeHints(layerShapes: Record<number, TensorShape>): Record<number, string> {
+    const hints: Record<number, string> = {};
+    for (const [layerId, shape] of Object.entries(layerShapes)) {
+      hints[Number(layerId)] = SimEngine.formatShapeLabel(shape);
+    }
+    return hints;
+  }
+
+  private buildNetwork3dShapePath(layers: NetworkLayer[], layerShapes: Record<number, TensorShape>): string[] {
+    return layers.map(layer => `${layer.name}: ${SimEngine.formatShapeLabel(layerShapes[layer.id] ?? [])}`);
   }
 
   private paramLabel(key: string): string {

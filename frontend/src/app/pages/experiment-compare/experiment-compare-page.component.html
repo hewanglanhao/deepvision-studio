@@ -114,7 +114,10 @@
                     <span class="network-title">网络结构</span>
                     <span class="network-meta">{{ checkpointLayers(checkpoint).length }} 层</span>
                   </div>
-                  <span class="read-only">只读</span>
+                  <div class="network-actions">
+                    <span class="read-only">只读</span>
+                    <button type="button" class="view-3d-btn" (click)="openNetwork3dViewer(checkpoint, $event)">3D化显示</button>
+                  </div>
                 </div>
                 <app-network-overview
                   [layers]="checkpointLayers(checkpoint)"

@@ -337,12 +337,37 @@ p {
   font-size: 11px;
 }
 
+.network-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
 .read-only {
   margin-left: 0;
   padding: 2px 7px;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   background: #fff;
+}
+
+.view-3d-btn {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.view-3d-btn:hover {
+  border-color: #93c5fd;
+  background: #dbeafe;
 }
 
 .structure-text {
