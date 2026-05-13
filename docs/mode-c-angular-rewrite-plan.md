@@ -5,7 +5,7 @@
 当前 `Mode C` 采用的是“宿主页 + iframe”的集成方式：
 
 - Angular 宿主页位于 `frontend/src/app/pages/mode-c/`
-- `cnn-explainer` 以同步后的静态产物运行在 `frontend/public/modules/cnn-explainer/`
+- `cnn-explainer` 以同步后的静态产物运行在 `frontend/public/mode-c/cnn-explainer/`
 - 主项目仅负责外层导航、认证状态和承载 iframe
 
 这套方案已经满足“快速集成”和“低耦合展示”的目标，但它不适合作为长期形态，原因包括：
@@ -372,7 +372,7 @@ frontend/public/mode-c/
 
 说明：
 
-- 不建议继续放在 `modules/cnn-explainer/`
+- 不建议继续放在 `mode-c/cnn-explainer/`
 - 那个目录更像“旧嵌入方案遗产目录”
 - 重写后应转为主项目自己的资源布局
 

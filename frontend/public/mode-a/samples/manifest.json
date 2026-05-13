@@ -1,0 +1,90 @@
+[
+  {
+    "id": "dog-labrador",
+    "name": "Labrador",
+    "label": "dog",
+    "category": "Animal",
+    "url": "mode-a/samples/images/dog-labrador.jpg",
+    "source": "Wikimedia Commons: YellowLabradorLooking_new.jpg"
+  },
+  {
+    "id": "cat",
+    "name": "Cat",
+    "label": "cat",
+    "category": "Animal",
+    "url": "mode-a/samples/images/cat.jpg",
+    "source": "Wikimedia Commons: Cat_August_2010-4.jpg"
+  },
+  {
+    "id": "cat-kitten",
+    "name": "Kitten",
+    "label": "cat",
+    "category": "Animal",
+    "url": "mode-a/samples/images/cat-kitten.jpg",
+    "source": "Wikimedia Commons: Red_Kitten_01.jpg"
+  },
+  {
+    "id": "bear",
+    "name": "Kodiak bear",
+    "label": "bear",
+    "category": "Animal",
+    "url": "mode-a/samples/images/bear.jpg",
+    "source": "Wikimedia Commons: 2010-kodiak-bear-1.jpg"
+  },
+  {
+    "id": "flower-rose",
+    "name": "Rose",
+    "label": "flower",
+    "category": "Flower",
+    "url": "mode-a/samples/images/flower-rose.jpg",
+    "source": "Wikimedia Commons: Rosa_rubiginosa_1.jpg"
+  },
+  {
+    "id": "flower-sunflower",
+    "name": "Sunflower",
+    "label": "flower",
+    "category": "Flower",
+    "url": "mode-a/samples/images/flower-sunflower.jpg",
+    "source": "Wikimedia Commons: Sunflower_from_Silesia2.jpg"
+  },
+  {
+    "id": "flower-daisy",
+    "name": "Daisy",
+    "label": "flower",
+    "category": "Flower",
+    "url": "mode-a/samples/images/flower-daisy.jpg",
+    "source": "Wikimedia Commons: Daisy_pollen_flower_220533.jpg"
+  },
+  {
+    "id": "fruit-strawberries",
+    "name": "Strawberries",
+    "label": "fruit",
+    "category": "Object",
+    "url": "mode-a/samples/images/fruit-strawberries.jpg",
+    "source": "Wikimedia Commons: Strawberries.jpg"
+  },
+  {
+    "id": "vehicle-airplane",
+    "name": "Airplane",
+    "label": "vehicle",
+    "category": "Object",
+    "url": "mode-a/samples/images/vehicle-airplane.svg",
+    "source": "Wikimedia Commons: Airplane_silhouette.svg"
+  },
+  {
+    "id": "landscape-mountain",
+    "name": "Mountain",
+    "label": "landscape",
+    "category": "Scene",
+    "url": "mode-a/samples/images/landscape-mountain.jpg",
+    "source": "Wikimedia Commons: Fronalpstock_big.jpg"
+  },
+  {
+    "id": "person-einstein",
+    "name": "Portrait",
+    "label": "person",
+    "category": "Person",
+    "url": "mode-a/samples/images/person-einstein.jpg",
+    "source": "Wikimedia Commons: Albert_Einstein_Head.jpg"
+  }
+]

@@ -78,7 +78,7 @@ python -m py_compile backend\python-forward\app.py backend\python-forward\forwar
    - 但 `runExperiments()` 使用 `SimEngine.evaluateTask()` 和 `SimEngine.runExperiment()`，仍是模拟对比。
 
 5. **Mode C 是前端 TF.js 静态模型解释，不是 B 训练模型的解释**
-   - C 加载 `/modules/cnn-explainer/assets/data/model.json` 和 TF.js 静态资源。
+   - C 加载 `/mode-c/cnn-explainer/assets/data/model.json` 和 TF.js 静态资源。
 - 它能做真实浏览器推理和中间激活解释，但不使用 B 模式训练出的 checkpoint；这是刻意保持模式独立。
    - 没有真实 Grad-CAM。
 
@@ -572,7 +572,7 @@ python scripts/download_builtin_datasets.py
 C 当前不是简单占位。它有这些真实能力：
 
 - 已经不是 iframe 宿主，而是 Angular 原生组件。
-- 使用 TensorFlow.js 加载静态模型 `/modules/cnn-explainer/assets/data/model.json`。
+- 使用 TensorFlow.js 加载静态模型 `/mode-c/cnn-explainer/assets/data/model.json`。
 - 使用静态图片样本 espresso/panda/pizza/bus。
 - 在浏览器中做真实 TF.js 推理。
 - 能生成中间层 summaries、previews、layerDetails。

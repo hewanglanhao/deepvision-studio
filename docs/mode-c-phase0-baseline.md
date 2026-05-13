@@ -19,7 +19,7 @@ Phase 0 is complete when we have:
 Today `Mode C` is still an iframe host:
 
 - Angular host page: `frontend/src/app/pages/mode-c/`
-- embedded static app: `frontend/public/modules/cnn-explainer/`
+- embedded static app: `frontend/public/mode-c/cnn-explainer/`
 - external source of truth: `D:\VS Code\cnn-explainer`
 
 This means the platform shell and auth state already belong to Angular, but the CNN explainer experience still belongs to a separate frontend runtime.

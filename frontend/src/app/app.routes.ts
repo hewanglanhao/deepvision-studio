@@ -3,61 +3,61 @@ import { Routes } from '@angular/router';
 export const routes: Routes = [
   {
     path: '',
-    loadComponent: () => import('./pages/home/home-page.component')
+    loadComponent: () => import('@shell/home/home-page.component')
       .then(m => m.HomePageComponent)
   },
   {
     path: 'login',
-    loadComponent: () => import('./pages/auth/auth-page.component')
+    loadComponent: () => import('@core/auth/auth-page.component')
       .then(m => m.AuthPageComponent),
     data: { mode: 'login' }
   },
   {
     path: 'register',
-    loadComponent: () => import('./pages/auth/auth-page.component')
+    loadComponent: () => import('@core/auth/auth-page.component')
       .then(m => m.AuthPageComponent),
     data: { mode: 'register' }
   },
   {
     path: 'mode-a',
-    loadComponent: () => import('./pages/mode-a/mode-a-page.component')
+    loadComponent: () => import('@modes/mode-a/mode-a-page.component')
       .then(m => m.ModeAPageComponent),
     data: { mode: 'forward' }
   },
   {
     path: 'mode-b',
-    loadComponent: () => import('./pages/mode-b/mode-b-page.component')
+    loadComponent: () => import('@modes/mode-b/mode-b-page.component')
       .then(m => m.ModeBPageComponent),
     data: { mode: 'training' }
   },
   {
     path: 'training/experiments',
-    loadComponent: () => import('./pages/experiment-compare/experiment-compare-page.component')
+    loadComponent: () => import('@modes/mode-b/experiment-compare/experiment-compare-page.component')
       .then(m => m.ExperimentComparePageComponent)
   },
   {
     path: 'training/collaboration',
-    loadComponent: () => import('./pages/training-collaboration/training-collaboration-page.component')
+    loadComponent: () => import('@modes/mode-b/training-collaboration/training-collaboration-page.component')
       .then(m => m.TrainingCollaborationPageComponent)
   },
   {
     path: 'mode-c',
-    loadComponent: () => import('./pages/mode-c/mode-c-page.component')
+    loadComponent: () => import('@modes/mode-c/mode-c-page.component')
       .then(m => m.ModeCPageComponent)
   },
   {
     path: 'mode-d',
-    loadComponent: () => import('./pages/mode-d/mode-d-page.component')
+    loadComponent: () => import('@modes/mode-d/mode-d-page.component')
       .then(m => m.ModeDPageComponent)
   },
   {
     path: 'mode-e',
-    loadComponent: () => import('./pages/mode-e/mode-e-page.component')
+    loadComponent: () => import('@modes/mode-e/mode-e-page.component')
       .then(m => m.ModeEPageComponent)
   },
   {
     path: 'network-3d',
-    loadComponent: () => import('./features/network-3d/network-3d-viewer.component')
+    loadComponent: () => import('@shared/network-3d/network-3d-viewer.component')
       .then(m => m.Network3dViewerComponent)
   },
   { path: 'forward', redirectTo: 'mode-a', pathMatch: 'full' },

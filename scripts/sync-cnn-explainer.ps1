@@ -1,7 +1,7 @@
 param(
   [string]$SourcePath = "D:\VS Code\cnn-explainer",
   [string]$DestinationPath = "",
-  [string]$PublicBasePath = "/modules/cnn-explainer"
+  [string]$PublicBasePath = "/mode-c/cnn-explainer"
 )
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -23,7 +23,7 @@ function Write-Utf8Text {
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
 if ([string]::IsNullOrWhiteSpace($DestinationPath)) {
-  $DestinationPath = Join-Path $repoRoot "frontend\public\modules\cnn-explainer"
+  $DestinationPath = Join-Path $repoRoot "frontend\public\mode-c\cnn-explainer"
 }
 
 $resolvedSourcePath = (Resolve-Path -LiteralPath $SourcePath -ErrorAction Stop).Path

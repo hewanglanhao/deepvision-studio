@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="CNN Explainer" />
+    <meta
+      name="description"
+      content="An interactive visualization system designed to help non-experts learn about Convolutional Neural Networks (CNNs)."
+    />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://poloclub.github.io/cnn-explainer/"
+    />
+    <meta property="og:title" content="CNN Explainer" />
+    <meta
+      property="og:description"
+      content="An interactive visualization system designed to help non-experts learn about Convolutional Neural Networks (CNNs)."
+    />
+    <meta
+      property="og:image"
+      content="https://poloclub.github.io/cnn-explainer/assets/figures/preview.png"
+    />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta
+      property="twitter:url"
+      content="https://poloclub.github.io/cnn-explainer/"
+    />
+    <meta property="twitter:title" content="CNN Explainer" />
+    <meta
+      property="twitter:description"
+      content="An interactive visualization system designed to help non-experts learn about Convolutional Neural Networks (CNNs)."
+    />
+    <meta
+      property="twitter:image"
+      content="https://poloclub.github.io/cnn-explainer/assets/figures/preview.png"
+    />
+    <meta property="twitter:site" content="@jay4w" />
+    <meta property="twitter:creator" content="@jay4w" />
+
+    <title>CNN Explainer</title>
+
+    <link rel="icon" type="image/png" href="/mode-c/cnn-explainer/assets/img/favicon.png" />
+    <link rel="stylesheet" href="/mode-c/cnn-explainer/global.css" />
+    <link rel="stylesheet" href="/mode-c/cnn-explainer/bundle.css" />
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css?family=Neucha&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://d3js.org/d3.v5.js"></script>
+    <script src="/mode-c/cnn-explainer/vendor/tf.min.js"></script>
+    <script
+      defer
+      src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"
+    ></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/gh/cferdinandi/smooth-scroll@15/dist/smooth-scroll.polyfills.min.js"></script>
+    <script
+      id="MathJax-script"
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"
+    ></script>
+
+    <script
+      type="module"
+      src="https://unpkg.com/recommender-overlay/dist/recommender-overlay.es.js"
+    ></script>
+
+    <script defer src="/mode-c/cnn-explainer/bundle.js"></script>
+
+    <style>
+      @font-face {
+        font-family: 'A Love of Thunder';
+        src: URL('/mode-c/cnn-explainer/assets/font/A Love of Thunder.ttf') format('truetype');
+      }
+    </style>
+      <script>
+      (function () {
+        var originalInsertBefore = Node.prototype.insertBefore;
+        Node.prototype.insertBefore = function (newNode, referenceNode) {
+          if (
+            newNode &&
+            newNode.tagName === 'SCRIPT' &&
+            typeof newNode.src === 'string' &&
+            newNode.src.indexOf('youtube.com/iframe_api') !== -1
+          ) {
+            return newNode;
+          }
+          return originalInsertBefore.call(this, newNode, referenceNode);
+        };
+
+        function showBootError(message) {
+          var existing = document.getElementById('cnn-explainer-boot-error');
+          if (existing) {
+            existing.textContent = message;
+            return;
+          }
+          var box = document.createElement('pre');
+          box.id = 'cnn-explainer-boot-error';
+          box.textContent = message;
+          box.style.cssText = 'position:fixed;top:12px;left:12px;right:12px;z-index:99999;padding:12px 14px;border-radius:12px;background:#fff1f2;color:#9f1239;border:1px solid #fecdd3;font:12px/1.6 Consolas,monospace;white-space:pre-wrap;';
+          document.body.appendChild(box);
+        }
+
+        window.addEventListener('error', function (event) {
+          var target = event && event.target;
+          if (target && target.tagName === 'SCRIPT' && target.src) {
+            if (target.src.indexOf('youtube.com/iframe_api') !== -1) {
+              return;
+            }
+            showBootError('CNN Explainer failed to load script:\n' + target.src);
+            return;
+          }
+          showBootError('CNN Explainer runtime error:\n' + (event.message || 'Unknown error'));
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason;
+          showBootError('CNN Explainer promise rejection:\n' + (reason && reason.message ? reason.message : String(reason)));
+        });
+
+        function removeVideoTutorialSection() {
+          var description = document.getElementById('description');
+          if (!description) {
+            return false;
+          }
+
+          var headings = Array.prototype.slice.call(description.querySelectorAll('h2'));
+          var tutorialHeading = headings.find(function (heading) {
+            return (heading.textContent || '').trim() === 'Video Tutorial';
+          });
+
+          if (!tutorialHeading) {
+            return true;
+          }
+
+          var nodesToRemove = [];
+          var current = tutorialHeading;
+          while (current) {
+            if (
+              current !== tutorialHeading &&
+              current.tagName === 'H2'
+            ) {
+              break;
+            }
+            nodesToRemove.push(current);
+            current = current.nextElementSibling;
+          }
+
+          nodesToRemove.forEach(function (node) {
+            node.remove();
+          });
+
+          return true;
+        }
+
+        window.setTimeout(function () {
+          if (!document.getElementById('app-page')) {
+            var d3Ready = typeof window.d3 !== 'undefined';
+            var tfReady = typeof window.tf !== 'undefined';
+            showBootError(
+              'CNN Explainer did not finish booting.\n' +
+              'd3 loaded: ' + d3Ready + '\n' +
+              'tf loaded: ' + tfReady + '\n' +
+              'If d3 is false, the external CDN script is likely blocked.'
+            );
+            return;
+          }
+
+          removeVideoTutorialSection();
+        }, 5000);
+
+        var cleanupTimer = window.setInterval(function () {
+          if (removeVideoTutorialSection()) {
+            window.clearInterval(cleanupTimer);
+          }
+        }, 500);
+      })();
+    </script>
+  </head>
+
+  <body></body>
+</html>
