@@ -848,17 +848,21 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     group.userData['layerId'] = view.layer.id;
     const snapshot = this.payload?.layerSnapshots?.[view.layer.id];
 
-    if (view.layer.type === 'conv2d' || view.layer.type === 'pool2d' || view.layer.type === 'input') {
+    if (this.shouldRenderFeatureStack(view)) {
       this.addFeatureStack(group, view, snapshot);
     } else if (view.layer.type === 'flatten') {
       this.addFlattenRibbon(group, view);
     } else if (view.layer.type === 'dense' || view.layer.type === 'output') {
-      this.addNeuronCloud(group, view);
+      this.addUnitGrid(group, view, view.layer.type === 'output' ? 'output' : 'dense');
+    } else if (view.shape.length === 1) {
+      this.addUnitGrid(group, view, 'vector');
+    } else if (view.shape.length === 2) {
+      this.addMatrixSheet(group, view);
     } else {
       this.addAbstractLayer(group, view);
     }
 
-    if (snapshot?.previewImageUrl && (view.layer.type === 'conv2d' || view.layer.type === 'pool2d' || view.layer.type === 'activation')) {
+    if (snapshot?.previewImageUrl && this.shouldRenderFeatureStack(view)) {
       this.addPreviewPlane(group, snapshot.previewImageUrl, view.width * 0.72, view.height * 0.72, view.depth / 2 + 0.035);
     }
 
@@ -900,45 +904,88 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
   private addFlattenRibbon(group: THREE.Group, view: Network3dLayerView): void {
     this.addLayerFrame(group, view, '#fbbf24');
     const bars = Math.min(Math.max(view.shape[0] ?? 32, 18), 72);
-    const cols = Math.ceil(Math.sqrt(bars));
+    const cols = Math.min(bars, Math.max(8, Math.ceil(Math.sqrt(bars) * 1.8)));
     const rows = Math.ceil(bars / cols);
-    const cell = Math.min(view.width / cols, view.height / rows) * 0.76;
+    const cell = Math.min(view.width / cols, view.height / rows) * 0.7;
     for (let i = 0; i < bars; i += 1) {
       const col = i % cols;
       const row = Math.floor(i / cols);
       const material = this.layerMaterial(view, 0.62 + (i % cols) / cols * 0.18);
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(cell, cell, 0.16), material);
-      bar.position.set((col - (cols - 1) / 2) * cell * 1.28, ((rows - 1) / 2 - row) * cell * 1.28, 0);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(cell * 1.35, cell * 0.74, 0.14), material);
+      bar.position.set((col - (cols - 1) / 2) * cell * 1.48, ((rows - 1) / 2 - row) * cell * 1.12, 0);
       bar.userData['layerId'] = view.layer.id;
       group.add(bar);
       this.registerMaterial(view.layer.id, material);
     }
+    if ((view.shape[0] ?? 0) > bars) {
+      const badge = this.createBadgeSprite(`${view.shape[0]} values`);
+      badge.position.set(0, -view.height / 2 - 0.34, 0);
+      group.add(badge);
+    }
   }
 
-  private addNeuronCloud(group: THREE.Group, view: Network3dLayerView): void {
-    this.addLayerFrame(group, view, view.layer.type === 'output' ? '#f87171' : '#c084fc');
+  private addUnitGrid(group: THREE.Group, view: Network3dLayerView, role: 'dense' | 'output' | 'vector'): void {
+    const frameColor = role === 'output' ? '#f87171' : role === 'dense' ? '#c084fc' : view.color;
+    this.addLayerFrame(group, view, frameColor);
     const units = Math.max(1, view.shape[0] ?? this.layerUnits(view.layer));
-    const visible = Math.min(units, 54);
+    const visible = Math.min(units, role === 'output' ? 80 : 64);
     const cols = Math.ceil(Math.sqrt(visible));
     const rows = Math.ceil(visible / cols);
-    const radius = Math.min(view.width / Math.max(cols, 1), view.height / Math.max(rows, 1)) * 0.24;
-    const stepX = cols <= 1 ? 0 : (view.width * 0.74) / (cols - 1);
-    const stepY = rows <= 1 ? 0 : (view.height * 0.74) / (rows - 1);
+    const cell = Math.min(view.width / Math.max(cols, 1), view.height / Math.max(rows, 1)) * 0.58;
+    const stepX = cols <= 1 ? 0 : (view.width * 0.78) / (cols - 1);
+    const stepY = rows <= 1 ? 0 : (view.height * 0.78) / (rows - 1);
     for (let i = 0; i < visible; i += 1) {
       const col = i % cols;
       const row = Math.floor(i / cols);
       const material = this.layerMaterial(view, 0.68 + (i % 7) * 0.025);
-      const node = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.055, radius), 16, 12), material);
+      const node = new THREE.Mesh(
+        new THREE.BoxGeometry(Math.max(0.075, cell), Math.max(0.075, cell), role === 'output' ? 0.2 : 0.16),
+        material
+      );
       node.position.set((col - (cols - 1) / 2) * stepX, ((rows - 1) / 2 - row) * stepY, 0);
       node.userData['layerId'] = view.layer.id;
       group.add(node);
       this.registerMaterial(view.layer.id, material);
+
+      const edge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(node.geometry),
+        new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: role === 'output' ? 0.32 : 0.22 })
+      );
+      node.add(edge);
     }
     if (units > visible) {
       const badge = this.createBadgeSprite(`${units} units`);
       badge.position.set(0, -view.height / 2 - 0.35, 0);
       group.add(badge);
     }
+  }
+
+  private addMatrixSheet(group: THREE.Group, view: Network3dLayerView): void {
+    this.addLayerFrame(group, view, view.color);
+    const [rows, cols] = view.shape as [number, number];
+    const visibleRows = Math.min(rows, 12);
+    const visibleCols = Math.min(cols, 12);
+    const cell = Math.min(view.width / Math.max(visibleCols, 1), view.height / Math.max(visibleRows, 1)) * 0.72;
+    for (let row = 0; row < visibleRows; row += 1) {
+      for (let col = 0; col < visibleCols; col += 1) {
+        const material = this.layerMaterial(view, 0.58 + ((row + col) % 6) * 0.025);
+        const tile = new THREE.Mesh(new THREE.BoxGeometry(cell, cell, 0.12), material);
+        tile.position.set((col - (visibleCols - 1) / 2) * cell * 1.26, ((visibleRows - 1) / 2 - row) * cell * 1.26, 0);
+        tile.userData['layerId'] = view.layer.id;
+        group.add(tile);
+        this.registerMaterial(view.layer.id, material);
+      }
+    }
+    if (rows > visibleRows || cols > visibleCols) {
+      const badge = this.createBadgeSprite(`${rows} x ${cols}`);
+      badge.position.set(0, -view.height / 2 - 0.35, 0);
+      group.add(badge);
+    }
+  }
+
+  private shouldRenderFeatureStack(view: Network3dLayerView): boolean {
+    return view.shape.length === 3
+      && ['input', 'conv2d', 'pool2d', 'residual', 'activation', 'dropout'].includes(view.layer.type);
   }
 
   private addLayerFrame(group: THREE.Group, view: Network3dLayerView, color: string): void {

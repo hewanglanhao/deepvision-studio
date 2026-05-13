@@ -5,6 +5,7 @@ const LAYER_COLORS: Record<string, string> = {
   input: '#6366f1',
   conv2d: '#0ea5e9',
   pool2d: '#10b981',
+  residual: '#14b8a6',
   flatten: '#f59e0b',
   dense: '#8b5cf6',
   activation: '#ec4899',
@@ -55,11 +56,29 @@ function layerSize(shape: TensorShape, layer: NetworkLayer): { width: number; he
     };
   }
 
-  const units = shape.length === 1 ? shape[0] : layer.type === 'flatten' ? 96 : 24;
+  const units = Math.max(1, shape.length === 1 ? shape[0] : layer.type === 'flatten' ? 96 : 24);
+  if (layer.type === 'flatten') {
+    return {
+      width: clamp(Math.sqrt(units) / 3.2, 1.4, 4.2),
+      height: clamp(Math.ceil(units / 24) * 0.22, 0.55, 1.35),
+      depth: 0.36
+    };
+  }
+
+  if (layer.type === 'dense' || layer.type === 'output') {
+    const cols = Math.ceil(Math.sqrt(units));
+    const rows = Math.ceil(units / cols);
+    return {
+      width: clamp(cols / 5, 0.9, 3),
+      height: clamp(rows / 5, 0.85, 2.8),
+      depth: 0.42
+    };
+  }
+
   return {
-    width: clamp(Math.sqrt(Math.max(1, units)) / 5, 0.55, 2.4),
-    height: clamp(units / 80, 0.8, 3.5),
-    depth: 0.5
+    width: clamp(Math.sqrt(units) / 4.5, 0.75, 2.6),
+    height: clamp(Math.sqrt(units) / 5.5, 0.75, 2.4),
+    depth: 0.38
   };
 }
 
