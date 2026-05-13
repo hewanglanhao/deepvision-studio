@@ -32,7 +32,7 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
           <header class="llm-head">
             <div class="title-wrap">
               <div class="llm-title">{{ title }}</div>
-              <div class="llm-subtitle">{{ includeContext ? '使用当前 A 模式上下文' : '普通问答' }}</div>
+              <div class="llm-subtitle">{{ includeContext ? '使用当前页面数据' : '普通问答' }}</div>
             </div>
             <button type="button" class="icon-btn" aria-label="关闭" (click)="open=false">×</button>
           </header>
@@ -52,7 +52,7 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
           <div class="chat-log">
             @if (!messages.length) {
               <div class="empty-tip">
-                勾选页面数据后，可以直接问当前层、卷积核、输出图为什么会这样。
+                勾选页面数据后，可以直接询问当前页面里的网络、数据和指标。
               </div>
             }
             @for (message of messages; track $index) {
@@ -85,7 +85,7 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
               name="llmQuestion"
               [(ngModel)]="draft"
               rows="2"
-              placeholder="问当前网络或任意问题..."
+              placeholder="问当前页面或任意问题..."
               [disabled]="busy"
             ></textarea>
             <button type="submit" [disabled]="busy || !draft.trim()">发送</button>
@@ -491,11 +491,25 @@ export class LlmFloatingAssistantComponent {
     }
 
     try {
-      const response = await this.llm.chat({
+      const apiMessages = this.toApiMessages(question, context);
+      let assistantText = '';
+      this.messages = [...this.messages, { role: 'assistant', text: '' }];
+      const response = await this.llm.streamChat({
         systemPrompt: this.systemPrompt,
-        messages: this.toApiMessages(question, context)
+        messages: apiMessages
+      }, delta => {
+        assistantText += delta;
+        this.messages = [
+          ...this.messages.slice(0, -1),
+          { role: 'assistant', text: assistantText }
+        ];
       });
-      this.messages = [...this.messages, { role: 'assistant', text: response.content || '模型没有返回内容。' }];
+      if (!assistantText) {
+        this.messages = [
+          ...this.messages.slice(0, -1),
+          { role: 'assistant', text: response.content || '模型没有返回内容。' }
+        ];
+      }
     } catch (err) {
       this.error = err instanceof Error ? err.message : '大模型请求失败';
     } finally {

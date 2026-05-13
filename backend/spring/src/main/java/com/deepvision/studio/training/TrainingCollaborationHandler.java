@@ -3,9 +3,15 @@ package com.deepvision.studio.training;
 import com.deepvision.studio.auth.AppUser;
 import com.deepvision.studio.auth.AppUserRepository;
 import com.deepvision.studio.auth.JwtService;
+import com.deepvision.studio.llm.LlmChatClient;
+import com.deepvision.studio.llm.LlmDtos.ChatMessage;
+import com.deepvision.studio.llm.LlmDtos.ChatRequest;
+import com.deepvision.studio.llm.LlmDtos.ContentPart;
 import com.deepvision.studio.training.TrainingDtos.CollaborationRoomSummary;
+import com.deepvision.studio.training.TrainingDtos.TrainingStatusResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.annotation.PreDestroy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
@@ -21,6 +27,8 @@ import java.util.UUID;
 import java.util.Comparator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -30,21 +38,27 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Component
 public class TrainingCollaborationHandler extends TextWebSocketHandler {
   private static final int MAX_RECENT_MESSAGES = 60;
+  private static final String ASSISTANT_NAME = "智能助手";
+  private static final String ASSISTANT_USERNAME = "robot-assistant";
 
   private final TrainingJobService jobService;
+  private final LlmChatClient llmChatClient;
   private final JwtService jwtService;
   private final AppUserRepository users;
   private final ObjectMapper objectMapper;
+  private final ExecutorService assistantExecutor = Executors.newCachedThreadPool();
   private final Map<String, RoomState> rooms = new ConcurrentHashMap<>();
   private final Map<String, Participant> participants = new ConcurrentHashMap<>();
 
   public TrainingCollaborationHandler(
       TrainingJobService jobService,
+      LlmChatClient llmChatClient,
       JwtService jwtService,
       AppUserRepository users,
       ObjectMapper objectMapper
   ) {
     this.jobService = jobService;
+    this.llmChatClient = llmChatClient;
     this.jwtService = jwtService;
     this.users = users;
     this.objectMapper = objectMapper;
@@ -131,6 +145,9 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
       RoomState room = rooms.computeIfAbsent(participant.jobId(), ignored -> new RoomState());
       room.addMessage(payload);
       broadcast(participant.jobId(), payload);
+      if (mentionsAssistant(text)) {
+        requestAssistantReply(participant, text, room.recentMessages());
+      }
     } catch (JsonProcessingException ignored) {
       // Ignore malformed client messages.
     }
@@ -158,6 +175,11 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     afterConnectionClosed(session, CloseStatus.SERVER_ERROR);
   }
 
+  @PreDestroy
+  void shutdown() {
+    assistantExecutor.shutdownNow();
+  }
+
   private Participant identifyParticipant(WebSocketSession session, Map<String, String> query, String jobId) {
     String token = query.getOrDefault("token", "");
     if (!token.isBlank()) {
@@ -183,7 +205,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     if (room == null) {
       return;
     }
-    List<Map<String, String>> activeUsers = room.sessions.stream()
+    List<Map<String, String>> activeUsers = new ArrayList<>(room.sessions.stream()
         .map(session -> participants.get(session.getId()))
         .filter(participant -> participant != null)
         .map(participant -> Map.of(
@@ -191,7 +213,11 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
             "displayName", participant.displayName()
         ))
         .distinct()
-        .toList();
+        .toList());
+    activeUsers.add(Map.of(
+        "username", ASSISTANT_USERNAME,
+        "displayName", ASSISTANT_NAME
+    ));
     broadcast(jobId, Map.of(
         "type", "presence",
         "jobId", jobId,
@@ -206,6 +232,143 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     payload.put("text", text);
     payload.put("createdAt", Instant.now().toString());
     broadcast(jobId, payload);
+  }
+
+  private void requestAssistantReply(Participant requester, String rawText, List<Map<String, Object>> recentMessages) {
+    String question = stripAssistantMention(rawText);
+    if (question.isBlank()) {
+      broadcastAssistant(requester.jobId(), "你可以在 @智能助手 后面直接写问题，例如：@智能助手 现在训练损失下降正常吗？");
+      return;
+    }
+    String messageId = UUID.randomUUID().toString();
+    broadcastAssistantStart(requester.jobId(), messageId);
+    assistantExecutor.submit(() -> {
+      StringBuilder answer = new StringBuilder();
+      try {
+        TrainingStatusResponse status = jobService.status(requester.jobId());
+        llmChatClient.stream(new ChatRequest(
+            null,
+            "medium",
+            assistantSystemPrompt(status),
+            List.of(new ChatMessage(
+                "user",
+                List.of(new ContentPart("text", assistantUserPrompt(requester, question, recentMessages), null))
+            ))
+        ), delta -> {
+          answer.append(delta);
+          broadcastAssistantUpdate(requester.jobId(), messageId, answer.toString(), true);
+        });
+        String finalText = answer.isEmpty() ? "我没有生成有效回答，可以换个问法再试一次。" : answer.toString();
+        broadcastAssistantUpdate(requester.jobId(), messageId, finalText, false);
+      } catch (RuntimeException ex) {
+        broadcastAssistantUpdate(requester.jobId(), messageId, "智能助手暂时无法回答：" + ex.getMessage(), false);
+      }
+    });
+  }
+
+  private void broadcastAssistant(String jobId, String text) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("type", "chat");
+    payload.put("id", UUID.randomUUID().toString());
+    payload.put("jobId", jobId);
+    payload.put("username", ASSISTANT_USERNAME);
+    payload.put("displayName", ASSISTANT_NAME);
+    payload.put("text", text);
+    payload.put("createdAt", Instant.now().toString());
+    RoomState room = rooms.get(jobId);
+    if (room != null) {
+      room.addMessage(payload);
+    }
+    broadcast(jobId, payload);
+  }
+
+  private void broadcastAssistantStart(String jobId, String messageId) {
+    Map<String, Object> payload = assistantPayload(jobId, messageId, "", true);
+    RoomState room = rooms.get(jobId);
+    if (room != null) {
+      room.addMessage(payload);
+    }
+    broadcast(jobId, payload);
+  }
+
+  private void broadcastAssistantUpdate(String jobId, String messageId, String text, boolean streaming) {
+    RoomState room = rooms.get(jobId);
+    if (room != null) {
+      room.updateMessage(messageId, text, streaming);
+    }
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("type", "chat_update");
+    payload.put("id", messageId);
+    payload.put("jobId", jobId);
+    payload.put("text", text);
+    payload.put("streaming", streaming);
+    payload.put("createdAt", Instant.now().toString());
+    broadcast(jobId, payload);
+  }
+
+  private Map<String, Object> assistantPayload(String jobId, String messageId, String text, boolean streaming) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("type", "chat");
+    payload.put("id", messageId);
+    payload.put("jobId", jobId);
+    payload.put("username", ASSISTANT_USERNAME);
+    payload.put("displayName", ASSISTANT_NAME);
+    payload.put("text", text);
+    payload.put("streaming", streaming);
+    payload.put("createdAt", Instant.now().toString());
+    return payload;
+  }
+
+  private boolean mentionsAssistant(String text) {
+    return text.startsWith("@" + ASSISTANT_NAME) || text.contains("@" + ASSISTANT_NAME + " ");
+  }
+
+  private String stripAssistantMention(String text) {
+    return text.replace("@" + ASSISTANT_NAME, "").trim();
+  }
+
+  private String assistantSystemPrompt(TrainingStatusResponse status) {
+    return """
+        你是深度学习演示平台训练聊天室中的智能助手。
+        你的任务是帮助学生和教师理解当前训练状态、排查模型训练问题、解释日志和指标。
+        回答请使用中文，简洁、具体，优先结合给定训练状态，不要编造不存在的日志或指标。
+        当前训练状态：
+        - jobId: %s
+        - status: %s
+        - epoch: %d / %d
+        - batch: %d / %d
+        - latestLoss: %.6f
+        - latestValLoss: %s
+        - latestAccuracy: %.6f
+        - latestValAccuracy: %s
+        - elapsedSeconds: %d
+        - etaSeconds: %d
+        """.formatted(
+        status.jobId(),
+        status.status(),
+        status.epoch(),
+        status.totalEpochs(),
+        status.batch(),
+        status.totalBatches(),
+        status.latestLoss(),
+        status.latestValLoss() == null ? "N/A" : String.format(java.util.Locale.US, "%.6f", status.latestValLoss()),
+        status.latestAccuracy(),
+        status.latestValAccuracy() == null ? "N/A" : String.format(java.util.Locale.US, "%.6f", status.latestValAccuracy()),
+        status.elapsedSeconds(),
+        status.etaSeconds()
+    );
+  }
+
+  private String assistantUserPrompt(Participant requester, String question, List<Map<String, Object>> recentMessages) {
+    List<String> context = recentMessages.stream()
+        .filter(message -> "chat".equals(String.valueOf(message.get("type"))))
+        .skip(Math.max(0, recentMessages.size() - 10))
+        .map(message -> String.valueOf(message.getOrDefault("displayName", message.getOrDefault("username", "成员")))
+            + ": " + String.valueOf(message.getOrDefault("text", "")))
+        .toList();
+    return "提问者：" + requester.displayName()
+        + "\n问题：" + question
+        + "\n\n最近聊天室上下文：\n" + (context.isEmpty() ? "无" : String.join("\n", context));
   }
 
   private void broadcast(String jobId, Object payload) {
@@ -276,6 +439,16 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
 
     private synchronized List<Map<String, Object>> recentMessages() {
       return new ArrayList<>(recentMessages);
+    }
+
+    private synchronized void updateMessage(String id, String text, boolean streaming) {
+      for (Map<String, Object> message : recentMessages) {
+        if (id.equals(String.valueOf(message.get("id")))) {
+          message.put("text", text);
+          message.put("streaming", streaming);
+          return;
+        }
+      }
     }
   }
 }

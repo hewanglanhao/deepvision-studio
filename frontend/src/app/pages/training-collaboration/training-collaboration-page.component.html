@@ -104,11 +104,11 @@
 
         <div class="message-list">
           @for (message of messages; track message.id ?? message.createdAt) {
-            <div [class]="message.type === 'system' ? 'message system' : 'message'">
+            <div [class]="messageClass(message)">
               @if (message.type === 'chat') {
                 <div class="message-author">{{ message.displayName || message.username }}</div>
               }
-              <div class="message-text">{{ message.text }}</div>
+              <div class="message-text">{{ message.text || (message.streaming ? '正在生成...' : '') }}@if (message.streaming) {<span class="stream-cursor"></span>}</div>
               <div class="message-time">{{ message.createdAt | date:'HH:mm:ss' }}</div>
             </div>
           } @empty {
@@ -117,7 +117,23 @@
         </div>
 
         <div class="composer">
-          <input [(ngModel)]="chatText" placeholder="输入消息，按 Enter 发送" (keyup.enter)="send()" [disabled]="collaborationState !== 'connected'" />
+          <div class="composer-input">
+            @if (showMentionMenu) {
+              <div class="mention-menu">
+                <button type="button" class="mention-option" (mousedown)="$event.preventDefault()" (click)="insertAssistantMention()">
+                  <strong>@智能助手</strong>
+                  <span>询问训练状态、日志和模型问题</span>
+                </button>
+              </div>
+            }
+            <input
+              [(ngModel)]="chatText"
+              placeholder="输入消息，@ 可选择智能助手，Enter 发送"
+              (input)="handleChatInput()"
+              (keydown)="handleComposerKeydown($event)"
+              [disabled]="collaborationState !== 'connected'"
+            />
+          </div>
           <button type="button" (click)="send()" [disabled]="collaborationState !== 'connected' || !chatText.trim()">发送</button>
         </div>
       </section>

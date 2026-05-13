@@ -22,6 +22,7 @@ export class TrainingCollaborationPageComponent implements OnInit, OnDestroy {
   activeRoomId = '';
   chatText = '';
   error = '';
+  showMentionMenu = false;
 
   collaborationState: 'idle' | 'connecting' | 'connected' | 'closed' | 'error' = 'idle';
   users: CollaborationUser[] = [];
@@ -143,6 +144,39 @@ export class TrainingCollaborationPageComponent implements OnInit, OnDestroy {
     if (!text) return;
     this.collaborationSvc.send(text);
     this.chatText = '';
+    this.showMentionMenu = false;
+  }
+
+  handleChatInput(): void {
+    const lastToken = this.chatText.split(/\s/).at(-1) ?? '';
+    this.showMentionMenu = this.collaborationState === 'connected' && lastToken.startsWith('@') && !lastToken.includes('智能助手');
+  }
+
+  handleComposerKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      this.showMentionMenu = false;
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.send();
+    }
+  }
+
+  insertAssistantMention(): void {
+    const trimmedRight = this.chatText.replace(/\s*$/, '');
+    const atIndex = trimmedRight.lastIndexOf('@');
+    if (atIndex >= 0 && !trimmedRight.slice(atIndex).includes(' ')) {
+      this.chatText = `${trimmedRight.slice(0, atIndex)}@智能助手 `;
+    } else {
+      this.chatText = `${trimmedRight}${trimmedRight ? ' ' : ''}@智能助手 `;
+    }
+    this.showMentionMenu = false;
+  }
+
+  messageClass(message: CollaborationMessage): string {
+    if (message.type === 'system') return 'message system';
+    return message.username === 'robot-assistant' ? 'message assistant' : 'message';
   }
 
   leave(): void {

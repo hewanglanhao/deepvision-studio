@@ -354,10 +354,19 @@ h1 {
   color: #047857;
 }
 
+.message.assistant {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
 .message-author {
   color: #1d4ed8;
   font-size: 12px;
   font-weight: 900;
+}
+
+.message.assistant .message-author {
+  color: #4338ca;
 }
 
 .message-text {
@@ -366,6 +375,22 @@ h1 {
   font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.stream-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  margin-left: 2px;
+  border-radius: 2px;
+  background: #4338ca;
+  vertical-align: -2px;
+  animation: streamBlink 1s steps(2, start) infinite;
+}
+
+@keyframes streamBlink {
+  50% { opacity: 0; }
 }
 
 .message-time {
@@ -387,6 +412,46 @@ h1 {
   gap: 8px;
   padding: 12px;
   border-top: 1px solid #e2e8f0;
+}
+
+.composer-input {
+  position: relative;
+  min-width: 0;
+}
+
+.mention-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 7px);
+  z-index: 5;
+  width: min(280px, 100%);
+  padding: 6px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, .16);
+}
+
+.mention-option {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  width: 100%;
+  min-height: auto;
+  padding: 8px 9px;
+  border-color: #e0e7ff;
+  background: #eef2ff;
+  text-align: left;
+}
+
+.mention-option strong {
+  color: #3730a3;
+  font-size: 13px;
+}
+
+.mention-option span {
+  color: #64748b;
+  font-size: 11px;
 }
 
 .logs {

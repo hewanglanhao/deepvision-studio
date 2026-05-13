@@ -5,6 +5,9 @@ import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { NetworkOverviewComponent } from '../../components/network-overview.component';
 import { PlatformTopbarComponent } from '../../components/platform-topbar.component';
+import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '../../features/llm/llm-floating-assistant.component';
+import { LlmChatContext } from '../../features/llm/llm.models';
+import { MODE_B_LLM_SYSTEM_PROMPT } from '../../features/llm/llm-prompts';
 import { AuthUser } from '../../models/auth.models';
 import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from '../../models/forward-record.models';
 import { AuthService } from '../../services/auth.service';
@@ -69,11 +72,40 @@ type TrainingChartFormat = 'number' | 'percent' | 'lr';
 
 @Component({
   selector: 'app-mode-b-page',
-  imports: [CommonModule, FormsModule, DecimalPipe, RouterModule, NetworkOverviewComponent, PlatformTopbarComponent],
+  imports: [CommonModule, FormsModule, DecimalPipe, RouterModule, NetworkOverviewComponent, PlatformTopbarComponent, LlmFloatingAssistantComponent],
   templateUrl: './mode-b-page.component.html',
   styleUrl: './mode-b-page.component.css'
 })
 export class ModeBPageComponent implements OnInit, OnDestroy {
+  readonly modeBLlmSystemPrompt = MODE_B_LLM_SYSTEM_PROMPT;
+  readonly modeBLlmContextProvider = (): LlmChatContext => this.buildModeBLlmContext();
+  readonly modeBLlmQuickPrompts: LlmQuickPrompt[] = [
+    {
+      label: '检查结构',
+      question: '请结合当前 B 端页面数据，检查我的数据集、输入层、网络结构和输出层类别数是否匹配。'
+    },
+    {
+      label: '训练诊断',
+      question: '请根据当前训练损失、验证损失、准确率、学习率和梯度范数，判断训练是否正常，并指出可能问题。'
+    },
+    {
+      label: 'CSV建议',
+      question: '如果当前选择的是 CSV/表格数据集，请检查我是否使用了合适的输入层和网络层，并给出修改建议。'
+    },
+    {
+      label: '图像建议',
+      question: '如果当前选择的是图像数据集，请检查输入尺寸、卷积/池化/残差层和输出层配置是否合理。'
+    },
+    {
+      label: '调参建议',
+      question: '请根据当前 batch size、epoch、学习率、优化器、scheduler 和训练曲线，给出下一轮调参建议。'
+    },
+    {
+      label: '日志解释',
+      question: '请解释当前训练日志中最值得关注的信息，如果有报错，请说明可能原因和处理办法。'
+    }
+  ];
+
   readonly topbarModeLabel = '\u6a21\u5f0f B';
   readonly topbarModeTitle = '\u6a21\u578b\u8bad\u7ec3\u5de5\u4f5c\u53f0';
   mode: AppMode = 'training';
@@ -1664,6 +1696,128 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
   resetTraining(): void  { void this.trainingSvc.reset(); }
+
+  private buildModeBLlmContext(): LlmChatContext {
+    const ds = this.trainingDatasetDetail;
+    const lines: string[] = [
+      '模式: B 模式 / 模型训练工作台',
+      `当前页面子模式: ${this.mode}`,
+      `登录用户: ${this.authUser?.displayName || this.authUser?.username || '未登录'}`,
+      `网络层数: ${this.layerCount}`,
+      `参数量估计: ${this.parameterCount}`,
+      `当前模板: ${this.selectedTemplate?.name ?? this.selectedTemplateId}`,
+      `当前选中层: ${this.selectedLayer?.name ?? '无'} (${this.selectedLayer?.type ?? '-'})`,
+      `当前训练任务: ${this.currentTrainingJobId || '无'}`,
+      `训练状态: ${this.trainingStatus}`,
+      `Epoch: ${this.trainingEpoch} / ${this.trainingConfig.totalEpochs}`,
+      `Batch: ${this.trainingCurrentBatch} / ${this.trainingTotalBatches}`,
+      `训练进度: ${this.trainingProgressPercent.toFixed(1)}%`,
+      `训练损失: ${this.trainingLoss.toFixed(6)}`,
+      `验证损失: ${this.trainingValLoss === null ? 'N/A' : Number(this.trainingValLoss).toFixed(6)}`,
+      `训练准确率: ${(this.trainingAcc * 100).toFixed(2)}%`,
+      `验证准确率: ${this.trainingValAcc === null ? 'N/A' : (Number(this.trainingValAcc) * 100).toFixed(2) + '%'}`,
+      `学习率: ${this.trainingLr}`,
+      `梯度范数: ${this.trainingGradientNorm} (${this.gradientAlert})`,
+      `训练耗时: ${this.formatDuration(this.trainingElapsedSeconds)}`,
+      `预计剩余: ${this.formatDuration(this.trainingEtaSeconds)}`
+    ];
+
+    if (ds) {
+      lines.push(
+        '',
+        '当前训练数据集:',
+        `id: ${ds.id}`,
+        `名称: ${ds.name}`,
+        `来源: ${ds.source}`,
+        `类型: ${ds.kind}`,
+        `描述: ${ds.description}`,
+        `样本数: ${ds.sampleCount}`,
+        `类别数: ${ds.classCount}`,
+        `输入形状: ${ds.inputShape}`,
+        `标签: ${ds.labels.join(', ') || '无'}`,
+        `划分: train=${(ds.trainRatio * 100).toFixed(1)}%, val=${(ds.valRatio * 100).toFixed(1)}%, test=${(ds.testRatio * 100).toFixed(1)}%`,
+        `数据集警告: ${ds.warnings.join('; ') || '无'}`
+      );
+      if (ds.labelDistribution?.length) {
+        lines.push(`类别分布: ${ds.labelDistribution.map(item => `${item.label}=${item.count}`).join(', ')}`);
+      }
+    } else {
+      lines.push('', '当前训练数据集: 未加载');
+    }
+
+    lines.push(
+      '',
+      '训练超参数:',
+      `batchSize: ${this.trainingConfig.batchSize}`,
+      `totalEpochs: ${this.trainingConfig.totalEpochs}`,
+      `learningRate: ${this.trainingConfig.learningRate}`,
+      `optimizer: ${this.trainingConfig.optimizer}`,
+      `scheduler: ${this.trainingConfig.scheduler}`,
+      `lrDecay: ${this.trainingConfig.lrDecay}`,
+      `lossFunction: ${this.trainingConfig.lossFunction}`
+    );
+
+    lines.push('', '网络结构:');
+    for (const [index, layer] of this.layers.entries()) {
+      const shapeHint = this.trainingLayerShapeMap[layer.id] ?? this.forwardLayerShapeMap[layer.id] ?? '';
+      lines.push(`${index + 1}. ${layer.name} / ${layer.type} / inputs=${layer.inputs.join(',') || 'none'} / shape=${shapeHint || '未知'} / params=${this.safeJson(layer.params)}`);
+    }
+
+    lines.push('', '结构校验结果:');
+    for (const issue of this.trainingModelIssues) {
+      lines.push(`[${issue.level}] ${issue.message}`);
+    }
+
+    if (this.trainingHistory.length) {
+      lines.push('', '最近训练曲线点:');
+      for (const point of this.trainingHistory.slice(-8)) {
+        lines.push(`step=${point.step}, loss=${point.loss.toFixed(6)}, valLoss=${point.valLoss.toFixed(6)}, acc=${(point.accuracy * 100).toFixed(2)}%, valAcc=${(point.valAccuracy * 100).toFixed(2)}%, lr=${point.lr}, gradNorm=${point.gradientNorm.toFixed(6)}`);
+      }
+    }
+
+    if (this.trainingLogs.length) {
+      lines.push('', '最近训练日志:');
+      for (const log of this.trainingLogs.slice(-12)) {
+        lines.push(`[${log.time}] [${log.level}] ${log.message}`);
+      }
+    }
+
+    if (this.trainingTestResult) {
+      lines.push(
+        '',
+        '测试集结果:',
+        `testLoss: ${this.trainingTestResult.testLoss ?? 'N/A'}`,
+        `testAccuracy: ${this.trainingTestResult.testAccuracy === null ? 'N/A' : (this.trainingTestResult.testAccuracy * 100).toFixed(2) + '%'}`,
+        `sampleCount: ${this.trainingTestResult.sampleCount}`
+      );
+    }
+
+    if (this.datasetCheckpointHistory.length) {
+      lines.push('', '当前数据集历史 checkpoint:');
+      for (const ckpt of this.datasetCheckpointHistory.slice(0, 5)) {
+        lines.push(`${ckpt.name} / Epoch ${ckpt.epoch}/${ckpt.totalEpochs} / 训练=${this.checkpointPercent(ckpt.trainAccuracy)} / 验证=${this.checkpointPercent(ckpt.valAccuracy)} / 测试=${this.checkpointPercent(ckpt.testAccuracy)} / 结构=${this.checkpointLayerText(ckpt)} / 配置=${this.checkpointConfigText(ckpt)}`);
+      }
+    }
+
+    if (ds?.imagePreview?.length) {
+      lines.push(
+        '',
+        '数据集预览图片摘要:',
+        ...ds.imagePreview.slice(0, 8).map(item => `${item.label} / ${item.name}`)
+      );
+    }
+
+    return { text: lines.join('\n'), images: [] };
+  }
+
+  private safeJson(value: unknown): string {
+    try {
+      const text = JSON.stringify(value);
+      return text.length > 900 ? `${text.slice(0, 900)}...` : text;
+    } catch {
+      return String(value);
+    }
+  }
 
   openCurrentTrainingChat(): void {
     const target = this.trainingSvc.currentBackendJobId.trim();

@@ -15,6 +15,7 @@ export interface CollaborationMessage {
   displayName?: string;
   text: string;
   createdAt: string;
+  streaming?: boolean;
 }
 
 export interface CollaborationRoomSummary {
@@ -27,6 +28,7 @@ export interface CollaborationRoomSummary {
 type CollaborationInbound =
   | { type: 'history'; jobId: string; messages: CollaborationMessage[] }
   | { type: 'presence'; jobId: string; users: CollaborationUser[] }
+  | { type: 'chat_update'; id: string; jobId: string; text: string; streaming?: boolean; createdAt?: string }
   | CollaborationMessage;
 
 @Injectable({ providedIn: 'root' })
@@ -122,6 +124,19 @@ export class TrainingCollaborationService implements OnDestroy {
     }
     if (payload.type === 'chat' || payload.type === 'system') {
       this.messages$.next([...this.messages$.value, payload].slice(-100));
+      return;
+    }
+    if (payload.type === 'chat_update') {
+      const next = this.messages$.value.map(message => {
+        if (message.id !== payload.id) return message;
+        return {
+          ...message,
+          text: payload.text,
+          streaming: payload.streaming ?? false,
+          createdAt: payload.createdAt ?? message.createdAt
+        };
+      });
+      this.messages$.next(next);
     }
   }
 
