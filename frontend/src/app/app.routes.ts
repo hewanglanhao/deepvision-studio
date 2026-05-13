@@ -25,6 +25,11 @@ export const routes: Routes = [
     data: { mode: 'forward' }
   },
   {
+    path: 'teaching',
+    loadComponent: () => import('@shell/teaching/teaching-doc-page.component')
+      .then(m => m.TeachingDocPageComponent)
+  },
+  {
     path: 'mode-b',
     loadComponent: () => import('@modes/mode-b/mode-b-page.component')
       .then(m => m.ModeBPageComponent),

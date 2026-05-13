@@ -9,3 +9,18 @@ html, body {
   color: #1f2937;
   font-family: 'Inter', 'Segoe UI', 'Noto Sans SC', sans-serif;
 }
+
+.teaching-term-active {
+  border-radius: 5px;
+  outline: 1px dashed rgba(15, 118, 110, .48);
+  outline-offset: 2px;
+  background: rgba(204, 251, 241, .68);
+  cursor: help;
+  transition: background .12s ease, outline-color .12s ease, box-shadow .12s ease;
+}
+
+.teaching-term-active:hover,
+.teaching-term-active:focus-visible {
+  outline-color: #0f766e;
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, .15);
+}

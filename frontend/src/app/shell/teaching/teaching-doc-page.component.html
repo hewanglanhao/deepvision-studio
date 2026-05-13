@@ -1,0 +1,54 @@
+<main class="teaching-page">
+  <header class="teaching-hero">
+    <a routerLink="/mode-a" class="back-link">返回 A 模式</a>
+    <div>
+      <p class="eyebrow">教学文档</p>
+      <h1>A 模式术语与前向传播指南</h1>
+      <p class="lead">
+        这里集中解释 A 模式里会遇到的标准术语。开启右下角问号后，回到实验界面点击高亮术语即可直接跳到对应模块。
+      </p>
+    </div>
+  </header>
+
+  <div class="teaching-layout">
+    <nav class="toc" aria-label="教学文档目录">
+      @for (category of categories; track category) {
+        <section>
+          <h2>{{ category }}</h2>
+          @for (term of termsByCategory(category); track term.id) {
+            <a [routerLink]="['/teaching']" [fragment]="term.id">{{ term.title }}</a>
+          }
+        </section>
+      }
+    </nav>
+
+    <article class="term-list">
+      @for (category of categories; track category) {
+        <section class="category-section">
+          <h2>{{ category }}</h2>
+          <div class="term-grid">
+            @for (term of termsByCategory(category); track term.id) {
+              <section class="term-card" [id]="term.id">
+                <div class="term-head">
+                  <span class="mode-pill">模式 {{ term.mode }}</span>
+                  <h3>{{ term.title }}</h3>
+                </div>
+                <p class="summary">{{ term.summary }}</p>
+                <ul>
+                  @for (line of term.details; track line) {
+                    <li>{{ line }}</li>
+                  }
+                </ul>
+                <div class="aliases">
+                  @for (alias of term.aliases; track alias) {
+                    <span>{{ alias }}</span>
+                  }
+                </div>
+              </section>
+            }
+          </div>
+        </section>
+      }
+    </article>
+  </div>
+</main>

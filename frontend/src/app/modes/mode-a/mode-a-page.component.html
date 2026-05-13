@@ -56,7 +56,7 @@
       <!-- 左侧面板 -->
       <aside class="side-panel">
         <div class="pane">
-          <div class="pane-title">输入来源</div>
+          <div class="pane-title"><span appTeachingTerm="input-source">输入来源</span></div>
           <div class="dataset-collection-list">
             @for (dataset of localDatasetNames; track dataset) {
               <button class="dataset-collection-card" [class.active]="selectedDataset===dataset" (click)="selectDataset(dataset)">
@@ -78,13 +78,13 @@
 
         @if (currentInputAsset) {
           <div class="pane">
-            <div class="pane-title">输入信息</div>
+            <div class="pane-title"><span appTeachingTerm="input-source">输入信息</span></div>
             <div class="info-grid">
               <div class="info-row"><span class="info-k">宽度</span><span class="info-v">{{ currentInputAsset.originalWidth }}px</span></div>
               <div class="info-row"><span class="info-k">高度</span><span class="info-v">{{ currentInputAsset.originalHeight }}px</span></div>
-              <div class="info-row"><span class="info-k">通道</span><span class="info-v">{{ currentInputAsset.originalChannels }}</span></div>
+              <div class="info-row"><span class="info-k" appTeachingTerm="channel">通道</span><span class="info-v">{{ currentInputAsset.originalChannels }}</span></div>
               <div class="info-row"><span class="info-k">颜色</span><span class="info-v">{{ currentInputAsset.originalColorMode }}</span></div>
-              <div class="info-row"><span class="info-k">实际计算尺寸</span><span class="info-v">{{ currentInputAsset.prepared.tensor.shape[1] }} × {{ currentInputAsset.prepared.tensor.shape[0] }} × {{ currentInputAsset.prepared.tensor.shape[2] }}</span></div>
+              <div class="info-row"><span class="info-k" appTeachingTerm="shape">实际计算尺寸</span><span class="info-v">{{ currentInputAsset.prepared.tensor.shape[1] }} × {{ currentInputAsset.prepared.tensor.shape[0] }} × {{ currentInputAsset.prepared.tensor.shape[2] }}</span></div>
             </div>
             @if (originalInputImageUrl) {
               <div style="margin-top:8px">
@@ -94,7 +94,7 @@
             }
             @if (preparedInputImageUrl) {
               <div style="margin-top:8px">
-                <div class="section-title" style="margin-bottom:3px">预处理后预览 · {{ currentInputAsset.prepared.tensor.shape[1] }}×{{ currentInputAsset.prepared.tensor.shape[0] }}</div>
+                <div class="section-title" style="margin-bottom:3px"><span appTeachingTerm="preprocessing">预处理后预览</span> · {{ currentInputAsset.prepared.tensor.shape[1] }}×{{ currentInputAsset.prepared.tensor.shape[0] }}</div>
                 <img class="input-image-preview zoomable-image" [src]="preparedInputImageUrl" alt="预处理后输入图像" (click)="openImageViewer('预处理后输入图像', preparedInputImageUrl, currentInputAsset.prepared.tensor.shape[1] + '×' + currentInputAsset.prepared.tensor.shape[0] + '×' + currentInputAsset.prepared.tensor.shape[2])" />
                 @if (currentInputAsset.prepared.notes.length) {
                   <div class="muted" style="margin-top:3px">{{ currentInputAsset.prepared.notes.join(' · ') }}</div>
@@ -105,8 +105,8 @@
         }
 
         <div class="pane">
-          <div class="pane-title">网络模板</div>
-          <label>选择模板
+          <div class="pane-title"><span appTeachingTerm="network-template">网络模板</span></div>
+          <label><span appTeachingTerm="network-template">选择模板</span>
             <select [(ngModel)]="selectedTemplateId" (change)="applyTemplate()">
               @for (t of modelTemplates; track t.id) { <option [value]="t.id">{{ t.name }}</option> }
             </select>
@@ -119,7 +119,7 @@
       <main class="center-panel">
         <div class="canvas-container">
           <div class="canvas-header">
-            <span class="canvas-title">网络结构</span>
+            <span class="canvas-title" appTeachingTerm="network-template">网络结构</span>
             <div class="palette">
               @for (type of layerPalette; track type) {
                 <button class="palette-chip"
@@ -147,7 +147,7 @@
           @if (forwardResult?.shapePath?.length) {
             <div class="shape-trail-bar">
               @for (step of forwardResult!.shapePath; track $index) {
-                <span class="shape-tag">{{ step }}</span>
+                <span class="shape-tag" appTeachingTerm="shape">{{ step }}</span>
                 @if ($index < forwardResult!.shapePath.length - 1) {
                   <span class="shape-arrow">→</span>
                 }
@@ -174,72 +174,72 @@
               @if (layer.type === 'input') {
                 <div class="row-3">
                   @if (!uploadedImageUrl) {
-                    <label>缩放模式
+                  <label><span appTeachingTerm="preprocessing">缩放模式</span>
                       <select [(ngModel)]="layer.params.preprocessing.resizeMode" (ngModelChange)="onLayerConfigChange()">
                         <option value="none">不缩放</option><option value="fit">自适应</option>
                       </select>
                     </label>
                   } @else {
-                    <label>缩放模式
+                    <label><span appTeachingTerm="preprocessing">缩放模式</span>
                       <input value="上传图片时由“上传计算档位”决定" disabled />
                     </label>
                   }
-                  <label>颜色模式
+                  <label><span appTeachingTerm="preprocessing">颜色模式</span>
                     <select [(ngModel)]="layer.params.preprocessing.colorMode" (ngModelChange)="onLayerConfigChange()">
                       @for (m of inputColorModeOptions; track m.value) {
                         <option [value]="m.value">{{ m.label }}</option>
                       }
                     </select>
                   </label>
-                  <label>归一化
+                  <label><span appTeachingTerm="normalization">归一化</span>
                     <select [(ngModel)]="layer.params.preprocessing.normalize" (ngModelChange)="onLayerConfigChange()">
-                      <option value="none">不归一化</option><option value="zero-one">[0,1]</option>
+                    <option value="none">不归一化</option><option value="zero-one">[0,1]</option>
                     </select>
                   </label>
                 </div>
                 @if (!uploadedImageUrl && layer.params.preprocessing.resizeMode === 'fit') {
                   <div class="row-2">
-                    <label>目标宽 <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetWidth" (ngModelChange)="onLayerConfigChange()" /></label>
-                    <label>目标高 <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetHeight" (ngModelChange)="onLayerConfigChange()" /></label>
+                    <label><span appTeachingTerm="preprocessing">目标宽</span> <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetWidth" (ngModelChange)="onLayerConfigChange()" /></label>
+                    <label><span appTeachingTerm="preprocessing">目标高</span> <input type="number" min="8" [(ngModel)]="layer.params.preprocessing.targetHeight" (ngModelChange)="onLayerConfigChange()" /></label>
                   </div>
                 }
                 <div class="checkbox-row">
                   <input type="checkbox" [(ngModel)]="layer.params.preprocessing.invert" (ngModelChange)="onLayerConfigChange()" />
-                  像素值取反
+                  <span appTeachingTerm="preprocessing">像素值取反</span>
                 </div>
               }
 
               @if (layer.type === 'conv2d') {
                 <div class="row-3">
-                  <label>输出通道
+                  <label><span appTeachingTerm="channel">输出通道</span>
                     <input type="number" min="1" [(ngModel)]="layer.params.outChannels" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'outChannels')" />
                     @if (hasFieldError(layer.id, 'outChannels')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'outChannels') }}</div>
                     }
                   </label>
-                  <label>核大小
+                  <label><span appTeachingTerm="kernel-size">核大小</span>
                     <input type="number" min="1" max="9" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onKernelSizeChange()"
                       [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
                     @if (hasFieldError(layer.id, 'kernelSize')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div>
                     }
                   </label>
-                  <label>激活函数
+                  <label><span appTeachingTerm="activation">激活函数</span>
                     <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
                       <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
                     </select>
                   </label>
                 </div>
                 <div class="row-2">
-                  <label>stride
+                  <label><span appTeachingTerm="stride">stride</span>
                     <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'stride')" />
                     @if (hasFieldError(layer.id, 'stride')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div>
                     }
                   </label>
-                  <label>padding
+                  <label><span appTeachingTerm="padding">padding</span>
                     <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'padding')" />
                     @if (hasFieldError(layer.id, 'padding')) {
@@ -248,19 +248,19 @@
                   </label>
                 </div>
                 <div class="row-2">
-                  <label>Dilation
+                  <label><span appTeachingTerm="dilation">Dilation</span>
                     <input type="number" min="1" [(ngModel)]="layer.params.dilation" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'dilation')" />
                     @if (hasFieldError(layer.id, 'dilation')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'dilation') }}</div>
                     }
                   </label>
-                  <label>Bias
+                  <label><span appTeachingTerm="bias">Bias</span>
                     <input type="number" step="0.01" [ngModel]="convBiasValue(layer)" (ngModelChange)="onConvBiasInput(layer, $event)" />
                   </label>
                 </div>
                 <div class="row-2" [class.row-1]="!showConvInChannelSelector">
-                  <label>编辑输出通道
+                  <label><span appTeachingTerm="channel">编辑输出通道</span>
                     <select [(ngModel)]="selectedKernelOutChannel" (ngModelChange)="onKernelChannelChange()">
                       @for (oc of convOutChannelIndices; track oc) {
                         <option [ngValue]="oc">Out {{ oc }}</option>
@@ -268,7 +268,7 @@
                     </select>
                   </label>
                   @if (showConvInChannelSelector) {
-                    <label>输入通道切片
+                    <label><span appTeachingTerm="channel">输入通道切片</span>
                       <select [(ngModel)]="selectedKernelInChannel" (ngModelChange)="onKernelChannelChange()">
                         @for (ic of convInChannelIndices; track ic) {
                           <option [ngValue]="ic">In {{ ic }}</option>
@@ -278,11 +278,11 @@
                   }
                 </div>
                 @if (!showConvInChannelSelector) {
-                  <div class="muted" style="margin-bottom:6px">当前输入是单通道，卷积核仅存在 In 0 切片。</div>
+                  <div class="muted" style="margin-bottom:6px">当前输入是<span appTeachingTerm="channel">单通道</span>，<span appTeachingTerm="conv2d">卷积核</span>仅存在 In 0 切片。</div>
                 }
                 <div class="kernel-presets">
                   <div class="section-line" style="margin-bottom:4px">
-                    <div class="section-title">经典卷积核预设</div>
+                    <div class="section-title" appTeachingTerm="conv2d">经典卷积核预设</div>
                     <button class="btn-sm compare-kernel-trigger" (click)="openKernelCompareModal()">对比效果</button>
                   </div>
                   <div class="preset-chips">
@@ -292,7 +292,7 @@
                   </div>
                 </div>
                 <div class="kernel-wrap">
-                  <div class="section-title" style="margin-bottom:3px">卷积核矩阵（Out {{ selectedKernelOutChannel }} · In {{ selectedKernelInChannel }}）</div>
+                  <div class="section-title" style="margin-bottom:3px"><span appTeachingTerm="conv2d">卷积核矩阵</span>（Out {{ selectedKernelOutChannel }} · In {{ selectedKernelInChannel }}）</div>
                   <div class="kernel-grid" [style.--size]="layer.params.kernelSize">
                     @for (row of editableKernelMatrix; track $index; let r = $index) {
                       @for (cell of row; track $index; let c = $index) {
@@ -305,26 +305,26 @@
 
               @if (layer.type === 'pool2d') {
                 <div class="row-3">
-                  <label>池化方式
+                  <label><span appTeachingTerm="pooling">池化方式</span>
                     <select [(ngModel)]="layer.params.mode" (ngModelChange)="onLayerConfigChange()">
                       <option value="max">最大池化</option><option value="avg">平均池化</option>
                     </select>
                   </label>
-                  <label>核大小
+                  <label><span appTeachingTerm="kernel-size">核大小</span>
                     <input type="number" min="1" [(ngModel)]="layer.params.kernelSize" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'kernelSize')" />
                     @if (hasFieldError(layer.id, 'kernelSize')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'kernelSize') }}</div>
                     }
                   </label>
-                  <label>stride
+                  <label><span appTeachingTerm="stride">stride</span>
                     <input type="number" min="1" [(ngModel)]="layer.params.stride" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'stride')" />
                     @if (hasFieldError(layer.id, 'stride')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'stride') }}</div>
                     }
                   </label>
-                  <label>padding
+                  <label><span appTeachingTerm="padding">padding</span>
                     <input type="number" min="0" [(ngModel)]="layer.params.padding" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'padding')" />
                     @if (hasFieldError(layer.id, 'padding')) {
@@ -336,14 +336,14 @@
 
               @if (layer.type === 'dense') {
                 <div class="row-2">
-                  <label>神经元数
+                  <label><span appTeachingTerm="dense">神经元数</span>
                     <input type="number" min="1" [(ngModel)]="layer.params.units" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'units')" />
                     @if (hasFieldError(layer.id, 'units')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'units') }}</div>
                     }
                   </label>
-                  <label>激活函数
+                  <label><span appTeachingTerm="activation">激活函数</span>
                     <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
                       <option value="none">无</option><option value="relu">ReLU</option><option value="tanh">Tanh</option><option value="gelu">GELU</option><option value="sigmoid">Sigmoid</option>
                     </select>
@@ -354,14 +354,14 @@
 
               @if (layer.type === 'output') {
                 <div class="row-2">
-                  <label>输出类别数
+                  <label><span appTeachingTerm="top-k">输出类别数</span>
                     <input type="number" min="1" [(ngModel)]="layer.params.units" (ngModelChange)="onLayerConfigChange()"
                       [class.field-error]="hasFieldError(layer.id, 'units')" />
                     @if (hasFieldError(layer.id, 'units')) {
                       <div class="field-error-msg">{{ fieldErrorText(layer.id, 'units') }}</div>
                     }
                   </label>
-                  <label>激活函数
+                  <label><span appTeachingTerm="activation">激活函数</span>
                     <select [(ngModel)]="layer.params.activation" (ngModelChange)="onLayerConfigChange()">
                       <option value="none">无</option><option value="softmax">Softmax</option><option value="sigmoid">Sigmoid</option>
                     </select>
@@ -379,7 +379,7 @@
               }
 
               @if (layer.type === 'dropout') {
-                <label>Dropout 比率
+                <label><span appTeachingTerm="dropout">Dropout 比率</span>
                   <input type="number" step="0.05" min="0" max="0.95" [(ngModel)]="layer.params.rate" (ngModelChange)="onLayerConfigChange()"
                     [class.field-error]="hasFieldError(layer.id, 'rate')" />
                   @if (hasFieldError(layer.id, 'rate')) {
@@ -388,7 +388,7 @@
                 </label>
                 <div class="checkbox-row">
                   <input type="checkbox" [(ngModel)]="layer.params.training" (ngModelChange)="onLayerConfigChange()" />
-                  启用随机丢弃演示
+                  <span appTeachingTerm="dropout">启用随机丢弃演示</span>
                 </div>
               }
             </div>
@@ -397,20 +397,20 @@
 
         <ng-template #denseWeightEditor let-layer="layer" let-title="title" let-unitLabel="unitLabel">
           <div class="advanced-param-box dense-weight-editor">
-            <div class="section-title">{{ title }}</div>
+            <div class="section-title"><span appTeachingTerm="bias">{{ title }}</span></div>
             <div class="row-2">
-              <label>编辑{{ unitLabel }}
+              <label><span appTeachingTerm="dense">编辑{{ unitLabel }}</span>
                 <select [ngModel]="selectedDenseWeightRow(layer)" (ngModelChange)="onDenseWeightRowChange(layer, $event)">
                   @for (unit of denseUnitIndices(layer); track unit) {
                     <option [ngValue]="unit">{{ unitLabel }} {{ unit }}</option>
                   }
                 </select>
               </label>
-              <label>Bias
+              <label><span appTeachingTerm="bias">Bias</span>
                 <input type="number" step="0.01" [ngModel]="denseBiasValue(layer, selectedDenseWeightRow(layer))" (ngModelChange)="onDenseBiasInput(layer, $event)" />
               </label>
             </div>
-            <div class="param-note">Dense/Output 权重由系统按层 ID 生成确定性演示权重；当前面板只开放偏置，避免庞大的权重矩阵干扰前向传播教学。</div>
+            <div class="param-note"><span appTeachingTerm="dense">Dense/Output 权重</span>由系统按层 ID 生成确定性演示权重；当前面板只开放<span appTeachingTerm="bias">偏置</span>，避免庞大的权重矩阵干扰<span appTeachingTerm="forward-pass">前向传播</span>教学。</div>
           </div>
         </ng-template>
       </main>
@@ -419,15 +419,15 @@
       <aside class="side-panel right">
         @if (selectedForwardResult; as res) {
           <div class="pane">
-            <div class="pane-title">层检查器</div>
+            <div class="pane-title"><span appTeachingTerm="layer-inspector">层检查器</span></div>
             <div class="editor-header" style="margin-bottom:6px">
               <span class="layer-type-badge">{{ res.layerType }}</span>
               <span style="font-size:13px;font-weight:600">{{ res.layerName }}</span>
             </div>
             <div class="shape-path">
-              <span class="shape-tag">{{ res.inputShapeLabel }}</span>
+              <span class="shape-tag" appTeachingTerm="shape">{{ res.inputShapeLabel }}</span>
               <span class="shape-arrow">→</span>
-              <span class="shape-tag" style="border-color:#bbf7d0;background:#f0fdf4;color:var(--green)">{{ res.outputShapeLabel }}</span>
+              <span class="shape-tag" style="border-color:#bbf7d0;background:#f0fdf4;color:var(--green)" appTeachingTerm="shape">{{ res.outputShapeLabel }}</span>
             </div>
             <div class="muted" style="margin-top:5px">{{ res.transitionNote }}</div>
             @if (selectedFormula; as formula) {
@@ -442,11 +442,11 @@
           </div>
 
           <div class="pane">
-            <div class="pane-title">可视化输出</div>
+            <div class="pane-title"><span appTeachingTerm="feature-map">可视化输出</span></div>
             @if (res.visualization.mode === 'image') {
               <img class="tensor-image-preview zoomable-image" [src]="selectedTensorImageUrl" [alt]="res.layerName + ' output'" (click)="openImageViewer(res.layerName + ' 输出', selectedTensorImageUrl, res.outputShapeLabel)" />
               @if (selectedChannelPreviews.length > 1) {
-                <div class="section-title" style="margin:6px 0 3px">特征图（展示前 {{ selectedChannelPreviews.length }} / 共 {{ selectedChannelCount }}）</div>
+                <div class="section-title" style="margin:6px 0 3px"><span appTeachingTerm="feature-map">特征图</span>（展示前 {{ selectedChannelPreviews.length }} / 共 {{ selectedChannelCount }}）</div>
                 <div class="channels-grid">
                   @for (ch of selectedChannelPreviews; track ch.channel) {
                     <div class="channel-card">
@@ -469,12 +469,12 @@
           </div>
 
           <div class="pane">
-            <div class="pane-title">张量统计</div>
+            <div class="pane-title"><span appTeachingTerm="tensor-stats">张量统计</span></div>
             <div class="stat-row">
-              <div class="stat-cell"><div class="stat-label">最小值</div><div class="stat-value">{{ res.stats.min.toFixed(3) }}</div></div>
-              <div class="stat-cell"><div class="stat-label">最大值</div><div class="stat-value">{{ res.stats.max.toFixed(3) }}</div></div>
-              <div class="stat-cell"><div class="stat-label">均值</div><div class="stat-value">{{ res.stats.mean.toFixed(3) }}</div></div>
-              <div class="stat-cell"><div class="stat-label">非零率</div><div class="stat-value">{{ (res.stats.nonZeroRatio*100).toFixed(0) }}%</div></div>
+              <div class="stat-cell"><div class="stat-label" appTeachingTerm="tensor-stats">最小值</div><div class="stat-value">{{ res.stats.min.toFixed(3) }}</div></div>
+              <div class="stat-cell"><div class="stat-label" appTeachingTerm="tensor-stats">最大值</div><div class="stat-value">{{ res.stats.max.toFixed(3) }}</div></div>
+              <div class="stat-cell"><div class="stat-label" appTeachingTerm="tensor-stats">均值</div><div class="stat-value">{{ res.stats.mean.toFixed(3) }}</div></div>
+              <div class="stat-cell"><div class="stat-label" appTeachingTerm="tensor-stats">非零率</div><div class="stat-value">{{ (res.stats.nonZeroRatio*100).toFixed(0) }}%</div></div>
             </div>
           </div>
 
@@ -497,11 +497,11 @@
         @if (forwardResult?.finalTensor) {
           <div class="pane">
             @if (finalTensorMode === 'image') {
-              <div class="pane-title">最终输出（图像张量）</div>
+              <div class="pane-title">最终输出（<span appTeachingTerm="tensor">图像张量</span>）</div>
               @if (finalImageViz; as fv) {
                 <img class="tensor-image-preview zoomable-image" [src]="finalTensorImageUrl" alt="最终输出图像" (click)="openImageViewer('最终输出图像', finalTensorImageUrl, fv.width + '×' + fv.height + '×' + fv.channels)" />
                 @if (fv.channelPreviews.length > 1) {
-                  <div class="section-title compact-title">输出特征图通道（展示前 {{ fv.channelPreviews.length }} / 共 {{ finalChannelCount }}）</div>
+                  <div class="section-title compact-title"><span appTeachingTerm="feature-map">输出特征图通道</span>（展示前 {{ fv.channelPreviews.length }} / 共 {{ finalChannelCount }}）</div>
                   <div class="channels-grid">
                     @for (ch of fv.channelPreviews; track ch.channel) {
                       <div class="channel-card">
@@ -519,7 +519,7 @@
                 <div class="muted" style="margin-top:4px">{{ fv.width }}×{{ fv.height }}×{{ fv.channels }}</div>
               }
             } @else if (finalTensorMode === 'vector') {
-              <div class="pane-title">输出分布（Top-K）</div>
+              <div class="pane-title"><span appTeachingTerm="top-k">输出分布（Top-K）</span></div>
               <div class="topk-list topk-compact">
                 @for (item of forwardResult!.finalTopK; track item.index) {
                   <div class="topk-item">
@@ -554,7 +554,7 @@
           <div class="modal-title">后端计算中</div>
         </div>
         <div class="modal-body">
-          <p>正在执行前向传播，请稍候...</p>
+          <p>正在执行<span appTeachingTerm="forward-pass">前向传播</span>，请稍候...</p>
           @if (forwardStatusMessage) {
             <p>{{ forwardStatusMessage }}</p>
           }
@@ -592,8 +592,8 @@
       <div class="modal-card kernel-compare-modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div>
-            <div class="modal-title">卷积核对比</div>
-            <div class="modal-subtitle">当前 Conv 层 · Out {{ selectedKernelOutChannel }} · 同一输入图的真实前向结果</div>
+            <div class="modal-title" appTeachingTerm="conv2d">卷积核对比</div>
+            <div class="modal-subtitle">当前 Conv 层 · Out {{ selectedKernelOutChannel }} · 同一输入图的真实<span appTeachingTerm="forward-pass">前向结果</span></div>
           </div>
           <button class="btn-ghost" (click)="closeKernelCompareModal()">{{ kernelCompareBusy ? '取消' : '关闭' }}</button>
         </div>
@@ -601,7 +601,7 @@
           @if (kernelCompareBusy) {
             <div class="compare-loading">
               <div class="spinner"></div>
-              <span>正在分别套用经典卷积核并调用后端前向传播...</span>
+              <span>正在分别套用经典<span appTeachingTerm="conv2d">卷积核</span>并调用后端<span appTeachingTerm="forward-pass">前向传播</span>...</span>
             </div>
           }
           @if (kernelCompareError) {
@@ -776,6 +776,8 @@
       </div>
     </div>
   }
+
+  <app-teaching-search-fab />
 
   <app-llm-floating-assistant
     title="A模式 AI 分析"

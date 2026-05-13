@@ -7,6 +7,8 @@ import { NetworkOverviewComponent } from '@shared/network/network-overview.compo
 import { PlatformTopbarComponent } from '@shared/components/platform-topbar.component';
 import { NETWORK_3D_SESSION_KEY, Network3dLayerSnapshot, Network3dPayload } from '@shared/network-3d/network-3d.models';
 import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
+import { TeachingSearchFabComponent } from '@shared/teaching/teaching-search-fab.component';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import { LlmChatContext } from '@shared/llm/llm.models';
 import { MODE_A_LLM_SYSTEM_PROMPT } from '@shared/llm/llm-prompts';
 import { AuthUser } from '@core/auth/auth.models';
@@ -88,7 +90,9 @@ type EditableBiasParams = { bias?: number[] };
     RouterModule,
     NetworkOverviewComponent,
     PlatformTopbarComponent,
-    LlmFloatingAssistantComponent
+    LlmFloatingAssistantComponent,
+    TeachingSearchFabComponent,
+    TeachingTermDirective
   ],
   templateUrl: './mode-a-page.component.html',
   styleUrl: './mode-a-page.component.css'
