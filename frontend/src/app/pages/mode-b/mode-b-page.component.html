@@ -661,6 +661,37 @@
           <small>查看历史数据集、网络结构和准确率</small>
         </a>
 
+        <div class="pane collaboration-pane">
+          <div class="pane-title">多人协作聊天室</div>
+          <div class="muted">聊天室已拆分为独立页面，可基于当前训练任务创建房间，也可输入已有 jobId 加入观察。</div>
+          <button class="btn-sm btn-primary" (click)="openCurrentTrainingChat()" [disabled]="!currentTrainingJobId">用当前训练新建聊天室</button>
+          <label>训练房间 ID
+            <input [(ngModel)]="collaborationJoinId" placeholder="粘贴 train-... jobId" />
+          </label>
+          <div class="btn-row">
+            <button class="btn-sm" (click)="openExistingTrainingChat()">加入现有聊天室</button>
+            <button class="btn-sm" (click)="loadCollaborationRooms()" [disabled]="collaborationRoomsLoading">{{ collaborationRoomsLoading ? '加载中' : '查看现有聊天室' }}</button>
+            <button class="btn-ghost btn-sm" (click)="openCollaborationWindow()">打开聊天室页面</button>
+          </div>
+          @if (collaborationError) {
+            <div class="error-box" style="margin-top:0">{{ collaborationError }}</div>
+          }
+          @if (collaborationRoomsOpen) {
+            <div class="collab-room-list">
+              @if (collaborationRooms.length) {
+                @for (room of collaborationRooms; track room.jobId) {
+                  <button class="collab-room-card" (click)="joinListedCollaborationRoom(room)">
+                    <span>{{ room.jobId }}</span>
+                    <small>{{ room.onlineCount }} 人在线 · {{ room.users.join('、') || '暂无成员' }}</small>
+                  </button>
+                }
+              } @else {
+                <div class="muted">当前没有已创建的聊天室。</div>
+              }
+            </div>
+          }
+        </div>
+
       </aside>
 
       <main class="training-center">

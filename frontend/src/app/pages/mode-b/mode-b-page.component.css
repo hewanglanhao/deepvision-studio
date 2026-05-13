@@ -1062,6 +1062,129 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   background: #d1fae5;
 }
 
+.collaboration-pane {
+  display: grid;
+  gap: 8px;
+}
+
+.collab-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.collab-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.collab-dot.connected { background: var(--green); box-shadow: 0 0 0 3px #dcfce7; }
+.collab-dot.connecting { background: var(--yellow); box-shadow: 0 0 0 3px #fef3c7; }
+.collab-dot.error { background: var(--red); box-shadow: 0 0 0 3px #fee2e2; }
+
+.collab-users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  color: var(--text3);
+  font-size: 11px;
+}
+
+.collab-users i {
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg3);
+  color: var(--text2);
+  font-style: normal;
+}
+
+.collab-messages {
+  min-height: 120px;
+  max-height: 190px;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.collab-message {
+  display: grid;
+  gap: 2px;
+  padding: 6px 7px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.collab-message strong {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.collab-message.system {
+  border-color: #bbf7d0;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 11px;
+}
+
+.collab-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.collab-room-list {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.collab-room-card {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid #d8dee6;
+  border-left: 4px solid var(--accent2);
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collab-room-card span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.collab-room-card small {
+  color: var(--text3);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
 /* ===== 实验对比 ===== */
 .exp-row { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; margin-bottom: 5px; }
 .exp-name { flex: 1; font-size: 13px; color: var(--text); }

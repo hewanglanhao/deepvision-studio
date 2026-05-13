@@ -9,14 +9,21 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @EnableWebSocket
 public class TrainingWebSocketConfig implements WebSocketConfigurer {
   private final TrainingStreamHandler streamHandler;
+  private final TrainingCollaborationHandler collaborationHandler;
 
-  public TrainingWebSocketConfig(TrainingStreamHandler streamHandler) {
+  public TrainingWebSocketConfig(
+      TrainingStreamHandler streamHandler,
+      TrainingCollaborationHandler collaborationHandler
+  ) {
     this.streamHandler = streamHandler;
+    this.collaborationHandler = collaborationHandler;
   }
 
   @Override
   public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
     registry.addHandler(streamHandler, "/api/training/stream")
+        .setAllowedOrigins("http://localhost:4200", "http://127.0.0.1:4200");
+    registry.addHandler(collaborationHandler, "/api/training/collaboration")
         .setAllowedOrigins("http://localhost:4200", "http://127.0.0.1:4200");
   }
 }

@@ -162,6 +162,13 @@ public final class TrainingDtos {
       List<TrainingPredictionSample> samples
   ) {}
 
+  public record CollaborationRoomSummary(
+      String jobId,
+      int onlineCount,
+      Instant createdAt,
+      List<String> users
+  ) {}
+
   public record TrainingCheckpointSummary(
       Long id,
       String name,

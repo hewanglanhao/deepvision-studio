@@ -1,0 +1,142 @@
+<div class="collab-shell">
+  <app-platform-topbar
+    modeLabel="B Mode"
+    modeTitle="训练协作聊天室"
+    [statusPills]="topbarStatusPills"
+    [user]="authUser"
+    (logoutRequested)="logout()"
+  />
+
+  <div class="collab-workspace">
+    <aside class="room-panel">
+      <a class="back-link" routerLink="/mode-b">返回 B 端训练</a>
+
+      <section class="panel">
+        <div class="panel-title">加入训练房间</div>
+        <label>训练房间 ID
+          <input [(ngModel)]="roomDraft" placeholder="train-..." (keyup.enter)="connectRoom()" />
+        </label>
+        <div class="room-actions">
+          <button type="button" (click)="connectRoom()">加入并观察</button>
+          <button type="button" class="ghost" (click)="loadRooms()" [disabled]="roomsLoading">{{ roomsLoading ? '刷新中' : '刷新列表' }}</button>
+          <button type="button" class="ghost" (click)="leave()" [disabled]="collaborationState !== 'connected'">离开</button>
+        </div>
+        @if (error) {
+          <div class="error-box">{{ error }}</div>
+        }
+        @if (activeRoomId) {
+          <div class="room-chip">当前房间 <strong>{{ activeRoomId }}</strong></div>
+        }
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">现有聊天室</div>
+        <div class="room-list">
+          @for (room of activeRooms; track room.jobId) {
+            <button type="button" class="room-card" (click)="joinRoom(room)">
+              <span>{{ room.jobId }}</span>
+              <small>{{ room.onlineCount }} 人在线 · {{ room.users.join('、') || '暂无成员' }}</small>
+            </button>
+          } @empty {
+            <div class="muted">当前没有已创建的聊天室。</div>
+          }
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">在线成员</div>
+        <div class="presence-head">
+          <span [class]="'state-dot ' + collaborationState"></span>
+          <strong>{{ stateText() }}</strong>
+          <small>{{ users.length }} 人在线</small>
+        </div>
+        <div class="user-list">
+          @for (user of users; track user.username) {
+            <div class="user-pill">{{ user.displayName }}</div>
+          } @empty {
+            <div class="muted">暂无在线成员。</div>
+          }
+        </div>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <section class="training-board">
+        <div class="training-head">
+          <div>
+            <div class="eyebrow">Live Training Room</div>
+            <h1>{{ activeRoomId || '请选择训练房间' }}</h1>
+          </div>
+          <div [class]="'status-badge ' + trainingStatus">
+            <span></span>{{ trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : trainingStatus === 'completed' ? '已完成' : trainingStatus === 'stopped' ? '已停止' : '等待连接' }}
+          </div>
+        </div>
+
+        <div class="progress-block">
+          <div class="progress-head">
+            <span>训练进度</span>
+            <strong>{{ trainingProgressPercent | number:'1.0-0' }}%</strong>
+          </div>
+          <div class="progress-track"><div [style.width.%]="trainingProgressPercent"></div></div>
+        </div>
+
+        <div class="metric-grid">
+          <div><span>当前 Epoch</span><strong>{{ trainingEpoch }} / {{ trainingTotalEpochs || 'N/A' }}</strong></div>
+          <div><span>Batch</span><strong>{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</strong></div>
+          <div><span>LR</span><strong>{{ trainingLr | number:'1.5-5' }}</strong></div>
+          <div><span>训练损失</span><strong>{{ trainingLoss | number:'1.4-4' }}</strong></div>
+          <div><span>验证损失</span><strong>{{ trainingValLoss === null ? 'N/A' : (trainingValLoss | number:'1.4-4') }}</strong></div>
+          <div><span>训练准确率</span><strong>{{ percent(trainingAcc) }}</strong></div>
+          <div><span>验证准确率</span><strong>{{ percent(trainingValAcc) }}</strong></div>
+          <div><span>训练耗时</span><strong>{{ formatDuration(trainingElapsedSeconds) }}</strong></div>
+          <div><span>预计剩余</span><strong>{{ formatDuration(trainingEtaSeconds) }}</strong></div>
+          <div><span>梯度 Norm</span><strong>{{ trainingGradientNorm | number:'1.4-4' }}</strong></div>
+        </div>
+      </section>
+
+      <section class="chat-board">
+        <div class="chat-head">
+          <div>
+            <div class="panel-title">实时讨论</div>
+            <p>同一训练房间内的成员可以边观察指标边讨论。</p>
+          </div>
+        </div>
+
+        <div class="message-list">
+          @for (message of messages; track message.id ?? message.createdAt) {
+            <div [class]="message.type === 'system' ? 'message system' : 'message'">
+              @if (message.type === 'chat') {
+                <div class="message-author">{{ message.displayName || message.username }}</div>
+              }
+              <div class="message-text">{{ message.text }}</div>
+              <div class="message-time">{{ message.createdAt | date:'HH:mm:ss' }}</div>
+            </div>
+          } @empty {
+            <div class="empty-chat">加入训练房间后，聊天消息会显示在这里。</div>
+          }
+        </div>
+
+        <div class="composer">
+          <input [(ngModel)]="chatText" placeholder="输入消息，按 Enter 发送" (keyup.enter)="send()" [disabled]="collaborationState !== 'connected'" />
+          <button type="button" (click)="send()" [disabled]="collaborationState !== 'connected' || !chatText.trim()">发送</button>
+        </div>
+      </section>
+    </main>
+
+    <aside class="log-panel">
+      <section class="panel logs">
+        <div class="panel-title">训练日志</div>
+        <div class="log-list">
+          @for (log of trainingLogs; track log.time + log.message) {
+            <div [class]="'log-row ' + log.level">
+              <span>{{ log.time }}</span>
+              <strong>{{ log.message }}</strong>
+            </div>
+          } @empty {
+            <div class="muted">连接训练房间后会同步训练日志。</div>
+          }
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>

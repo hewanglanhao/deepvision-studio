@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -52,6 +53,7 @@ import org.springframework.web.socket.WebSocketSession;
 @Service
 public class TrainingJobService {
   private static final DateTimeFormatter JOB_ID_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+  private static final int MAX_RECENT_TRAINING_EVENTS = 240;
 
   private final TrainingDatasetService datasetService;
   private final AppUserRepository users;
@@ -197,6 +199,13 @@ public class TrainingJobService {
   public void addSession(String jobId, WebSocketSession session) {
     TrainingJob job = getJob(jobId);
     sessions.computeIfAbsent(jobId, ignored -> new CopyOnWriteArraySet<>()).add(session);
+    List<String> recentEvents = job.recentStreamEvents();
+    if (!recentEvents.isEmpty()) {
+      for (String event : recentEvents) {
+        sendRaw(session, event);
+      }
+      return;
+    }
     TrainingMetricMessage latest = job.latestMetric();
     if (latest != null) {
       send(session, latest);
@@ -271,6 +280,7 @@ public class TrainingJobService {
       try {
         TrainingMetricMessage metric = objectMapper.treeToValue(node, TrainingMetricMessage.class);
         job.setLatestMetric(metric);
+        job.addStreamEvent(line);
         if (metric.epoch() >= metric.totalEpochs()) {
           job.setStatus("completed");
         } else if (!"paused".equals(job.status())) {
@@ -283,9 +293,11 @@ public class TrainingJobService {
     } else if ("control".equals(type)) {
       String status = node.path("status").asText(job.status());
       job.setStatus(status);
+      job.addStreamEvent(line);
       broadcastRaw(job.jobId(), line);
     } else if ("test_result".equals(type)) {
       job.setTestResult(node);
+      job.addStreamEvent(line);
       if (!job.checkpointSaved() && job.username() != null && !job.username().isBlank()) {
         try {
           saveCheckpoint(job, node);
@@ -297,6 +309,7 @@ public class TrainingJobService {
       broadcastRaw(job.jobId(), line);
     } else if ("error".equals(type)) {
       job.setStatus("stopped");
+      job.addStreamEvent(line);
       broadcastRaw(job.jobId(), line);
     }
   }
@@ -369,6 +382,17 @@ public class TrainingJobService {
     }
     try {
       session.sendMessage(new TextMessage(objectMapper.writeValueAsString(metric)));
+    } catch (IOException ex) {
+      removeSession(session);
+    }
+  }
+
+  private void sendRaw(WebSocketSession session, String payload) {
+    if (!session.isOpen()) {
+      return;
+    }
+    try {
+      session.sendMessage(new TextMessage(payload));
     } catch (IOException ex) {
       removeSession(session);
     }
@@ -677,6 +701,7 @@ public class TrainingJobService {
     private volatile JsonNode testResult;
     private volatile boolean checkpointSaved;
     private volatile Process process;
+    private final ArrayDeque<String> recentStreamEvents = new ArrayDeque<>();
 
     private TrainingJob(String jobId, StartTrainingRequest request, String username, String modelSignature, int totalEpochs, int totalBatches) {
       this.jobId = jobId;
@@ -729,7 +754,25 @@ public class TrainingJobService {
       latestMetric = null;
       testResult = null;
       checkpointSaved = false;
+      synchronized (recentStreamEvents) {
+        recentStreamEvents.clear();
+      }
       status = "running";
+    }
+
+    private void addStreamEvent(String payload) {
+      synchronized (recentStreamEvents) {
+        recentStreamEvents.addLast(payload);
+        while (recentStreamEvents.size() > MAX_RECENT_TRAINING_EVENTS) {
+          recentStreamEvents.removeFirst();
+        }
+      }
+    }
+
+    private List<String> recentStreamEvents() {
+      synchronized (recentStreamEvents) {
+        return new ArrayList<>(recentStreamEvents);
+      }
     }
 
     private void destroyProcess() {

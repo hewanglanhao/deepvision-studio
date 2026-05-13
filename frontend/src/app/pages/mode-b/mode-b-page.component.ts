@@ -10,6 +10,7 @@ import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from
 import { AuthService } from '../../services/auth.service';
 import { ForwardRecordService } from '../../services/forward-record.service';
 import { ForwardBackendService } from '../../services/forward-backend.service';
+import { CollaborationRoomSummary, TrainingCollaborationService } from '../../services/training-collaboration.service';
 import { TrainingCheckpointSummary, TrainingLog, TrainingRuntimeService, TrainingTestResult } from '../../services/training-runtime.service';
 import { TrainingDatasetApiService } from '../../services/training-dataset-api.service';
 import { SimEngine } from '../../sim-engine';
@@ -157,6 +158,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   selectedCheckpointId: number | null = null;
   checkpointBusy = false;
   checkpointError = '';
+  collaborationJoinId = '';
+  collaborationError = '';
+  collaborationRooms: CollaborationRoomSummary[] = [];
+  collaborationRoomsOpen = false;
+  collaborationRoomsLoading = false;
 
   selectedTaskId = 'mnist-classify';
   experimentResults: ExperimentResult[] = [];
@@ -268,6 +274,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private trainingSvc: TrainingRuntimeService,
     private trainingDatasetApi: TrainingDatasetApiService,
+    private collaborationSvc: TrainingCollaborationService,
     private forwardBackend: ForwardBackendService,
     private authSvc: AuthService,
     private forwardRecordSvc: ForwardRecordService
@@ -326,7 +333,6 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       window.clearTimeout(this.forwardDebounceTimer);
       this.forwardDebounceTimer = null;
     }
-    void this.trainingSvc.pause();
   }
 
   // ── Getters ──────────────────────────────────────────
@@ -336,6 +342,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get selectedTemplate() { return this.modelTemplates.find(t => t.id === this.selectedTemplateId); }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
   get selectedCheckpoint() { return this.trainingCheckpoints.find(item => item.id === this.selectedCheckpointId) ?? null; }
+  get currentTrainingJobId(): string { return this.trainingSvc.currentBackendJobId; }
   get datasetCheckpointHistory(): TrainingCheckpointSummary[] {
     const datasetId = this.trainingDatasetDetail?.id;
     if (!datasetId) return [];
@@ -1648,6 +1655,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
         config: this.trainingConfig
       });
       this.trainingBackendNotice = '训练任务由 Spring Boot 后端运行，指标通过 WebSocket 推送。';
+      this.collaborationJoinId = this.trainingSvc.currentBackendJobId;
     } catch (err) {
       this.trainingDatasetError = err instanceof Error ? err.message : '启动后端训练失败。';
     }
@@ -1656,6 +1664,66 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
   resetTraining(): void  { void this.trainingSvc.reset(); }
+
+  openCurrentTrainingChat(): void {
+    const target = this.trainingSvc.currentBackendJobId.trim();
+    if (!target) {
+      this.collaborationError = '当前还没有正在运行或刚启动的后端训练任务。';
+      return;
+    }
+    this.collaborationError = '';
+    this.collaborationJoinId = target;
+    this.openCollaborationWindow(target, true);
+  }
+
+  async openExistingTrainingChat(): Promise<void> {
+    const target = this.collaborationJoinId.trim();
+    if (!target) {
+      this.collaborationError = '请输入要加入的训练房间 ID。';
+      return;
+    }
+    this.collaborationError = '';
+    this.collaborationRoomsLoading = true;
+    try {
+      const rooms = await this.collaborationSvc.listRooms();
+      this.collaborationRooms = rooms;
+      this.collaborationRoomsOpen = true;
+      if (!rooms.some(room => room.jobId === target)) {
+        this.collaborationError = '该聊天室不存在，请从现有聊天室列表中选择，或先用当前训练新建聊天室。';
+        return;
+      }
+    } catch (err) {
+      this.collaborationError = err instanceof Error ? err.message : '加载聊天室列表失败。';
+      return;
+    } finally {
+      this.collaborationRoomsLoading = false;
+    }
+    this.openCollaborationWindow(target);
+  }
+
+  async loadCollaborationRooms(): Promise<void> {
+    this.collaborationRoomsOpen = true;
+    this.collaborationRoomsLoading = true;
+    this.collaborationError = '';
+    try {
+      this.collaborationRooms = await this.collaborationSvc.listRooms();
+    } catch (err) {
+      this.collaborationError = err instanceof Error ? err.message : '加载聊天室列表失败。';
+    } finally {
+      this.collaborationRoomsLoading = false;
+    }
+  }
+
+  joinListedCollaborationRoom(room: CollaborationRoomSummary): void {
+    this.collaborationJoinId = room.jobId;
+    this.openCollaborationWindow(room.jobId);
+  }
+
+  openCollaborationWindow(jobId = '', createRoom = false): void {
+    const query = jobId.trim() ? `?jobId=${encodeURIComponent(jobId.trim())}` : '';
+    const create = jobId.trim() && createRoom ? `${query ? '&' : '?'}create=true` : '';
+    window.open(`/training/collaboration${query}${create}`, '_blank', 'noopener,noreferrer');
+  }
 
   async loadTrainingCheckpoints(): Promise<void> {
     if (!this.authUser) return;

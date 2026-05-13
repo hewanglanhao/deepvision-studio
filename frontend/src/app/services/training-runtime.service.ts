@@ -158,6 +158,10 @@ export class TrainingRuntimeService implements OnDestroy {
 
   constructor(private api: ApiClientService) {}
 
+  get currentBackendJobId(): string {
+    return this.backendJobId;
+  }
+
   configure(config: TrainingConfig, layers: NetworkLayer[]): void {
     this.config = { ...config };
     this.layers = layers;
@@ -198,6 +202,7 @@ export class TrainingRuntimeService implements OnDestroy {
       etaSeconds: 0,
       currentBatch: 0,
       totalBatches: 0,
+      totalEpochs: request.config.totalEpochs,
       message: 'Starting backend training...'
     });
     this.log('info', `提交训练任务：dataset=${request.datasetId}, optimizer=${request.config.optimizer}, lr=${request.config.learningRate}, epochs=${request.config.totalEpochs}`);
@@ -214,6 +219,7 @@ export class TrainingRuntimeService implements OnDestroy {
         status: response.status,
         currentBatch: 0,
         totalBatches: response.totalBatches,
+        totalEpochs: response.totalEpochs,
         message: `Backend training started: ${response.jobId}`
       });
       this.log('info', `后端训练任务已启动：${response.jobId}`);
@@ -247,6 +253,29 @@ export class TrainingRuntimeService implements OnDestroy {
     const accText = normalized.testAccuracy === null ? 'N/A' : `${(normalized.testAccuracy * 100).toFixed(1)}%`;
     this.log('info', `已使用 checkpoint 跑测试集：accuracy=${accText}, samples=${normalized.sampleCount}`);
     return normalized;
+  }
+
+  observeBackendJob(jobId: string): void {
+    const target = jobId.trim();
+    if (!target) return;
+    this.clearTimer();
+    this.closeSocket();
+    this.backendJobId = target;
+    this.backendTotalEpochs = 0;
+    this.backendTotalBatches = 0;
+    this.history$.next([]);
+    this.logs$.next([]);
+    this.testResult$.next(null);
+    this.patchState({
+      status: 'running',
+      currentEpoch: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+      totalEpochs: 0,
+      message: `Observing backend training: ${target}`
+    });
+    this.log('info', `加入训练观察：${target}`);
+    this.connectWebSocket(`/api/training/stream?jobId=${encodeURIComponent(target)}`);
   }
 
   async pause(): Promise<void> {
@@ -413,6 +442,7 @@ export class TrainingRuntimeService implements OnDestroy {
       etaSeconds: message.etaSeconds,
       currentBatch: message.batch,
       totalBatches: message.totalBatches,
+      totalEpochs: message.totalEpochs,
       message: `Backend epoch ${message.epoch}/${message.totalEpochs}`
     });
     const history = [...this.history$.value, metric].slice(-200);

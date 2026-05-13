@@ -36,6 +36,11 @@ export const routes: Routes = [
       .then(m => m.ExperimentComparePageComponent)
   },
   {
+    path: 'training/collaboration',
+    loadComponent: () => import('./pages/training-collaboration/training-collaboration-page.component')
+      .then(m => m.TrainingCollaborationPageComponent)
+  },
+  {
     path: 'mode-c',
     loadComponent: () => import('./pages/mode-c/mode-c-page.component')
       .then(m => m.ModeCPageComponent)

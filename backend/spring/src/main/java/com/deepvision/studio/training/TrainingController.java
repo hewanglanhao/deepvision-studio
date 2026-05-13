@@ -1,6 +1,7 @@
 package com.deepvision.studio.training;
 
 import com.deepvision.studio.training.TrainingDtos.CheckpointTestResult;
+import com.deepvision.studio.training.TrainingDtos.CollaborationRoomSummary;
 import com.deepvision.studio.training.TrainingDtos.DatasetErrorResponse;
 import com.deepvision.studio.training.TrainingDtos.DatasetImportResponse;
 import com.deepvision.studio.training.TrainingDtos.StartTrainingRequest;
@@ -35,10 +36,16 @@ import org.springframework.web.multipart.MultipartFile;
 public class TrainingController {
   private final TrainingDatasetService datasetService;
   private final TrainingJobService jobService;
+  private final TrainingCollaborationHandler collaborationHandler;
 
-  public TrainingController(TrainingDatasetService datasetService, TrainingJobService jobService) {
+  public TrainingController(
+      TrainingDatasetService datasetService,
+      TrainingJobService jobService,
+      TrainingCollaborationHandler collaborationHandler
+  ) {
     this.datasetService = datasetService;
     this.jobService = jobService;
+    this.collaborationHandler = collaborationHandler;
   }
 
   @GetMapping("/datasets")
@@ -89,6 +96,11 @@ public class TrainingController {
       @RequestParam(value = "datasetId", required = false) String datasetId
   ) {
     return jobService.listCheckpoints(principal == null ? null : principal.getName(), datasetId);
+  }
+
+  @GetMapping("/collaboration/rooms")
+  public List<CollaborationRoomSummary> collaborationRooms() {
+    return collaborationHandler.listRooms();
   }
 
   @PostMapping("/checkpoints/{checkpointId}/test")

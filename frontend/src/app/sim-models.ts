@@ -257,6 +257,7 @@ export interface ForwardInputAsset {
 export interface TrainingState {
   status: 'idle' | 'running' | 'paused' | 'stopped' | 'completed';
   currentEpoch: number;
+  totalEpochs?: number;
   currentLr: number;
   latestLoss: number;
   latestValLoss: number;
