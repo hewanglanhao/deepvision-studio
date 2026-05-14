@@ -2,3 +2,12 @@
   [user]="user"
   (logoutRequested)="logout()"
 />
+
+<app-teaching-search-fab />
+
+<app-llm-floating-assistant
+  title="Mode C AI 学习助手"
+  [systemPrompt]="modeCLlmSystemPrompt"
+  [contextProvider]="modeCLlmContextProvider"
+  [quickPrompts]="modeCLlmQuickPrompts"
+/>

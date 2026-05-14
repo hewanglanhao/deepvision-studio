@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { AuthUser } from '@core/auth/auth.models';
 import { PlatformTopbarComponent } from '@shared/components/platform-topbar.component';
-import { ModeCArticleComponent } from '../article/mode-c-article.component';
 import { ModeCDetailPanelComponent } from '../detail-panels/mode-c-detail-panel.component';
 import { ModeCOverviewComponent } from '../overview/mode-c-overview.component';
 import { ModeCModelService } from '../../services/mode-c-model.service';
@@ -13,8 +12,7 @@ import { ModeCModelService } from '../../services/mode-c-model.service';
     CommonModule,
     PlatformTopbarComponent,
     ModeCOverviewComponent,
-    ModeCDetailPanelComponent,
-    ModeCArticleComponent
+    ModeCDetailPanelComponent
   ],
   templateUrl: './mode-c-explainer-shell.component.html',
   styleUrl: './mode-c-explainer-shell.component.css'

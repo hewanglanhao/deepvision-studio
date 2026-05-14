@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { ModeCPreviewCanvasComponent } from '../preview-canvas/mode-c-preview-canvas.component';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import {
   ModeCConvChannelExample,
   ModeCConvInputContribution,
@@ -46,7 +47,7 @@ type ConvOverlayCell = { row: number; col: number } | null;
 
 @Component({
   selector: 'app-mode-c-overview',
-  imports: [CommonModule, ModeCPreviewCanvasComponent],
+  imports: [CommonModule, ModeCPreviewCanvasComponent, TeachingTermDirective],
   templateUrl: './mode-c-overview.component.html',
   styleUrl: './mode-c-overview.component.css'
 })
@@ -712,21 +713,6 @@ export class ModeCOverviewComponent implements OnInit {
   formatSigned(value: number, digits = 3): string {
     const formatted = value.toFixed(digits);
     return value > 0 ? `+${formatted}` : formatted;
-  }
-
-  getMatrixMin(matrix: number[][]): number {
-    const values = matrix.flat().filter(value => Number.isFinite(value));
-    return values.length ? Math.min(...values) : 0;
-  }
-
-  getMatrixMax(matrix: number[][]): number {
-    const values = matrix.flat().filter(value => Number.isFinite(value));
-    return values.length ? Math.max(...values) : 0;
-  }
-
-  getMatrixSample(matrix: number[][]): number {
-    if (!matrix.length || !matrix[0]?.length) return 0;
-    return matrix[Math.floor(matrix.length / 2)]?.[Math.floor(matrix[0].length / 2)] ?? 0;
   }
 
   closeOverlay(): void {

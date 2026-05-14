@@ -12,41 +12,15 @@
 
 .overview-card {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   padding: 24px 16px 22px;
 }
 
-.panel-header,
 .topology-toolbar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  color: #2563eb;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-h2,
-p {
-  margin: 0;
-}
-
-h2 {
-  color: #0f172a;
-  font-size: 26px;
-  line-height: 1.12;
-}
-
-.panel-copy {
-  color: #475569;
-  line-height: 1.75;
 }
 
 .overview-alert {
@@ -137,8 +111,7 @@ h2 {
 }
 
 .toolbar-button,
-.toolbar-pill,
-.status-badge {
+.toolbar-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -168,16 +141,6 @@ h2 {
   padding: 8px 12px;
   background: #f8fafc;
   color: #475569;
-}
-
-.status-badge {
-  padding: 4px 10px;
-  text-transform: capitalize;
-}
-
-.status-badge.in-progress {
-  background: #eff6ff;
-  color: #1d4ed8;
 }
 
 .graph-board {
@@ -1433,89 +1396,6 @@ h2 {
   line-height: 1.75;
 }
 
-.debug-panel {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-  border: 1px dashed rgba(148, 163, 184, 0.5);
-  border-radius: 18px;
-  background: rgba(248, 250, 252, 0.72);
-}
-
-.debug-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.debug-header h3 {
-  margin: 0;
-  color: #0f172a;
-  font-size: 18px;
-}
-
-.debug-hint {
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.debug-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 14px;
-}
-
-.debug-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.debug-meta span,
-.debug-empty {
-  color: #475569;
-  font-size: 12px;
-}
-
-.debug-empty {
-  padding: 12px 14px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 14px;
-  background: #fff;
-}
-
-.debug-card {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 16px;
-  background: #fff;
-}
-
-.debug-image {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: 12px;
-  border: 1px solid rgba(191, 219, 254, 0.9);
-  background: #fff;
-}
-
-.debug-card strong,
-.debug-card span,
-.debug-card code {
-  color: #334155;
-  font-size: 12px;
-}
-
-.debug-card code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  word-break: break-all;
-}
-
 @media (max-width: 980px) {
   .topology-toolbar,
   .layer-inspector {
@@ -1534,8 +1414,7 @@ h2 {
 
   .overlay-grid,
   .overlay-metrics,
-  .layer-inspector,
-  .debug-grid {
+  .layer-inspector {
     grid-template-columns: 1fr;
   }
 

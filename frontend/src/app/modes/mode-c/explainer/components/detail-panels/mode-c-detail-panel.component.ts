@@ -1,12 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import { ModeCNetworkLayer } from '../../models/mode-c.types';
 import { ModeCModelService } from '../../services/mode-c-model.service';
 import { ModeCStateService } from '../../services/mode-c-state.service';
 
 @Component({
   selector: 'app-mode-c-detail-panel',
-  imports: [CommonModule],
+  imports: [CommonModule, TeachingTermDirective],
   templateUrl: './mode-c-detail-panel.component.html',
   styleUrl: './mode-c-detail-panel.component.css'
 })

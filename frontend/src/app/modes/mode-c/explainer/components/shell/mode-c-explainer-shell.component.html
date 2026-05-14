@@ -8,42 +8,9 @@
   />
 
   <main class="mode-c-main">
-    <section class="hero-card">
-      <div class="hero-copy">
-        <p class="eyebrow">Mode C</p>
-        <h1>CNN 解释工作台</h1>
-        <p>
-          观察卷积窗口、卷积核乘积、中间特征图和分类证据，理解 CNN 如何从局部模式逐步形成判断。
-        </p>
-      </div>
-
-      <div class="hero-status">
-        <article>
-          <span>模型状态</span>
-          <strong>{{ model.shellStatus().title }}</strong>
-          <p>使用内置 CNN Explainer 资源执行浏览器端推理和解释展示。</p>
-        </article>
-        <article>
-          <span>学习重点</span>
-          <strong>卷积、特征图与分类依据</strong>
-          <p>下方总览区展示网络层级和可交互解释面板。</p>
-        </article>
-      </div>
-    </section>
-
     <section class="workspace-stack">
       <app-mode-c-overview />
       <app-mode-c-detail-panel />
     </section>
-
-    <details class="article-drawer">
-      <summary>
-        <span>学习文章</span>
-        <span class="drawer-hint">展开补充阅读</span>
-      </summary>
-      <div class="article-drawer-body">
-        <app-mode-c-article />
-      </div>
-    </details>
   </main>
 </div>

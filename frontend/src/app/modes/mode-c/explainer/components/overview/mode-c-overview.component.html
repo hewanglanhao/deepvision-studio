@@ -1,17 +1,4 @@
-<section class="panel-card overview-card" aria-labelledby="mode-c-overview-title">
-  <div class="panel-header">
-    <div>
-      <p class="eyebrow">总览视图 V2</p>
-      <h2 id="mode-c-overview-title">CNN 拓扑画布</h2>
-    </div>
-    <span class="status-badge in-progress">拓扑</span>
-  </div>
-
-  <p class="panel-copy">
-    这一版优先重建原始 cnn-explainer 的拓扑结构：样例条、输入通道、纵向特征图列，以及右侧输出类别轨道。
-    右侧细节面板仍然保持联动，但主画布现在已经成为核心解释界面。
-  </p>
-
+<section class="panel-card overview-card" aria-label="Mode C CNN 总览">
   @if (state.networkLayersError()) {
     <div class="overview-alert error">
       <strong>网络数据已切换到回退模式。</strong>
@@ -56,7 +43,7 @@
       <div class="toolbar-actions">
         @if (state.selectedLayer(); as layer) {
           <button type="button" class="toolbar-button primary" (click)="focusTopic('overview-graph')">
-            查看细节
+            <span appTeachingTerm="layer-inspector">查看细节</span>
           </button>
           <span class="toolbar-pill">{{ layer.shortTitle }}</span>
         }
@@ -208,7 +195,7 @@
       </div>
 
       @if (showConvOverlay() && activeConvExample(); as convExample) {
-        <section class="intermediate-overlay" aria-label="卷积中间视图">
+        <section class="intermediate-overlay" aria-label="卷积中间视图" appTeachingTerm="intermediate-view">
           <div class="overlay-scrim"></div>
           <button type="button" class="overlay-close" (click)="closeOverlay()" aria-label="关闭卷积中间视图">
             ×
@@ -616,7 +603,7 @@
       }
 
       @if (showReluOverlay() && activeReluExample(); as reluExample) {
-        <section class="intermediate-overlay" aria-label="ReLU 中间视图">
+        <section class="intermediate-overlay" aria-label="ReLU 中间视图" appTeachingTerm="intermediate-view">
           <div class="overlay-scrim"></div>
           <button type="button" class="overlay-close" (click)="closeOverlay()" aria-label="关闭 ReLU 中间视图">
             ×
@@ -715,7 +702,7 @@
       }
 
       @if (showPoolOverlay() && activePoolExample(); as poolExample) {
-        <section class="intermediate-overlay" aria-label="池化中间视图">
+        <section class="intermediate-overlay" aria-label="池化中间视图" appTeachingTerm="intermediate-view">
           <div class="overlay-scrim"></div>
           <button type="button" class="overlay-close" (click)="closeOverlay()" aria-label="关闭池化中间视图">
             ×
@@ -822,19 +809,19 @@
   @if (state.selectedLayer(); as layer) {
     <div class="layer-inspector">
       <div>
-        <span class="inspector-label">当前选中层</span>
+        <span class="inspector-label" appTeachingTerm="layer-inspector">当前选中层</span>
         <strong>{{ layer.title }}</strong>
       </div>
       <div>
-        <span class="inspector-label">当前聚焦通道</span>
+        <span class="inspector-label" appTeachingTerm="channel">当前聚焦通道</span>
         <strong>#{{ state.selectedChannelIndex() }}</strong>
       </div>
       <div>
-        <span class="inspector-label">输出形状</span>
+        <span class="inspector-label" appTeachingTerm="shape">输出形状</span>
         <strong>{{ layer.outputShapeLabel }}</strong>
       </div>
       <div>
-        <span class="inspector-label">卷积核</span>
+        <span class="inspector-label" appTeachingTerm="conv2d">卷积核</span>
         <strong>{{ layer.kernelLabel ?? '无' }}</strong>
       </div>
       <p>{{ layer.description }}</p>

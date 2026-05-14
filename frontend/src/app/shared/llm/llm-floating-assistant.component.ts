@@ -16,9 +16,9 @@ export interface LlmQuickPrompt {
 }
 
 const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
-  { label: '解释当前层', question: '请解释当前选中网络层为什么会产生这样的输出效果。' },
-  { label: '看卷积核', question: '请根据卷积核和输出图，判断这个网络更关注了哪些图像特征。' },
-  { label: '调参建议', question: '如果我想让输出更清晰，应该调整哪些参数？' }
+  { label: '解释当前层', question: '请结合当前页面上下文，解释当前选中内容为什么会产生这样的结果。' },
+  { label: '看关键特征', question: '请根据当前页面的图像、层输出和张量信息，说明模型更关注哪些特征。' },
+  { label: '学习建议', question: '如果我要进一步理解这里的结果，下一步最值得关注哪些信息？' }
 ];
 
 @Component({
@@ -32,29 +32,30 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
           <header class="llm-head">
             <div class="title-wrap">
               <div class="llm-title">{{ title }}</div>
-              <div class="llm-subtitle">{{ includeContext ? '使用当前页面数据' : '普通问答' }}</div>
+              <div class="llm-subtitle">{{ includeContext ? '结合当前页面数据回答' : '普通问答模式' }}</div>
             </div>
-            <button type="button" class="icon-btn" aria-label="关闭" (click)="open=false">×</button>
+            <button type="button" class="icon-btn" aria-label="关闭" (click)="open = false">×</button>
           </header>
 
           <div class="context-row">
             <label class="context-toggle">
               <input type="checkbox" [(ngModel)]="includeContext" (ngModelChange)="onContextToggle()" />
-              <span>传入页面数据</span>
+              <span>传入页面上下文</span>
             </label>
             @if (includeContext) {
               <button type="button" class="text-btn" (click)="refreshContext()">刷新</button>
             }
           </div>
 
-          <div class="context-summary">{{ includeContext ? contextSummary : '未传入页面数据' }}</div>
+          <div class="context-summary">{{ includeContext ? contextSummary : '当前不会附带页面上下文。' }}</div>
 
           <div class="chat-log">
             @if (!messages.length) {
               <div class="empty-tip">
-                勾选页面数据后，可以直接询问当前页面里的网络、数据和指标。
+                打开页面上下文后，你可以直接提问当前网络结构、层输出、预测结果和可视化内容。
               </div>
             }
+
             @for (message of messages; track $index) {
               <article [class]="'chat-bubble ' + message.role">
                 @if (message.role === 'assistant') {
@@ -64,9 +65,11 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
                 }
               </article>
             }
+
             @if (busy) {
-              <article class="chat-bubble assistant pending">分析中...</article>
+              <article class="chat-bubble assistant pending">正在分析...</article>
             }
+
             @if (error) {
               <div class="chat-error">{{ error }}</div>
             }
@@ -85,7 +88,7 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
               name="llmQuestion"
               [(ngModel)]="draft"
               rows="2"
-              placeholder="问当前页面或任意问题..."
+              placeholder="问当前页面，或输入任何和深度学习相关的问题..."
               [disabled]="busy"
             ></textarea>
             <button type="submit" [disabled]="busy || !draft.trim()">发送</button>
@@ -93,7 +96,7 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
         </section>
       }
 
-      <button type="button" class="llm-fab" aria-label="打开 AI 分析" (click)="toggle()">AI</button>
+      <button type="button" class="llm-fab" aria-label="打开 AI 助手" (click)="toggle()">AI</button>
     </div>
   `,
   styles: [`
@@ -119,7 +122,6 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
       color: #fff;
       font-size: 13px;
       font-weight: 900;
-      letter-spacing: 0;
       box-shadow: 0 10px 26px rgba(37, 99, 235, .32);
       cursor: pointer;
     }
@@ -432,7 +434,7 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
   `]
 })
 export class LlmFloatingAssistantComponent {
-  @Input() title = 'AI 分析助手';
+  @Input() title = 'AI 学习助手';
   @Input() systemPrompt = DEFAULT_LLM_SYSTEM_PROMPT;
   @Input() contextProvider?: () => LlmChatContext;
   @Input() quickPrompts: LlmQuickPrompt[] = DEFAULT_QUICK_PROMPTS;
@@ -445,7 +447,7 @@ export class LlmFloatingAssistantComponent {
   contextSummary = '';
   messages: UiChatMessage[] = [];
 
-  constructor(private llm: LlmChatService) {}
+  constructor(private readonly llm: LlmChatService) {}
 
   toggle(): void {
     this.open = !this.open;
@@ -466,7 +468,7 @@ export class LlmFloatingAssistantComponent {
     const context = this.contextProvider?.();
     this.contextSummary = context
       ? `${context.text.length} 字上下文 · ${context.images.length} 张图`
-      : '当前页面没有可传入的数据';
+      : '当前页面没有可传入的上下文。';
   }
 
   askPreset(question: string): void {
@@ -487,23 +489,27 @@ export class LlmFloatingAssistantComponent {
     if (this.includeContext) {
       this.contextSummary = context
         ? `${context.text.length} 字上下文 · ${context.images.length} 张图`
-        : '当前页面没有可传入的数据';
+        : '当前页面没有可传入的上下文。';
     }
 
     try {
       const apiMessages = this.toApiMessages(question, context);
       let assistantText = '';
       this.messages = [...this.messages, { role: 'assistant', text: '' }];
-      const response = await this.llm.streamChat({
-        systemPrompt: this.systemPrompt,
-        messages: apiMessages
-      }, delta => {
-        assistantText += delta;
-        this.messages = [
-          ...this.messages.slice(0, -1),
-          { role: 'assistant', text: assistantText }
-        ];
-      });
+      const response = await this.llm.streamChat(
+        {
+          systemPrompt: this.systemPrompt,
+          messages: apiMessages
+        },
+        delta => {
+          assistantText += delta;
+          this.messages = [
+            ...this.messages.slice(0, -1),
+            { role: 'assistant', text: assistantText }
+          ];
+        }
+      );
+
       if (!assistantText) {
         this.messages = [
           ...this.messages.slice(0, -1),
@@ -511,7 +517,7 @@ export class LlmFloatingAssistantComponent {
         ];
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : '大模型请求失败';
+      this.error = err instanceof Error ? err.message : '大模型请求失败。';
     } finally {
       this.busy = false;
     }
@@ -520,12 +526,14 @@ export class LlmFloatingAssistantComponent {
   renderMarkdown(markdown: string): string {
     const escaped = this.escapeHtml(markdown);
     const blocks = escaped.split(/```/);
-    return blocks.map((block, index) => {
-      if (index % 2 === 1) {
-        return `<pre><code>${block.trim()}</code></pre>`;
-      }
-      return this.renderInlineMarkdownBlock(block);
-    }).join('');
+    return blocks
+      .map((block, index) => {
+        if (index % 2 === 1) {
+          return `<pre><code>${block.trim()}</code></pre>`;
+        }
+        return this.renderInlineMarkdownBlock(block);
+      })
+      .join('');
   }
 
   private renderInlineMarkdownBlock(block: string): string {
@@ -601,7 +609,7 @@ export class LlmFloatingAssistantComponent {
   }
 
   private toApiMessages(question: string, context?: LlmChatContext): LlmChatMessage[] {
-    const history = this.messages.slice(-6, -1).map<LlmChatMessage>((message) => ({
+    const history = this.messages.slice(-6, -1).map<LlmChatMessage>(message => ({
       role: message.role,
       content: [{ type: 'text', text: message.text }]
     }));
@@ -610,10 +618,7 @@ export class LlmFloatingAssistantComponent {
     if (context) {
       content.push({
         type: 'text',
-        text: [
-          '下面是当前页面传入的数据上下文，请结合这些数据回答用户问题。',
-          context.text
-        ].join('\n\n')
+        text: ['下面是当前页面传入的数据上下文，请结合这些内容回答用户问题。', context.text].join('\n\n')
       });
       for (const image of context.images.slice(0, 4)) {
         content.push({ type: 'text', text: `图片：${image.title}` });

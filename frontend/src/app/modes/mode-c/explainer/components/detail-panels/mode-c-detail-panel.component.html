@@ -37,13 +37,13 @@
   }
 
   @if (state.selectedLayer(); as layer) {
-    <div class="context-card selected-layer-card">
+    <div class="context-card selected-layer-card" appTeachingTerm="layer-inspector">
       <span class="context-label">当前选中层</span>
       <strong>{{ layer.title }}</strong>
       <p>{{ layer.description }}</p>
       <div class="context-meta">
         <span>{{ layer.type }}</span>
-        <span>{{ layer.outputShapeLabel }}</span>
+        <span appTeachingTerm="shape">{{ layer.outputShapeLabel }}</span>
       </div>
       <div class="context-meta">
         <span>{{ layer.kernelLabel ?? '无卷积核' }}</span>
@@ -60,14 +60,14 @@
 
       <div class="live-grid">
         @if (state.selectedLayerPreview(); as preview) {
-          <div class="preview-card">
+          <div class="preview-card" appTeachingTerm="feature-map">
             <span class="mini-label">预览</span>
             <img class="layer-preview" [src]="preview.dataUrl" [alt]="layer.title + ' live preview'" />
           </div>
         }
 
         @if (state.selectedLayerSummary(); as summary) {
-          <div class="metric-card">
+          <div class="metric-card" appTeachingTerm="tensor-stats">
             <span class="mini-label">激活统计</span>
             <div class="metric-list">
               <div class="metric-row">
@@ -96,7 +96,7 @@
       </div>
 
       @if ((isConvLayer(layer) || isReluLayer(layer) || isPoolLayer(layer) || isInputLayer(layer)) && state.selectedLayerDetail()?.channelPreviews?.length) {
-        <div class="interactive-block">
+        <div class="interactive-block" appTeachingTerm="channel">
           <div class="interactive-header">
             <span class="mini-label">通道浏览器</span>
             <span class="interactive-hint">选择一个通道，查看它的预览图和响应统计。</span>
@@ -117,7 +117,7 @@
           </div>
 
           @if (getActiveChannelPreview(); as activeChannel) {
-            <div class="channel-focus">
+            <div class="channel-focus" appTeachingTerm="channel-response">
               <img [src]="activeChannel.dataUrl" [alt]="layer.title + ' focused channel ' + activeChannel.index" />
               <div class="metric-list">
                 <div class="metric-row">
@@ -139,7 +139,7 @@
       }
 
       @if (isFlattenLayer(layer) && getVisibleVectorValues().length) {
-        <div class="interactive-block">
+        <div class="interactive-block" appTeachingTerm="flatten">
           <div class="interactive-header">
             <span class="mini-label">Flatten 向量</span>
             <span class="interactive-hint">下方用带符号的条形图展示了拉平向量的前一部分。</span>
@@ -164,7 +164,7 @@
           预览图强调的是卷积核在图像中响应最强的位置。正值占比较高通常说明这些卷积核响应得更广，较低则说明它们更具选择性。
         </div>
         @if (getActiveConvExample(); as convExample) {
-          <div class="interactive-block conv-process">
+          <div class="interactive-block conv-process" appTeachingTerm="conv2d">
             <div class="interactive-header">
               <span class="mini-label">单通道卷积示例</span>
               <span class="interactive-hint">
@@ -174,7 +174,7 @@
             </div>
 
             <div class="conv-grid">
-              <div class="conv-card">
+              <div class="conv-card" appTeachingTerm="conv-patch">
                 <span class="mini-label">输入局部块</span>
                 <img class="layer-preview" [src]="convExample.patchPreviewUrl" [alt]="layer.title + ' input patch'" />
                 <div class="matrix-grid">
@@ -186,7 +186,7 @@
                 </div>
               </div>
 
-              <div class="conv-card">
+              <div class="conv-card" appTeachingTerm="pool-window">
                 <span class="mini-label">卷积核</span>
                 <img class="layer-preview" [src]="convExample.kernelPreviewUrl" [alt]="layer.title + ' kernel'" />
                 <div class="matrix-grid">
@@ -238,7 +238,7 @@
           这一层只保留正向证据。把它的正值占比和前一层卷积结果对比，可以看出特征图中有多少区域被抑制了。
         </div>
         @if (getActiveReluExample(); as reluExample) {
-          <div class="interactive-block relu-process">
+          <div class="interactive-block relu-process" appTeachingTerm="activation">
             <div class="interactive-header">
               <span class="mini-label">ReLU 前后对比</span>
               <span class="interactive-hint">
@@ -283,7 +283,7 @@
           池化会降低分辨率，同时尽量保留最强结构。预览图会更块状，但重要响应区域通常仍然可见。
         </div>
         @if (getActivePoolExample(); as poolExample) {
-          <div class="interactive-block pool-process">
+          <div class="interactive-block pool-process" appTeachingTerm="pooling">
             <div class="interactive-header">
               <span class="mini-label">2×2 最大池化步骤</span>
               <span class="interactive-hint">
@@ -328,11 +328,11 @@
       }
 
       @if (isOutputLayer(layer) && state.currentSamplePrediction(); as prediction) {
-        <div class="type-note output-note">
+        <div class="type-note output-note" appTeachingTerm="softmax-ranking">
           <strong>Softmax 解读：</strong>
           当前样例被分类为 <strong>{{ prediction.label }}</strong>，置信度为 <strong>{{ formatPercent(prediction.confidence) }}</strong>。
         </div>
-        <div class="interactive-block">
+        <div class="interactive-block" appTeachingTerm="top-k">
           <div class="interactive-header">
             <span class="mini-label">类别概率</span>
             <span class="interactive-hint">这里展示的是当前样例在真实输出层上的完整 10 类 softmax 排名。</span>
@@ -363,14 +363,14 @@
               </div>
             }
           </div>
-          <div class="softmax-footnote">
+          <div class="softmax-footnote" appTeachingTerm="output-logit">
             右侧输出轨和这里的面板现在都使用完整的 softmax 排名，而不是只截取前三类，因此像 <code>espresso</code> 这样的标签即使不是第一名也仍然可见。
           </div>
         </div>
       }
 
       @if (isInputLayer(layer)) {
-        <div class="type-note">
+        <div class="type-note" appTeachingTerm="tensor">
           <strong>输入层解读：</strong>
           这里展示的就是送入 CNN 的原始图像张量，后续所有预览都可以理解为从这个起点信号演化而来的结果。
         </div>
