@@ -43,7 +43,7 @@ export class ModeDStateService {
   readonly networkMeta = signal<ModeDNetworkPreset | null>(null);
 
   readonly trainingConfig = signal<ModeDTrainingConfig>({
-    learningRate: 0.1, optimizer: 'adam', lossFunction: 'crossEntropy', maxIterations: 2000,
+    learningRate: 0.1, optimizer: 'adam', lossFunction: 'crossEntropy', maxIterations: 1000,
   });
 
   readonly currentStep = signal<ModeDBackpropStep | null>(null);
@@ -109,6 +109,8 @@ export class ModeDStateService {
       if (lh.length > 500) lh.shift();
       this.lossHistory.set(lh);
     }
+    this.maybeRecordAvgLoss(iteration + 1);
+
     const nextIdx = Math.floor(Math.random() * dataset.length);
     this.currentSampleIndex.set(nextIdx);
 
@@ -182,6 +184,7 @@ export class ModeDStateService {
       if (lh.length > 500) lh.shift();
       this.lossHistory.set(lh);
     }
+    this.maybeRecordAvgLoss(iteration + 1);
     const nextIdx = Math.floor(Math.random() * dataset.length);
     this.currentSampleIndex.set(nextIdx);
   }
@@ -192,7 +195,13 @@ export class ModeDStateService {
     if (this.isPlaying()) return;
     this.isPlaying.set(true);
     this.status.set('running');
+    const maxSteps = this.trainingConfig().maxIterations;
     const run = () => {
+      if (this.currentIteration() >= maxSteps) {
+        this.saveCurrentCurve();
+        this.pause();
+        return;
+      }
       if (!this.isAnimating()) {
         this.instantStep();
       }
@@ -224,6 +233,8 @@ export class ModeDStateService {
     this.stepHistory.set([]);
     this.currentIteration.set(0);
     this.lossHistory.set([]);
+    this.avgLossHistory.set([]);
+    this.latestAccuracy.set(0);
     this.gradientNormHistory.set([]);
     this.decisionBoundary.set(null);
     this.subStep.set({ type: 'idle' });
@@ -277,6 +288,11 @@ export class ModeDStateService {
   });
 
   readonly lossHistory = signal<{ iteration: number; loss: number }[]>([]);
+  /** Periodically computed average loss over all samples — smooth trend line */
+  readonly avgLossHistory = signal<{ iteration: number; loss: number; accuracy: number }[]>([]);
+
+  /** Saved loss curves for optimizer comparison */
+  readonly savedCurves = signal<{ label: string; color: string; points: { iteration: number; loss: number; accuracy?: number }[] }[]>([]);
   readonly gradientNormHistory = signal<{ iteration: number; norm: number }[]>([]);
   readonly decisionBoundary = signal<any>(null);
 
@@ -405,6 +421,54 @@ export class ModeDStateService {
   }
 
   setFocusedArea(area: ModeDFocusArea): void { this.focusedArea.set(area); }
+
+  /** Compute average loss + accuracy over all samples every 25 steps */
+  private maybeRecordAvgLoss(itr: number): void {
+    if (itr % 25 !== 0) return;
+    const layers = this.networkLayers();
+    if (layers.length === 0) return;
+    const dataset = this.currentDataset();
+    if (dataset.length === 0) return;
+    let totalLoss = 0;
+    let correct = 0;
+    const lossFn = this.trainingConfig().lossFunction;
+    for (const sample of dataset) {
+      const { output } = this.engine.forwardPass(layers, sample.input);
+      const { loss } = this.engine.computeLoss(output, sample.label, lossFn);
+      totalLoss += loss;
+      if (output.indexOf(Math.max(...output)) === sample.label) correct++;
+    }
+    const avg = totalLoss / dataset.length;
+    const acc = correct / dataset.length;
+    const alh = [...this.avgLossHistory(), { iteration: itr, loss: avg, accuracy: acc }];
+    if (alh.length > 200) alh.shift();
+    this.avgLossHistory.set(alh);
+    this.latestAccuracy.set(acc);
+  }
+
+  /** Latest full-dataset accuracy */
+  readonly latestAccuracy = signal(0);
+
+  /** Save current avg-loss curve for optimizer comparison (called on training complete) */
+  saveCurrentCurve(): void {
+    const points = this.avgLossHistory();
+    if (points.length === 0) return;
+    const config = this.trainingConfig();
+    const colors: Record<string, string> = { sgd: '#2563eb', momentum: '#7c3aed', adam: '#059669' };
+    const curves = this.savedCurves().filter(c => c.label !== `${config.optimizer.toUpperCase()}`);
+    const last = points[points.length - 1];
+    curves.push({
+      label: `${config.optimizer.toUpperCase()} (Acc ${(last.accuracy * 100).toFixed(0)}%)`,
+      color: colors[config.optimizer] ?? '#94a3b8',
+      points: [...points],
+    });
+    this.savedCurves.set(curves);
+  }
+
+  /** Clear saved comparison curves */
+  clearSavedCurves(): void {
+    this.savedCurves.set([]);
+  }
   setPreset(presetId: string): void { this.loadPreset(presetId); }
   setActiveLayer(layerId: number | null): void {
     this.activeLayerId.set(layerId);

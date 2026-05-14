@@ -22,4 +22,13 @@
     <app-mode-d-overview />
     <app-mode-d-detail-panel />
   </main>
+
+  <app-teaching-search-fab />
+
+  <app-llm-floating-assistant
+    title="模式D AI 分析"
+    [systemPrompt]="modeDLlmSystemPrompt"
+    [contextProvider]="modeDLlmContextProvider"
+    [quickPrompts]="modeDLlmQuickPrompts"
+  />
 </div>

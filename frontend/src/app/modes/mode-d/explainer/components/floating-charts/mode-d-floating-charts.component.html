@@ -24,25 +24,43 @@
     </div>
   </div>
 
-  <!-- Loss -->
-  <div class="chart-card">
-    <h4>损失曲线</h4>
+  <!-- Loss (clickable for modal) -->
+  <div class="chart-card loss-card" (click)="showModal.set(true)">
+    <h4>损失曲线对比</h4>
     <svg viewBox="0 0 200 80" class="chart-svg">
       <rect x="0" y="0" width="200" height="80" fill="#fff" rx="4"/>
       <line x1="0" y1="80" x2="200" y2="80" stroke="#e2e6ea" stroke-width="0.5"/>
-      @if (s.lossHistory().length > 1) {
-        <polyline [attr.points]="lossSvgPoints()" fill="none" stroke="#d97706" stroke-width="2"/>
+      @for (line of smallCurves().lines; track line.label) {
+        @if (line.points) {
+          <polyline [attr.points]="line.points" fill="none" [attr.stroke]="line.color"
+                    [attr.stroke-width]="line.faint ? 1 : line.dashed ? 1.5 : 2.5"
+                    [attr.stroke-dasharray]="line.dashed ? '4 3' : 'none'"
+                    [attr.opacity]="line.faint ? 0.35 : line.dashed ? 0.7 : 1"/>
+        }
       }
     </svg>
     <div class="loss-stat">
       <span>迭代 {{ iteration() }}</span>
       <span>Loss <strong>{{ lossVal() }}</strong></span>
+      @if (accuracy() > 0) { <span>Acc <strong>{{ accPct() }}%</strong></span> }
     </div>
+    @if (smallCurves().lines.length > 1) {
+      <div class="curve-legend">
+        @for (line of smallCurves().lines; track line.label) {
+          @if (!line.faint) {
+            <span class="curve-legend-item">
+              <span class="curve-dot" [style.background]="line.color"></span>{{ line.label }}
+            </span>
+          }
+        }
+      </div>
+    }
+    <div class="loss-hint">点击放大</div>
   </div>
 
   <!-- Prediction -->
   <div class="chart-card">
-    <h4>当前预测</h4>
+    <h4>当前预测 @if (accuracy() > 0) { · 整体准确率 {{ accPct() }}% }</h4>
     <div class="pred-info">
       <div class="pred-line">样本 <code>[{{ fmt(curSample()?.input?.[0] ?? 0) }}, {{ fmt(curSample()?.input?.[1] ?? 0) }}]</code></div>
       <div class="pred-line">真实 <strong>{{ trueLabel() }}</strong></div>
@@ -57,3 +75,58 @@
     </div>
   </div>
 </div>
+
+<!-- Modal overlay -->
+@if (showModal()) {
+  <div class="modal-overlay" (click)="showModal.set(false)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>损失曲线对比</h3>
+        <button class="modal-close" (click)="showModal.set(false)">X</button>
+      </div>
+      <svg viewBox="0 0 560 280" class="modal-svg">
+        <rect x="0" y="0" width="560" height="280" fill="#fff" rx="4"/>
+        <!-- Y-axis grid lines -->
+        @for (i of [1,2,3,4]; track i) {
+          <line [attr.x1]="40" [attr.y1]="i * 56" x2="560" [attr.y2]="i * 56"
+                stroke="#f1f5f9" stroke-width="0.5" stroke-dasharray="4 3"/>
+          <text [attr.x]="34" [attr.y]="i * 56 + 4" text-anchor="end" fill="#94a3b8" font-size="9">
+            {{ ((1 - i / 5) * modalCurves().maxLoss).toFixed(3) }}
+          </text>
+        }
+        <!-- X axis -->
+        <line x1="40" y1="270" x2="560" y2="270" stroke="#e2e6ea" stroke-width="1"/>
+        <!-- Curves -->
+        @for (line of modalCurves().lines; track line.label) {
+          @if (line.points) {
+            <polyline [attr.points]="line.points" fill="none" [attr.stroke]="line.color"
+                      [attr.stroke-width]="line.faint ? 1.5 : line.dashed ? 2 : 3"
+                      [attr.stroke-dasharray]="line.dashed ? '6 4' : 'none'"
+                      [attr.opacity]="line.faint ? 0.35 : line.dashed ? 0.75 : 1"/>
+          }
+        }
+        @for (line of modalCurves().lines; track line.label) {
+          @if (line.points && !line.faint) {
+            @let pts = line.points.split(' ');
+            @let last = pts[pts.length - 1];
+            @let coords = last.split(',');
+            @if (coords.length === 2) {
+              <circle [attr.cx]="coords[0]" [attr.cy]="coords[1]" r="5"
+                      [attr.fill]="line.color" stroke="#fff" stroke-width="2"/>
+            }
+          }
+        }
+      </svg>
+      <div class="modal-legend">
+        @for (line of modalCurves().lines; track line.label) {
+          @if (!line.faint) {
+            <span class="modal-legend-item">
+              <span class="modal-dot" [style.background]="line.color"></span>
+              {{ line.label }}
+            </span>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}

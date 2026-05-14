@@ -2,10 +2,10 @@ export interface TeachingTerm {
   id: string;
   title: string;
   aliases: string[];
-  category: '前向传播流程' | '数据与张量' | '网络层' | '层参数' | '输出解读';
+  category: '前向传播流程' | '数据与张量' | '网络层' | '层参数' | '输出解读' | '训练与优化';
   summary: string;
   details: string[];
-  mode: 'A';
+  mode: 'A' | 'D';
 }
 
 export const MODE_A_TEACHING_TERMS: TeachingTerm[] = [
@@ -288,7 +288,95 @@ export const MODE_A_TEACHING_TERMS: TeachingTerm[] = [
   }
 ];
 
-export const TEACHING_TERMS = MODE_A_TEACHING_TERMS;
+export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
+  {
+    id: 'optimizer-sgd',
+    title: 'SGD 优化器',
+    aliases: ['SGD', '随机梯度下降'],
+    category: '训练与优化',
+    summary: 'SGD 是最基础的优化器，每一步直接用梯度乘以学习率更新参数。',
+    details: [
+      '公式: w = w - lr * dw。每一步独立计算，不参考历史梯度。',
+      '优点: 简单、在光滑损失曲面上收敛干净。例如 XOR 这种简单问题，SGD 的随机性有助于越过鞍部找到最优解。',
+      '缺点: 遇到平坦区域或峡谷地形时收敛极慢，容易被单个噪点带偏方向。同心圆、螺旋等复杂数据集上表现明显差于 Adam。',
+      '学习率对 SGD 影响巨大: 太高则震荡不收敛，太低则几乎不动。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'optimizer-momentum',
+    title: 'Momentum 优化器',
+    aliases: ['Momentum', '动量'],
+    category: '训练与优化',
+    summary: 'Momentum 在 SGD 基础上加入"动量"概念，累积历史梯度来平滑更新方向。',
+    details: [
+      '公式: v = beta * v + lr * dw, w = w - v。beta 通常取 0.9。',
+      '类比: 像滚下山的球，速度逐渐累积。在平坦区域也能靠惯性继续前进，在震荡方向互相抵消。',
+      '相比 SGD 收敛更快更稳，在中等复杂度的数据集上通常好于 SGD 但不如 Adam 快。',
+      '在 D 模式中，可以对比 Momentum 和 SGD: Momentum 的损失曲线通常更平滑，震荡更少。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'optimizer-adam',
+    title: 'Adam 优化器',
+    aliases: ['Adam', '自适应矩估计'],
+    category: '训练与优化',
+    summary: 'Adam 结合动量和平滑的自适应学习率，是当前最常用的优化器。',
+    details: [
+      '维护两个状态: m (一阶矩，类似动量) 和 v (二阶矩，自适应缩放)。每个参数有独立的学习率。',
+      '优点: 收敛快、对学习率不敏感、在复杂损失曲面上表现出色。同心圆、螺旋等需要非线决策边界的问题上 Adam 远优于 SGD。',
+      '缺点: 在非常简单的问题上（如 XOR）可能"过度调节"，收敛路径不如 SGD 直接。',
+      'D 模式中 Adam 通常能在较少步数内达到更高准确率，但最终损失可能略高于精调后的 SGD。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'backpropagation',
+    title: '反向传播',
+    aliases: ['反向传播', 'Backpropagation', '梯度回传'],
+    category: '训练与优化',
+    summary: '反向传播是训练神经网络的核心算法，利用链式法则从输出层逐层回传梯度。',
+    details: [
+      '四个阶段: 前向传播计算预测 → 损失函数衡量误差 → 反向传播计算梯度 → 优化器更新参数。',
+      '链式法则: 对于复合函数 f(g(x))，导数为 f\'(g(x)) * g\'(x)。在网络中每层都使用这个原理。',
+      'Dense 层的反向传播: dW = a_prev^T * dZ, db = sum(dZ), dA_prev = dZ * W^T。',
+      '激活函数的反向传播: ReLU 为 dZ = dA * (Z > 0)，Sigmoid 为 dZ = dA * sigmoid(Z) * (1-sigmoid(Z))。',
+      'D 模式可视化展示每一步梯度如何从输出层流向输入层，以及权重如何被更新。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'gradient-descent',
+    title: '梯度下降',
+    aliases: ['梯度下降', 'Gradient Descent', '学习'],
+    category: '训练与优化',
+    summary: '梯度下降通过反复计算梯度并沿负梯度方向更新参数来最小化损失函数。',
+    details: [
+      '核心思想: 损失函数对参数求偏导得到梯度，参数沿负梯度方向移动一小步，损失就会下降。',
+      '学习率控制每一步的大小: 太大可能跳过最优解，太小则收敛太慢。',
+      'D 模式中每点一次"单步"就执行一次完整的梯度下降迭代: 前向 → 损失 → 反向 → 更新。',
+      '通过观察损失曲线和决策边界的变化，可以直观理解梯度下降如何逐步改善模型。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'learning-rate',
+    title: '学习率',
+    aliases: ['学习率', 'Learning Rate', 'lr'],
+    category: '训练与优化',
+    summary: '学习率控制每次参数更新的步长，是训练中最重要的超参数之一。',
+    details: [
+      '过高 (>0.5): 参数更新幅度大，可能导致损失震荡甚至发散，曲线呈锯齿状。',
+      '过低 (<0.001): 收敛极慢，损失几乎不降，需要大量迭代。',
+      '适中 (0.01-0.1): 平衡收敛速度和稳定性。具体值取决于优化器: Adam 对学习率不敏感，SGD 则需要仔细调节。',
+      'D 模式默认 lr=0.1，适合 Adam 和大多数数据集。训练效果差时可以尝试调低到 0.01 观察变化。'
+    ],
+    mode: 'D'
+  }
+];
+
+export const TEACHING_TERMS = [...MODE_A_TEACHING_TERMS, ...MODE_D_TEACHING_TERMS];
 
 export function findTeachingTerm(id: string): TeachingTerm | undefined {
   return TEACHING_TERMS.find(term => term.id === id);

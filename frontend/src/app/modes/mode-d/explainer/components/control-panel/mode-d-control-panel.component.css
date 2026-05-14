@@ -44,11 +44,44 @@
 .opt-btn:hover, .speed-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
 .opt-btn.selected, .speed-btn.selected { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
 
+/* teaching mode highlight override */
+.opt-btn.teaching-term-active,
+.speed-btn.teaching-term-active {
+  background: rgba(204, 251, 241, .68) !important;
+  outline: 1px dashed rgba(15, 118, 110, .48);
+  outline-offset: 2px;
+  border-color: transparent;
+  cursor: help;
+  color: #0f766e !important;
+}
+
+/* steps */
+.steps-row { display: flex; flex-direction: column; gap: 4px; }
+.steps-input {
+  width: 80px; padding: 5px 8px; border: 1px solid #e2e6ea; border-radius: 6px;
+  font-size: 12px; color: #4a5568; outline: none; font-family: 'Courier New', monospace;
+}
+.steps-input:focus { border-color: #2563eb; }
+.steps-progress { font-size: 11px; color: #64748b; }
+.steps-progress strong { color: #4a5568; }
+
 /* status */
 .status-row { display: flex; gap: 8px; font-size: 12px; margin-bottom: 3px; }
 .status-label { color: #8a9ab0; }
 .status-val { color: #4a5568; font-weight: 600; }
 .status-val.correct { color: #059669; }
+
+/* comparison buttons */
+.cmp-buttons { display: flex; gap: 4px; margin-bottom: 4px; }
+.cmp-btn {
+  padding: 6px 12px; border: 1px solid #e2e6ea; border-radius: 6px;
+  background: #fff; color: #4a5568; font-size: 11px; font-weight: 500;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.cmp-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+.cmp-btn.clear:hover { border-color: #dc2626; color: #dc2626; }
+.cmp-hint { font-size: 10px; color: #94a3b8; line-height: 1.4; max-width: 180px; text-transform: none; letter-spacing: normal; }
+.ctrl-group .cmp-hint { margin-top: 4px; }
 
 @media (max-width: 700px) {
   .control-panel { flex-direction: column; align-items: stretch; }

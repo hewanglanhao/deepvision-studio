@@ -34,7 +34,22 @@
           class="opt-btn"
           [class.selected]="opt.value === config().optimizer"
           (click)="setOptimizer(opt.value)"
+          [appTeachingTerm]="'optimizer-' + opt.value"
         >{{ opt.label }}</button>
+      }
+    </div>
+  </div>
+
+  <div class="ctrl-group">
+    <label>训练步数</label>
+    <div class="steps-row">
+      <input type="number" class="steps-input" min="10" max="5000" step="10"
+             [value]="config().maxIterations"
+             (change)="setSteps($any($event.target).value)" />
+      @if (iteration() > 0) {
+        <span class="steps-progress">
+          已跑 <strong>{{ iteration() }}</strong> / 剩余 <strong>{{ config().maxIterations - iteration() }}</strong>
+        </span>
       }
     </div>
   </div>

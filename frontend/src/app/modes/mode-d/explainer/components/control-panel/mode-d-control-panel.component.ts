@@ -1,11 +1,12 @@
 import { Component, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import { ModeDStateService } from '../../services/mode-d-state.service';
 import type { ModeDOptimizer } from '../../models/mode-d.types';
 
 @Component({
   selector: 'app-mode-d-control-panel',
-  imports: [CommonModule],
+  imports: [CommonModule, TeachingTermDirective],
   templateUrl: './mode-d-control-panel.component.html',
   styleUrl: './mode-d-control-panel.component.css',
 })
@@ -49,6 +50,11 @@ export class ModeDControlPanelComponent {
     this.state.setPlaySpeed(ms);
   }
 
+  setSteps(val: string): void {
+    const n = parseInt(val, 10);
+    if (n > 0) this.state.setTrainingConfig({ maxIterations: n });
+  }
+
   readonly isAnimating = computed(() => this.state.isAnimating());
   readonly hasMore = computed(() => this.state.hasMoreSubSteps());
   readonly totalPending = computed(() => this.state.totalPendingSubSteps());
@@ -68,5 +74,13 @@ export class ModeDControlPanelComponent {
 
   reset(): void {
     this.state.reset();
+  }
+
+  saveCurve(): void {
+    this.state.saveCurrentCurve();
+  }
+
+  clearCurves(): void {
+    this.state.clearSavedCurves();
   }
 }
