@@ -1035,10 +1035,112 @@
             <div class="chart-label">训练日志 <span class="muted">[Backend]</span></div>
             <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
           </div>
-          <div class="chart-wrap training-note-card">
-            <div class="chart-label">反向传播说明 <span class="muted">（教学占位）</span></div>
-            <div class="warn-box">当前后端已提供训练指标、梯度范数和权重分布近似数据。<br>逐层反向传播计算图、梯度热力图和真实权重更新尚未实现。</div>
+          <div class="chart-wrap backprop-card">
+            <div class="chart-label">反向传播观察 <span class="muted">[真实后端数据]</span></div>
+            @if (latestBackprop; as bp) {
+              <div class="backprop-summary">
+                <div><span>当前 Loss</span><strong>{{ bp.loss | number:'1.4-4' }}</strong></div>
+                <div><span>全局梯度 Norm</span><strong>{{ bp.globalGradNorm | number:'1.4-4' }}</strong></div>
+                <div><span>参数更新 Norm</span><strong>{{ bp.globalUpdateNorm | number:'1.6-6' }}</strong></div>
+                <div><span>状态</span><strong [class]="'bp-state ' + layerGradStatusClass(bp.gradientStatus)">{{ backpropStatusText }}</strong></div>
+              </div>
+            } @else {
+              <div class="warn-box">开始后端训练后，这里会显示真实反向传播数据：每层梯度、参数更新和输出层损失解释。</div>
+            }
           </div>
+        </div>
+
+        <div class="backprop-board">
+          <div class="backprop-head">
+            <div>
+              <div class="section-title">反向传播教学面板</div>
+              <div class="muted">由 Python worker 在真实训练 batch 上采集梯度、权重和预测结果后推送。</div>
+            </div>
+            @if (latestBackprop; as bp) {
+              <div class="backprop-epoch">Epoch {{ bp.epoch }} / {{ bp.totalEpochs }} · Batch {{ bp.batch }} / {{ bp.totalBatches }}</div>
+            }
+          </div>
+
+          <div class="bp-timeline">
+            @for (step of backpropTimeline; track step.key) {
+              <div [class]="'bp-step ' + (step.active ? 'active ' : '') + (step.done ? 'done' : '')">
+                <span></span>
+                <strong>{{ step.label }}</strong>
+              </div>
+            }
+          </div>
+
+          @if (latestBackprop; as bp) {
+            <div class="bp-grid">
+              <section class="bp-panel bp-flow-panel">
+                <div class="section-title">梯度流动图</div>
+                <div class="bp-flow">
+                  @for (layer of backpropFlowLayers; track layer.layerId + '-' + $index) {
+                    <span [class]="'bp-flow-node ' + layerGradStatusClass(layer.status)">{{ layer.name }}</span>
+                    @if (!$last) { <i>←</i> }
+                  }
+                </div>
+              </section>
+
+              <section class="bp-panel">
+                <div class="section-title">损失对输出的影响</div>
+                <div class="bp-prediction">
+                  <div><span>真实类别</span><strong>{{ bp.prediction.trueIndex }}</strong></div>
+                  <div><span>预测类别</span><strong>{{ bp.prediction.predictedIndex }}</strong></div>
+                  <div><span>预测置信度</span><strong>{{ (bp.prediction.confidence * 100) | number:'1.1-1' }}%</strong></div>
+                  <div><span>真实类概率</span><strong>{{ (bp.prediction.trueProbability * 100) | number:'1.1-1' }}%</strong></div>
+                </div>
+                <p class="bp-explain">{{ bp.prediction.explanation }}</p>
+              </section>
+
+              <section class="bp-panel">
+                <div class="section-title">优化器解释</div>
+                <p class="bp-explain">{{ optimizerExplanation }}</p>
+                <div class="bp-prediction compact">
+                  <div><span>Scheduler</span><strong>{{ bp.scheduler }}</strong></div>
+                  <div><span>LR</span><strong>{{ (bp.lr ?? bp.learningRate) | number:'1.6-6' }}</strong></div>
+                </div>
+              </section>
+
+              <section class="bp-panel">
+                <div class="section-title">异常诊断提醒</div>
+                <div class="bp-diagnosis-list">
+                  @for (item of backpropDiagnosis; track item.text) {
+                    <div [class]="'bp-diagnosis ' + item.level">{{ item.text }}</div>
+                  }
+                </div>
+              </section>
+            </div>
+
+            <section class="bp-panel bp-layer-panel">
+              <div class="section-title">每层梯度与参数更新</div>
+              <div class="bp-layer-table">
+                @for (layer of backpropLayers; track layer.layerId + '-' + $index) {
+                  <div class="bp-layer-row">
+                    <div class="bp-layer-main">
+                      <strong>{{ layer.name }}</strong>
+                      <span>{{ layer.layerType }} · {{ layer.paramCount | number }} 参数 · {{ layerGradStatusText(layer.status) }}</span>
+                    </div>
+                    <div class="bp-bar-cell">
+                      <span>grad {{ layer.gradNorm | number:'1.4-4' }}</span>
+                      <div class="bp-bar"><i [style.width.%]="(layer.gradNorm / maxLayerGradNorm) * 100"></i></div>
+                    </div>
+                    <div class="bp-bar-cell">
+                      <span>update {{ layer.updateNorm | number:'1.6-6' }}</span>
+                      <div class="bp-bar update"><i [style.width.%]="(layer.updateNorm / maxLayerUpdateNorm) * 100"></i></div>
+                    </div>
+                    <div class="bp-layer-stats">
+                      <span>mean {{ layer.gradMean | number:'1.6-6' }}</span>
+                      <span>max {{ layer.gradMax | number:'1.4-4' }}</span>
+                      <span>weight {{ layer.weightNorm | number:'1.3-3' }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            </section>
+          } @else {
+            <div class="bp-empty">等待训练流中的 backprop 事件。</div>
+          }
         </div>
 
         @if (trainingTestResult; as test) {

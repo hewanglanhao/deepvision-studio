@@ -14,7 +14,7 @@ import { AuthService } from '@core/auth/auth.service';
 import { ForwardRecordService } from '@shared/forward/forward-record.service';
 import { ForwardBackendService } from '@shared/forward/forward-backend.service';
 import { CollaborationRoomSummary, TrainingCollaborationService } from '@shared/training/training-collaboration.service';
-import { TrainingCheckpointSummary, TrainingLog, TrainingRuntimeService, TrainingTestResult } from '@shared/training/training-runtime.service';
+import { TrainingBackpropSnapshot, TrainingCheckpointSummary, TrainingLog, TrainingRuntimeService, TrainingTestResult } from '@shared/training/training-runtime.service';
 import { TrainingDatasetApiService } from '@shared/training/training-dataset-api.service';
 import { SimEngine } from '@shared/simulation/sim-engine';
 import {
@@ -185,6 +185,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   trainingTotalBatchesValue = 0;
   trainingHistory: MetricPoint[] = [];
   trainingLogs: TrainingLog[] = [];
+  latestBackprop: TrainingBackpropSnapshot | null = null;
   trainingTestResult: TrainingTestResult | null = null;
   trainingCheckpoints: TrainingCheckpointSummary[] = [];
   selectedCheckpointId: number | null = null;
@@ -340,6 +341,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
+    this.subs.add(this.trainingSvc.backprop$.subscribe(snapshot => this.latestBackprop = snapshot));
     this.subs.add(this.trainingSvc.testResult$.subscribe(result => {
       this.trainingTestResult = result;
       if (result && this.authUser) void this.loadTrainingCheckpoints();
@@ -727,6 +729,87 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (this.trainingGradientNorm < 0.02) return '梯度可能消失';
     if (this.trainingGradientNorm > 2.5) return '梯度可能爆炸';
     return '梯度稳定';
+  }
+  get backpropTimeline(): Array<{ key: string; label: string; active: boolean; done: boolean }> {
+    const has = !!this.latestBackprop;
+    const phase = this.latestBackprop?.phase ?? '';
+    const order = ['forward', 'loss', 'backward', 'gradient_check', 'optimizer_step', 'validation'];
+    const activeIndex = order.indexOf(phase);
+    return [
+      { key: 'forward', label: '前向传播', active: has && phase === 'forward', done: has && activeIndex >= 0 },
+      { key: 'loss', label: '计算损失', active: has && phase === 'loss', done: has && activeIndex >= 1 },
+      { key: 'backward', label: '反向传播', active: has && phase === 'backward', done: has && activeIndex >= 2 },
+      { key: 'gradient_check', label: '梯度检查', active: has && phase === 'gradient_check', done: has && activeIndex >= 3 },
+      { key: 'optimizer_step', label: '优化器更新', active: has && phase === 'optimizer_step', done: has && activeIndex >= 4 },
+      { key: 'validation', label: '验证评估', active: has && phase === 'validation', done: has && activeIndex >= 5 }
+    ];
+  }
+  get backpropLayers() {
+    return this.latestBackprop?.layers ?? [];
+  }
+  get trainableBackpropLayers() {
+    return this.backpropLayers.filter(layer => layer.trainable);
+  }
+  get backpropFlowLayers() {
+    return [...this.backpropLayers].reverse();
+  }
+  get maxLayerGradNorm(): number {
+    return Math.max(1e-6, ...this.backpropLayers.map(layer => layer.gradNorm || 0));
+  }
+  get maxLayerUpdateNorm(): number {
+    return Math.max(1e-6, ...this.backpropLayers.map(layer => layer.updateNorm || 0));
+  }
+  get backpropStatusText(): string {
+    const status = this.latestBackprop?.gradientStatus ?? 'stable';
+    if (status === 'vanishing') return '梯度可能消失';
+    if (status === 'exploding') return '梯度可能爆炸';
+    return '梯度稳定';
+  }
+  get backpropDiagnosis(): Array<{ level: 'ok' | 'warn' | 'error'; text: string }> {
+    const bp = this.latestBackprop;
+    if (!bp) return [{ level: 'warn', text: '等待后端训练产生真实反向传播数据。' }];
+    const items: Array<{ level: 'ok' | 'warn' | 'error'; text: string }> = [];
+    if (bp.gradientStatus === 'vanishing') {
+      items.push({ level: 'error', text: '全局梯度范数过小，可能出现梯度消失；可检查激活函数、初始化或学习率。' });
+    } else if (bp.gradientStatus === 'exploding') {
+      items.push({ level: 'error', text: '全局梯度范数过大，可能出现梯度爆炸；可降低学习率或加入梯度裁剪。' });
+    } else {
+      items.push({ level: 'ok', text: '全局梯度处于稳定区间。' });
+    }
+    if (this.trainingValLoss > this.trainingLoss * 1.35 && this.trainingEpoch > 2) {
+      items.push({ level: 'warn', text: '验证损失明显高于训练损失，可能存在过拟合。' });
+    }
+    if (bp.globalUpdateNorm < 1e-7 && bp.globalGradNorm > 0) {
+      items.push({ level: 'warn', text: '参数更新幅度极小，学习率可能偏低或优化器状态更新过慢。' });
+    }
+    const noisyLayer = this.trainableBackpropLayers.find(layer => layer.status === 'exploding' || layer.status === 'vanishing');
+    if (noisyLayer) {
+      items.push({ level: noisyLayer.status === 'exploding' ? 'error' : 'warn', text: `${noisyLayer.name} 的梯度状态为 ${this.layerGradStatusText(noisyLayer.status)}，建议优先检查该层附近结构。` });
+    }
+    return items;
+  }
+  get optimizerExplanation(): string {
+    const name = (this.latestBackprop?.optimizer || this.trainingConfig.optimizer || 'Adam').toLowerCase();
+    const lr = this.latestBackprop?.lr ?? this.latestBackprop?.learningRate ?? this.trainingLr;
+    const prefix = `当前优化器 ${this.latestBackprop?.optimizer || this.trainingConfig.optimizer}，学习率 ${Number(lr).toPrecision(4)}。`;
+    if (name === 'sgd') return prefix + 'SGD 直接沿负梯度方向更新参数，更新幅度主要由学习率和梯度大小决定。';
+    if (name === 'momentum' || name === 'nesterov') return prefix + '动量法会累积历史梯度方向，让更新更平滑，并减少震荡。';
+    if (name === 'rmsprop') return prefix + 'RMSProp 会根据近期梯度平方均值调节每个参数的步长。';
+    if (name === 'adamw') return prefix + 'AdamW 在 Adam 的自适应更新外分离权重衰减，常用于降低过拟合。';
+    if (name === 'adagrad' || name === 'adadelta') return prefix + '该优化器会按历史梯度自适应调整每个参数的学习步长。';
+    return prefix + 'Adam 会维护梯度的一阶和二阶动量，让每个参数拥有自适应更新幅度。';
+  }
+  layerGradStatusText(status: string): string {
+    if (status === 'vanishing') return '梯度消失';
+    if (status === 'exploding') return '梯度爆炸';
+    if (status === 'no_grad') return '无梯度';
+    return '稳定';
+  }
+  layerGradStatusClass(status: string): string {
+    if (status === 'exploding') return 'error';
+    if (status === 'vanishing') return 'warn';
+    if (status === 'no_grad') return 'muted';
+    return 'ok';
   }
   get weightHistogramBins(): Array<{ label: string; value: number }> {
     const mean = this.trainingWeightMean;
