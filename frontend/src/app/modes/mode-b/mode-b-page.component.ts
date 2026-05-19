@@ -753,6 +753,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get backpropFlowLayers() {
     return [...this.backpropLayers].reverse();
   }
+  get backpropNetworkLayers() {
+    return this.backpropLayers;
+  }
   get maxLayerGradNorm(): number {
     return Math.max(1e-6, ...this.backpropLayers.map(layer => layer.gradNorm || 0));
   }
@@ -810,6 +813,38 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (status === 'vanishing') return 'warn';
     if (status === 'no_grad') return 'muted';
     return 'ok';
+  }
+  layerGradPercent(layer: TrainingBackpropSnapshot['layers'][number]): number {
+    return Math.max(0, Math.min(100, ((layer.gradNorm || 0) / this.maxLayerGradNorm) * 100));
+  }
+  layerUpdatePercent(layer: TrainingBackpropSnapshot['layers'][number]): number {
+    return Math.max(0, Math.min(100, ((layer.updateNorm || 0) / this.maxLayerUpdateNorm) * 100));
+  }
+  layerVisualClass(layer: TrainingBackpropSnapshot['layers'][number]): string {
+    const type = (layer.layerType || '').toLowerCase();
+    if (type.includes('input')) return 'input';
+    if (type.includes('output')) return 'output';
+    if (type.includes('residual')) return 'residual';
+    if (type.includes('conv')) return 'conv';
+    if (type.includes('pool')) return 'pool';
+    if (type.includes('flatten')) return 'flatten';
+    if (type.includes('dropout')) return 'dropout';
+    if (type.includes('activation') || type === 'relu' || type === 'sigmoid' || type === 'tanh') return 'activation';
+    if (type.includes('dense') || type.includes('linear')) return 'dense';
+    return 'default';
+  }
+  layerVisualToken(layer: TrainingBackpropSnapshot['layers'][number]): string {
+    const type = (layer.layerType || '').toLowerCase();
+    if (type.includes('input')) return 'IN';
+    if (type.includes('output')) return 'OUT';
+    if (type.includes('residual')) return 'RES';
+    if (type.includes('conv')) return 'CV';
+    if (type.includes('pool')) return 'PL';
+    if (type.includes('flatten')) return 'FL';
+    if (type.includes('dropout')) return 'DO';
+    if (type.includes('activation') || type === 'relu' || type === 'sigmoid' || type === 'tanh') return 'AC';
+    if (type.includes('dense') || type.includes('linear')) return 'FC';
+    return 'L';
   }
   get weightHistogramBins(): Array<{ label: string; value: number }> {
     const mean = this.trainingWeightMean;

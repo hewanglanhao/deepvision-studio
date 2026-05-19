@@ -1071,17 +1071,66 @@
           </div>
 
           @if (latestBackprop; as bp) {
-            <div class="bp-grid">
-              <section class="bp-panel bp-flow-panel">
-                <div class="section-title">梯度流动图</div>
-                <div class="bp-flow">
-                  @for (layer of backpropFlowLayers; track layer.layerId + '-' + $index) {
-                    <span [class]="'bp-flow-node ' + layerGradStatusClass(layer.status)">{{ layer.name }}</span>
-                    @if (!$last) { <i>←</i> }
+            <section class="bp-panel bp-network-panel">
+              <div class="bp-network-head">
+                <div>
+                  <div class="section-title">网络结构中的梯度与参数更新</div>
+                  <div class="muted">节点按前向结构排列，流光表示当前 batch 的反向梯度正在从输出端回传。</div>
+                </div>
+                <div class="bp-network-legend">
+                  <span><i class="grad"></i>grad</span>
+                  <span><i class="update"></i>update</span>
+                </div>
+              </div>
+              <div class="bp-network-shell">
+                <div class="bp-network-rail forward"><span>forward</span></div>
+                <div class="bp-network-rail backward"><span>backward</span></div>
+                <div class="bp-network-scroll">
+                  @for (layer of backpropNetworkLayers; track layer.layerId + '-' + $index) {
+                    <div class="bp-network-stage">
+                      <div [class]="'bp-network-node ' + layerVisualClass(layer) + ' ' + layerGradStatusClass(layer.status)">
+                        <div class="bp-node-orbit">
+                          <span>{{ layerVisualToken(layer) }}</span>
+                        </div>
+                        <div class="bp-node-copy">
+                          <strong>{{ layer.name }}</strong>
+                          <em>{{ layer.layerType }} · {{ layerGradStatusText(layer.status) }}</em>
+                        </div>
+                        <div class="bp-node-metrics">
+                          <div>
+                            <span>grad</span>
+                            <strong>{{ layer.gradNorm | number:'1.4-4' }}</strong>
+                          </div>
+                          <div>
+                            <span>update</span>
+                            <strong>{{ layer.updateNorm | number:'1.6-6' }}</strong>
+                          </div>
+                        </div>
+                        <div class="bp-node-bars">
+                          <div class="bp-node-bar grad"><i [style.width.%]="layerGradPercent(layer)"></i></div>
+                          <div class="bp-node-bar update"><i [style.width.%]="layerUpdatePercent(layer)"></i></div>
+                        </div>
+                        <div class="bp-node-foot">
+                          <span>mean {{ layer.gradMean | number:'1.6-6' }}</span>
+                          <span>max {{ layer.gradMax | number:'1.4-4' }}</span>
+                          <span>w {{ layer.weightNorm | number:'1.3-3' }}</span>
+                        </div>
+                      </div>
+                      @if (!$last) {
+                        <div class="bp-network-link" aria-hidden="true">
+                          <span class="bp-link-line"></span>
+                          <span class="bp-particle p1"></span>
+                          <span class="bp-particle p2"></span>
+                          <span class="bp-particle p3"></span>
+                        </div>
+                      }
+                    </div>
                   }
                 </div>
-              </section>
+              </div>
+            </section>
 
+            <div class="bp-grid">
               <section class="bp-panel">
                 <div class="section-title">损失对输出的影响</div>
                 <div class="bp-prediction">
@@ -1111,33 +1160,6 @@
                 </div>
               </section>
             </div>
-
-            <section class="bp-panel bp-layer-panel">
-              <div class="section-title">每层梯度与参数更新</div>
-              <div class="bp-layer-table">
-                @for (layer of backpropLayers; track layer.layerId + '-' + $index) {
-                  <div class="bp-layer-row">
-                    <div class="bp-layer-main">
-                      <strong>{{ layer.name }}</strong>
-                      <span>{{ layer.layerType }} · {{ layer.paramCount | number }} 参数 · {{ layerGradStatusText(layer.status) }}</span>
-                    </div>
-                    <div class="bp-bar-cell">
-                      <span>grad {{ layer.gradNorm | number:'1.4-4' }}</span>
-                      <div class="bp-bar"><i [style.width.%]="(layer.gradNorm / maxLayerGradNorm) * 100"></i></div>
-                    </div>
-                    <div class="bp-bar-cell">
-                      <span>update {{ layer.updateNorm | number:'1.6-6' }}</span>
-                      <div class="bp-bar update"><i [style.width.%]="(layer.updateNorm / maxLayerUpdateNorm) * 100"></i></div>
-                    </div>
-                    <div class="bp-layer-stats">
-                      <span>mean {{ layer.gradMean | number:'1.6-6' }}</span>
-                      <span>max {{ layer.gradMax | number:'1.4-4' }}</span>
-                      <span>weight {{ layer.weightNorm | number:'1.3-3' }}</span>
-                    </div>
-                  </div>
-                }
-              </div>
-            </section>
           } @else {
             <div class="bp-empty">等待训练流中的 backprop 事件。</div>
           }
