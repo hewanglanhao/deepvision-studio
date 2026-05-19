@@ -307,6 +307,9 @@ public class TrainingJobService {
         }
       }
       broadcastRaw(job.jobId(), line);
+    } else if ("backprop".equals(type)) {
+      job.addStreamEvent(line);
+      broadcastRaw(job.jobId(), line);
     } else if ("error".equals(type)) {
       job.setStatus("stopped");
       job.addStreamEvent(line);

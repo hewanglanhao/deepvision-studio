@@ -43,6 +43,49 @@ export interface TrainingTestResult {
   samples: TrainingPredictionSample[];
 }
 
+export interface BackpropLayerStat {
+  layerId: number;
+  name: string;
+  layerType: string;
+  trainable: boolean;
+  gradNorm: number;
+  gradMean: number;
+  gradMax: number;
+  weightNorm: number;
+  updateNorm: number;
+  status: 'stable' | 'vanishing' | 'exploding' | 'no_grad';
+  paramCount: number;
+}
+
+export interface BackpropPredictionInsight {
+  trueIndex: number;
+  predictedIndex: number;
+  confidence: number;
+  trueProbability: number;
+  correct: boolean;
+  explanation: string;
+}
+
+export interface TrainingBackpropSnapshot {
+  type: 'backprop';
+  jobId: string;
+  epoch: number;
+  totalEpochs: number;
+  batch: number;
+  totalBatches: number;
+  phase: string;
+  loss: number;
+  optimizer: string;
+  scheduler: string;
+  learningRate: number;
+  lr?: number;
+  globalGradNorm: number;
+  globalUpdateNorm: number;
+  gradientStatus: 'stable' | 'vanishing' | 'exploding';
+  layers: BackpropLayerStat[];
+  prediction: BackpropPredictionInsight;
+}
+
 export interface TrainingCheckpointSummary {
   id: number;
   name: string;
@@ -85,7 +128,7 @@ interface BackendTrainingStartResponse {
 }
 
 interface BackendMetricMessage {
-  type: 'metric' | 'control' | 'error' | 'test_result';
+  type: 'metric' | 'control' | 'error' | 'test_result' | 'backprop';
   jobId: string;
   step?: number;
   epoch?: number;
@@ -144,6 +187,7 @@ export class TrainingRuntimeService implements OnDestroy {
   readonly history$ = new BehaviorSubject<MetricPoint[]>([]);
   readonly logs$ = new BehaviorSubject<TrainingLog[]>([]);
   readonly testResult$ = new BehaviorSubject<TrainingTestResult | null>(null);
+  readonly backprop$ = new BehaviorSubject<TrainingBackpropSnapshot | null>(null);
   readonly epochTick$ = new Subject<MetricPoint>();
 
   private config: TrainingConfig = {
@@ -187,6 +231,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.layers = [...request.layers];
     this.history$.next([]);
     this.testResult$.next(null);
+    this.backprop$.next(null);
     this.patchState({
       status: 'running',
       currentEpoch: 0,
@@ -266,6 +311,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.history$.next([]);
     this.logs$.next([]);
     this.testResult$.next(null);
+    this.backprop$.next(null);
     this.patchState({
       status: 'running',
       currentEpoch: 0,
@@ -326,6 +372,7 @@ export class TrainingRuntimeService implements OnDestroy {
     });
     this.history$.next([]);
     this.testResult$.next(null);
+    this.backprop$.next(null);
     this.log('warn', 'Training stopped and reset.');
   }
 
@@ -333,11 +380,13 @@ export class TrainingRuntimeService implements OnDestroy {
     if (this.backendJobId) {
       this.history$.next([]);
       this.testResult$.next(null);
+      this.backprop$.next(null);
       await this.controlBackend('reset', 'Training reset.');
       return;
     }
     await this.stop();
     this.logs$.next([]);
+    this.backprop$.next(null);
   }
 
   ngOnDestroy(): void {
@@ -403,6 +452,10 @@ export class TrainingRuntimeService implements OnDestroy {
       this.testResult$.next(result);
       const accText = result.testAccuracy === null ? 'N/A' : `${(result.testAccuracy * 100).toFixed(1)}%`;
       this.log('info', `测试集评估完成：accuracy=${accText}, samples=${result.sampleCount}`);
+      return;
+    }
+    if (message.type === 'backprop') {
+      this.backprop$.next(message as TrainingBackpropSnapshot);
       return;
     }
     if (message.type !== 'metric') return;

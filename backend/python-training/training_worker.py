@@ -20,6 +20,12 @@ from torch.utils.data import DataLoader, Dataset, Subset
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif"}
 
 
+class ModelBundle(nn.Sequential):
+    def __init__(self, modules: list[nn.Module], layer_refs: list[dict[str, Any]]) -> None:
+        super().__init__(*modules)
+        self.layer_refs = layer_refs
+
+
 class ImageClassificationDataset(Dataset):
     def __init__(self, root: Path, width: int, height: int, channels: int) -> None:
         self.root = root
@@ -212,7 +218,9 @@ def train(request: dict[str, Any]) -> None:
             emit({"type": "control", "jobId": job_id, "status": "stopped", "message": "Training stopped."})
             return
 
-        loss, accuracy, gradient_norm = train_epoch(model, train_loader, criterion, optimizer, device, control_file)
+        loss, accuracy, gradient_norm, backprop = train_epoch(
+            model, train_loader, criterion, optimizer, device, control_file, job_id, epoch, total_epochs, total_batches, config
+        )
         if scheduler is not None:
             scheduler.step()
         val_loss = None
@@ -225,6 +233,12 @@ def train(request: dict[str, Any]) -> None:
         elapsed = int(time.time() - start)
         eta = int(elapsed * (total_epochs - epoch) / max(1, epoch))
         lr = optimizer.param_groups[0]["lr"]
+        if backprop is not None:
+            backprop["phase"] = "validation"
+            backprop["lr"] = round(lr, 8)
+            backprop["valLoss"] = None if val_loss is None else round(val_loss, 6)
+            backprop["valAccuracy"] = None if val_accuracy is None else round(val_accuracy, 6)
+            emit(backprop)
         emit({
             "type": "metric",
             "jobId": job_id,
@@ -378,6 +392,7 @@ def split_dataset(dataset: Dataset, split: dict[str, float], seed: int) -> tuple
 
 def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_count: int) -> nn.Module:
     modules: list[nn.Module] = []
+    layer_refs: list[dict[str, Any]] = []
     spatial = sample_x.ndim == 3
     saw_trainable = False
     for layer in layers:
@@ -386,8 +401,10 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
         layer_type = layer.get("type")
         params = layer.get("params") or {}
         if layer_type == "input":
+            layer_refs.append(layer_ref(layer, layer_type, [], trainable=False))
             continue
         if layer_type == "conv2d":
+            start = len(modules)
             modules.append(nn.LazyConv2d(
                 out_channels=max(1, int(params.get("outChannels") or 8)),
                 kernel_size=max(1, int(params.get("kernelSize") or 3)),
@@ -396,9 +413,11 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
                 dilation=max(1, int(params.get("dilation") or 1)),
             ))
             append_activation(modules, params.get("activation"))
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=True))
             spatial = True
             saw_trainable = True
         elif layer_type == "pool2d":
+            start = len(modules)
             kernel_size = max(1, int(params.get("kernelSize") or 2))
             stride = max(1, int(params.get("stride") or kernel_size))
             padding = max(0, int(params.get("padding") or 0))
@@ -406,10 +425,12 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
                 modules.append(nn.AvgPool2d(kernel_size=kernel_size, stride=stride, padding=padding))
             else:
                 modules.append(nn.MaxPool2d(kernel_size=kernel_size, stride=stride, padding=padding))
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=False))
             spatial = True
         elif layer_type == "residual":
             if not spatial:
                 raise ValueError(f"Residual block {layer.get('name') or layer.get('id')} requires image-like feature maps.")
+            start = len(modules)
             modules.append(ResidualBlock(
                 out_channels=max(1, int(params.get("outChannels") or 8)),
                 kernel_size=max(1, int(params.get("kernelSize") or 3)),
@@ -418,23 +439,33 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
                 activation=params.get("activation"),
                 use_projection=bool(params.get("useProjection")),
             ))
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=True))
             spatial = True
             saw_trainable = True
         elif layer_type == "flatten":
+            start = len(modules)
             modules.append(AutoFlatten())
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=False))
             spatial = False
         elif layer_type == "dense":
+            start = len(modules)
             if spatial:
                 modules.append(AutoFlatten())
                 spatial = False
             modules.append(nn.LazyLinear(max(1, int(params.get("units") or 64))))
             append_activation(modules, params.get("activation"))
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=True))
             saw_trainable = True
         elif layer_type == "activation":
+            start = len(modules)
             append_activation(modules, params.get("activationType"))
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=False))
         elif layer_type == "dropout":
+            start = len(modules)
             modules.append(nn.Dropout(p=min(0.9, max(0.0, float(params.get("rate") or 0.2)))))
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=False))
         elif layer_type == "output":
+            start = len(modules)
             if spatial:
                 modules.append(AutoFlatten())
                 spatial = False
@@ -443,16 +474,34 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
             # CrossEntropyLoss expects logits, so softmax is intentionally skipped.
             if params.get("activation") not in {None, "none", "softmax"}:
                 append_activation(modules, params.get("activation"))
+            layer_refs.append(layer_ref(layer, layer_type, list(range(start, len(modules))), trainable=True))
             saw_trainable = True
 
     if not saw_trainable:
         if spatial:
             modules.append(AutoFlatten())
         modules.append(nn.LazyLinear(max(2, class_count)))
-    model = nn.Sequential(*modules)
+        layer_refs.append({
+            "layerId": -1,
+            "name": "Auto Output",
+            "type": "output",
+            "moduleIndices": [len(modules) - 1],
+            "trainable": True,
+        })
+    model = ModelBundle(modules, layer_refs)
     with torch.no_grad():
         model(sample_x.unsqueeze(0))
     return model
+
+
+def layer_ref(layer: dict[str, Any], layer_type: str, module_indices: list[int], trainable: bool) -> dict[str, Any]:
+    return {
+        "layerId": int(layer.get("id") or -1),
+        "name": str(layer.get("name") or layer_type),
+        "type": layer_type,
+        "moduleIndices": module_indices,
+        "trainable": trainable,
+    }
 
 
 def append_activation(modules: list[nn.Module], activation: Any) -> None:
@@ -506,13 +555,26 @@ def build_scheduler(optimizer, config: dict[str, Any], total_epochs: int):
     return None
 
 
-def train_epoch(model, loader, criterion, optimizer, device, control_file: Path) -> tuple[float, float, float]:
+def train_epoch(
+    model,
+    loader,
+    criterion,
+    optimizer,
+    device,
+    control_file: Path,
+    job_id: str,
+    epoch: int,
+    total_epochs: int,
+    total_batches: int,
+    config: dict[str, Any],
+) -> tuple[float, float, float, dict[str, Any] | None]:
     model.train()
     total_loss = 0.0
     total_correct = 0
     total = 0
     last_gradient_norm = 0.0
-    for x, y in loader:
+    latest_backprop: dict[str, Any] | None = None
+    for batch_index, (x, y) in enumerate(loader, start=1):
         command = wait_if_paused(control_file)
         if command == "stopped":
             break
@@ -520,15 +582,227 @@ def train_epoch(model, loader, criterion, optimizer, device, control_file: Path)
         y = y.to(device)
         optimizer.zero_grad(set_to_none=True)
         logits = model(x)
+        should_emit_phase = batch_index == 1
+        if should_emit_phase:
+            emit(build_backprop_event(
+                job_id,
+                epoch,
+                total_epochs,
+                batch_index,
+                total_batches,
+                config,
+                "forward",
+                0.0,
+                optimizer.param_groups[0]["lr"],
+                logits,
+                y,
+                [],
+            ))
         loss = criterion(logits, y)
+        if should_emit_phase:
+            emit(build_backprop_event(
+                job_id,
+                epoch,
+                total_epochs,
+                batch_index,
+                total_batches,
+                config,
+                "loss",
+                float(loss.detach().cpu()),
+                optimizer.param_groups[0]["lr"],
+                logits,
+                y,
+                [],
+            ))
+        before = snapshot_trainable_parameters(model)
         loss.backward()
         last_gradient_norm = compute_gradient_norm(model)
+        layer_stats_before_step = collect_layer_backprop_stats(model, before)
+        if should_emit_phase:
+            emit(build_backprop_event(
+                job_id,
+                epoch,
+                total_epochs,
+                batch_index,
+                total_batches,
+                config,
+                "backward",
+                float(loss.detach().cpu()),
+                optimizer.param_groups[0]["lr"],
+                logits,
+                y,
+                layer_stats_before_step,
+            ))
+            emit(build_backprop_event(
+                job_id,
+                epoch,
+                total_epochs,
+                batch_index,
+                total_batches,
+                config,
+                "gradient_check",
+                float(loss.detach().cpu()),
+                optimizer.param_groups[0]["lr"],
+                logits,
+                y,
+                layer_stats_before_step,
+            ))
         optimizer.step()
+        apply_update_norms(layer_stats_before_step, model, before)
+        latest_backprop = build_backprop_event(
+            job_id,
+            epoch,
+            total_epochs,
+            batch_index,
+            total_batches,
+            config,
+            "optimizer_step",
+            float(loss.detach().cpu()),
+            optimizer.param_groups[0]["lr"],
+            logits,
+            y,
+            layer_stats_before_step,
+        )
+        if should_emit_phase:
+            emit(latest_backprop)
         batch_size = y.shape[0]
         total_loss += float(loss.detach().cpu()) * batch_size
         total_correct += int((logits.argmax(dim=1) == y).sum().detach().cpu())
         total += batch_size
-    return total_loss / max(1, total), total_correct / max(1, total), last_gradient_norm
+    return total_loss / max(1, total), total_correct / max(1, total), last_gradient_norm, latest_backprop
+
+
+def snapshot_trainable_parameters(model: nn.Module) -> dict[str, torch.Tensor]:
+    return {
+        name: parameter.detach().clone()
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad
+    }
+
+
+def collect_layer_backprop_stats(model: nn.Module, before: dict[str, torch.Tensor]) -> list[dict[str, Any]]:
+    refs = list(getattr(model, "layer_refs", []))
+    rows: list[dict[str, Any]] = []
+    modules = list(model)
+    for ref in refs:
+        params: list[tuple[str, torch.nn.Parameter]] = []
+        for module_index in ref.get("moduleIndices", []):
+            if not isinstance(module_index, int) or module_index < 0 or module_index >= len(modules):
+                continue
+            prefix = f"{module_index}."
+            params.extend((prefix + name, parameter) for name, parameter in modules[module_index].named_parameters())
+        grad_values = [parameter.grad.detach().flatten() for _, parameter in params if parameter.grad is not None]
+        weight_values = [parameter.detach().flatten() for _, parameter in params if "weight" in _ and parameter.numel() > 0]
+        rows.append({
+            "layerId": ref.get("layerId"),
+            "name": ref.get("name"),
+            "layerType": ref.get("type"),
+            "trainable": bool(ref.get("trainable")),
+            "gradNorm": round(tensor_norm(grad_values), 6),
+            "gradMean": round(tensor_mean(grad_values), 6),
+            "gradMax": round(tensor_abs_max(grad_values), 6),
+            "weightNorm": round(tensor_norm(weight_values), 6),
+            "updateNorm": 0.0,
+            "status": gradient_status(tensor_norm(grad_values)) if grad_values else "no_grad",
+            "paramCount": int(sum(parameter.numel() for _, parameter in params)),
+        })
+    return rows
+
+
+def apply_update_norms(rows: list[dict[str, Any]], model: nn.Module, before: dict[str, torch.Tensor]) -> None:
+    refs = list(getattr(model, "layer_refs", []))
+    modules = list(model)
+    for row, ref in zip(rows, refs):
+        deltas: list[torch.Tensor] = []
+        for module_index in ref.get("moduleIndices", []):
+            if not isinstance(module_index, int) or module_index < 0 or module_index >= len(modules):
+                continue
+            prefix = f"{module_index}."
+            for name, parameter in modules[module_index].named_parameters():
+                key = prefix + name
+                if key in before:
+                    deltas.append((parameter.detach() - before[key].to(parameter.device)).flatten())
+        row["updateNorm"] = round(tensor_norm(deltas), 6)
+
+
+def build_backprop_event(
+    job_id: str,
+    epoch: int,
+    total_epochs: int,
+    batch: int,
+    total_batches: int,
+    config: dict[str, Any],
+    phase: str,
+    loss: float,
+    lr: float,
+    logits: torch.Tensor,
+    y: torch.Tensor,
+    layers: list[dict[str, Any]],
+) -> dict[str, Any]:
+    with torch.no_grad():
+        probs = torch.softmax(logits, dim=1)
+        first_probs = probs[0].detach().cpu()
+        true_index = int(y[0].detach().cpu().item())
+        predicted_index = int(torch.argmax(first_probs).item())
+        confidence = float(first_probs[predicted_index].item())
+        true_probability = float(first_probs[true_index].item()) if 0 <= true_index < first_probs.numel() else 0.0
+    global_grad_norm = math.sqrt(sum(float(layer.get("gradNorm") or 0.0) ** 2 for layer in layers))
+    global_update_norm = math.sqrt(sum(float(layer.get("updateNorm") or 0.0) ** 2 for layer in layers))
+    return {
+        "type": "backprop",
+        "jobId": job_id,
+        "epoch": epoch,
+        "totalEpochs": total_epochs,
+        "batch": batch,
+        "totalBatches": total_batches,
+        "phase": phase,
+        "loss": round(float(loss), 6),
+        "optimizer": str(config.get("optimizer") or "Adam"),
+        "scheduler": str(config.get("scheduler") or "none"),
+        "learningRate": float(config.get("learningRate") or 0.001),
+        "lr": round(float(lr), 8),
+        "globalGradNorm": round(global_grad_norm, 6),
+        "globalUpdateNorm": round(global_update_norm, 6),
+        "gradientStatus": gradient_status(global_grad_norm),
+        "layers": layers,
+        "prediction": {
+            "trueIndex": true_index,
+            "predictedIndex": predicted_index,
+            "confidence": round(confidence, 6),
+            "trueProbability": round(true_probability, 6),
+            "correct": predicted_index == true_index,
+            "explanation": prediction_explanation(predicted_index, true_index, confidence, true_probability),
+        },
+    }
+
+
+def tensor_norm(values: list[torch.Tensor]) -> float:
+    if not values:
+        return 0.0
+    return math.sqrt(sum(float(value.detach().norm(2).cpu()) ** 2 for value in values))
+
+
+def tensor_mean(values: list[torch.Tensor]) -> float:
+    if not values:
+        return 0.0
+    merged = torch.cat([value.detach().cpu() for value in values if value.numel() > 0])
+    return float(merged.mean()) if merged.numel() else 0.0
+
+
+def tensor_abs_max(values: list[torch.Tensor]) -> float:
+    if not values:
+        return 0.0
+    merged = torch.cat([value.detach().abs().cpu() for value in values if value.numel() > 0])
+    return float(merged.max()) if merged.numel() else 0.0
+
+
+def prediction_explanation(predicted_index: int, true_index: int, confidence: float, true_probability: float) -> str:
+    if predicted_index == true_index:
+        return f"当前样本预测正确，真实类别概率约 {true_probability:.1%}，反向传播会继续巩固这一路输出。"
+    return (
+        f"当前样本预测为 {predicted_index}，真实类别为 {true_index}；"
+        f"反向传播会降低错误类别置信度 {confidence:.1%}，并提高真实类别概率 {true_probability:.1%}。"
+    )
 
 
 def evaluate(model, loader, criterion, device) -> tuple[float, float]:
