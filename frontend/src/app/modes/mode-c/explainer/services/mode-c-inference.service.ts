@@ -3,6 +3,7 @@ import {
   ModeCClassScore,
   ModeCConvChannelExample,
   ModeCConvInputContribution,
+  ModeCGradCamResult,
   ModeCLayerChannelPreview,
   ModeCLayerDetailRuntime,
   ModeCLayerActivationSummary,
@@ -83,7 +84,8 @@ export class ModeCInferenceService {
 
     const probabilities = this.isTensor3D(current) ? [] : current;
     const topClasses = this.buildTopClasses(probabilities);
-    const topClass = topClasses[0] ?? { label: 'unknown', score: 0 };
+    const topClass = topClasses[0] ?? { classIndex: -1, label: 'unknown', score: 0 };
+    const gradCam = await this.computeGradCam(model, image, topClasses, rawLayers);
 
     return {
       prediction: {
@@ -93,8 +95,20 @@ export class ModeCInferenceService {
       },
       summaries,
       previews,
-      details
+      details,
+      gradCam
     };
+  }
+
+  async computeGradCamForTarget(assetPath: string, targetClassIndex: number): Promise<ModeCGradCamResult | null> {
+    const [model, rawLayers, image] = await Promise.all([
+      this.getModel(),
+      this.getRawLayers(),
+      this.loadAndPrepareImage(assetPath)
+    ]);
+    const probabilities = await this.predictProbabilities(model, image);
+    const topClasses = this.buildTopClasses(probabilities);
+    return this.computeGradCam(model, image, topClasses, rawLayers, targetClassIndex);
   }
 
   private async getTf(): Promise<any> {
@@ -138,6 +152,114 @@ export class ModeCInferenceService {
       this.rawLayersPromise = this.buildRawLayersFromModel();
     }
     return this.rawLayersPromise;
+  }
+
+  private async computeGradCam(
+    model: any,
+    image: Tensor3D,
+    topClasses: ModeCClassScore[],
+    rawLayers: RawNetworkLayer[],
+    forcedTargetClassIndex?: number
+  ): Promise<ModeCGradCamResult | null> {
+    const tfLib = await this.getTf();
+    const targetClass = typeof forcedTargetClassIndex === 'number'
+      ? topClasses.find(candidate => candidate.classIndex === forcedTargetClassIndex) ?? null
+      : (topClasses[0] ?? null);
+    if (!targetClass) {
+      return null;
+    }
+
+    const targetClassIndex = targetClass.classIndex;
+    if (targetClassIndex < 0) {
+      return null;
+    }
+
+    const targetLayerName = this.findLastConvLayerName(rawLayers);
+    if (!targetLayerName) {
+      return null;
+    }
+
+    const targetLayerIndex = model.layers.findIndex((layer: any) => layer.name === targetLayerName);
+    if (targetLayerIndex < 0) {
+      return null;
+    }
+
+    const targetLayer = model.getLayer(targetLayerName);
+    const activationModel = tfLib.model({
+      inputs: model.inputs,
+      outputs: targetLayer.output
+    });
+    const classifierLayers = model.layers.slice(targetLayerIndex + 1);
+    const batchedInput = tfLib.stack([tfLib.tensor3d(image)]);
+    const activations = activationModel.predict(batchedInput);
+
+    const gradFunction = tfLib.grad((activationTensor: any) => {
+      let value = activationTensor;
+      for (const layer of classifierLayers) {
+        value = layer.apply(value);
+      }
+      const logits = value.squeeze();
+      return logits.gather(targetClassIndex).asScalar();
+    });
+
+    const gradients = gradFunction(activations);
+    const weights = gradients.mean([0, 1, 2]);
+    const activationMap = activations.squeeze();
+    const weightedActivation = activationMap.mul(weights);
+    const cam = weightedActivation.sum(-1).relu();
+    const normalizedCam = tfLib.tidy(() => {
+      const maxValue = cam.max();
+      const minValue = cam.min();
+      const range = maxValue.sub(minValue);
+      return cam.sub(minValue).div(range.add(tfLib.scalar(1e-8)));
+    });
+    const resizedCam = tfLib.image
+      .resizeBilinear(normalizedCam.expandDims(-1).expandDims(0), [64, 64], true)
+      .squeeze();
+
+    const [heatmapMatrix, weightsArray] = await Promise.all([
+      resizedCam.array() as Promise<number[][]>,
+      weights.array() as Promise<number[]>
+    ]);
+
+    const heatmapPreviewUrl = this.createHeatmapPreviewUrl(heatmapMatrix);
+    const overlayPreviewUrl = this.createGradCamOverlayUrl(image, heatmapMatrix);
+    const dominantChannels = weightsArray
+      .map((weight, channelIndex) => ({ channelIndex, weight }))
+      .sort((left, right) => Math.abs(right.weight) - Math.abs(left.weight))
+      .slice(0, 5);
+
+    tfLib.dispose([
+      batchedInput,
+      activations,
+      gradients,
+      weights,
+      activationMap,
+      weightedActivation,
+      cam,
+      normalizedCam,
+      resizedCam
+    ]);
+
+    return {
+      layerId: targetLayerName,
+      targetClassIndex,
+      targetLabel: targetClass.label,
+      targetScore: targetClass.score,
+      heatmap: heatmapMatrix,
+      heatmapPreviewUrl,
+      overlayPreviewUrl,
+      dominantChannels
+    };
+  }
+
+  private findLastConvLayerName(rawLayers: RawNetworkLayer[]): string | null {
+    for (let index = rawLayers.length - 1; index >= 0; index -= 1) {
+      if (rawLayers[index]?.name?.includes('conv')) {
+        return rawLayers[index].name;
+      }
+    }
+    return null;
   }
 
   private async buildRawLayersFromModel(): Promise<RawNetworkLayer[]> {
@@ -477,10 +599,21 @@ export class ModeCInferenceService {
   private buildTopClasses(probabilities: number[]): ModeCClassScore[] {
     return probabilities
       .map((score, index) => ({
+        classIndex: index,
         label: this.classLabels[index] ?? `class-${index}`,
         score
       }))
       .sort((a, b) => b.score - a.score);
+  }
+
+  private async predictProbabilities(model: any, image: Tensor3D): Promise<number[]> {
+    const tfLib = await this.getTf();
+    const inputTensor = tfLib.tensor3d(image);
+    const batchedInput = tfLib.stack([inputTensor]);
+    const outputTensor = model.predict(batchedInput).squeeze();
+    const probabilities = await outputTensor.array() as number[];
+    tfLib.dispose([inputTensor, batchedInput, outputTensor]);
+    return probabilities;
   }
 
   private createLayerDetail(
@@ -741,6 +874,70 @@ export class ModeCInferenceService {
     return this.createObjectUrlFromCanvas(canvas);
   }
 
+  private createHeatmapPreviewUrl(matrix: number[][]): string {
+    const previewSize = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = previewSize;
+    canvas.height = previewSize;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return '';
+    }
+
+    const imageData = context.createImageData(previewSize, previewSize);
+    const pixels = imageData.data;
+    const height = matrix.length;
+    const width = matrix[0]?.length ?? 0;
+
+    for (let row = 0; row < previewSize; row++) {
+      for (let col = 0; col < previewSize; col++) {
+        const sourceRow = Math.min(height - 1, Math.floor((row / previewSize) * height));
+        const sourceCol = Math.min(width - 1, Math.floor((col / previewSize) * width));
+        const intensity = Math.max(0, Math.min(1, matrix[sourceRow]?.[sourceCol] ?? 0));
+        const [red, green, blue] = this.mapGradCamColor(intensity);
+        const index = (row * previewSize + col) * 4;
+        pixels[index] = red;
+        pixels[index + 1] = green;
+        pixels[index + 2] = blue;
+        pixels[index + 3] = 255;
+      }
+    }
+
+    context.putImageData(imageData, 0, 0);
+    return this.createObjectUrlFromCanvas(canvas);
+  }
+
+  private createGradCamOverlayUrl(input: Tensor3D, heatmap: number[][]): string {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return '';
+    }
+
+    const imageData = context.createImageData(size, size);
+    const pixels = imageData.data;
+
+    for (let row = 0; row < size; row++) {
+      for (let col = 0; col < size; col++) {
+        const base = input[row]?.[col] ?? [0, 0, 0];
+        const intensity = Math.max(0, Math.min(1, heatmap[row]?.[col] ?? 0));
+        const [heatR, heatG, heatB] = this.mapGradCamColor(intensity);
+        const alpha = 0.42 * intensity;
+        const index = (row * size + col) * 4;
+        pixels[index] = Math.round(base[0] * 255 * (1 - alpha) + heatR * alpha);
+        pixels[index + 1] = Math.round(base[1] * 255 * (1 - alpha) + heatG * alpha);
+        pixels[index + 2] = Math.round(base[2] * 255 * (1 - alpha) + heatB * alpha);
+        pixels[index + 3] = 255;
+      }
+    }
+
+    context.putImageData(imageData, 0, 0);
+    return this.createObjectUrlFromCanvas(canvas);
+  }
+
   private findMaxActivationPosition(outputActivation: Tensor3D, outputChannelIndex: number): { row: number; col: number } {
     let bestRow = 0;
     let bestCol = 0;
@@ -907,6 +1104,24 @@ export class ModeCInferenceService {
     ];
   }
 
+  private mapGradCamColor(normalized: number): [number, number, number] {
+    const clamped = Math.max(0, Math.min(1, normalized));
+    if (clamped < 0.25) {
+      const t = clamped / 0.25;
+      return [0, Math.round(80 * t), Math.round(180 + 75 * t)];
+    }
+    if (clamped < 0.5) {
+      const t = (clamped - 0.25) / 0.25;
+      return [Math.round(255 * t), Math.round(160 + 70 * t), Math.round(255 - 255 * t)];
+    }
+    if (clamped < 0.75) {
+      const t = (clamped - 0.5) / 0.25;
+      return [255, Math.round(230 - 130 * t), 0];
+    }
+    const t = (clamped - 0.75) / 0.25;
+    return [255, Math.round(100 - 100 * t), 0];
+  }
+
   private computePercentile(values: number[], percentile: number): number {
     if (!values.length) return 0;
     const sorted = [...values].sort((left, right) => left - right);
@@ -954,4 +1169,5 @@ export interface ModeCInferenceResult {
   summaries: ModeCLayerActivationSummary[];
   previews: ModeCLayerPreview[];
   details: ModeCLayerDetailRuntime[];
+  gradCam: ModeCGradCamResult | null;
 }

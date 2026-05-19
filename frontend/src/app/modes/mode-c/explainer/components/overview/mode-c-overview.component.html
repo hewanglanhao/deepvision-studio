@@ -1,4 +1,4 @@
-<section class="panel-card overview-card" aria-label="Mode C CNN 总览">
+<section class="panel-card overview-card" aria-label="模式 C CNN 总览">
   @if (state.networkLayersError()) {
     <div class="overview-alert error">
       <strong>网络数据已切换到回退模式。</strong>
@@ -24,7 +24,7 @@
         [class.active]="state.currentSampleId() === sample.id"
         (click)="selectSample(sample.id)"
       >
-        <img [src]="sample.assetPath" [alt]="sample.title + ' sample'" />
+        <img [src]="sample.assetPath" [alt]="sample.title + ' 样例图片'" />
       </button>
     }
     <button type="button" class="sample-chip add-chip" aria-label="预留样例槽位">
@@ -348,7 +348,7 @@
 
                     <div class="conv-pipeline-column conv-pipeline-output" [style.paddingTop.px]="getConvPipelineOffsetPx()">
                       <div class="contribution-sum conv-output-card" [class.receiving]="!!animatedConvContribution()">
-                        <span class="conv-pipeline-title">{{ state.selectedLayer()?.sourceName ?? 'conv' }}</span>
+                        <span class="conv-pipeline-title">{{ state.selectedLayer()?.sourceName ?? '卷积层' }}</span>
                         <span>目标单元</span>
                         <div class="conv-output-visual">
                           <div
@@ -516,11 +516,11 @@
                   <span class="overlay-label">累加并加上偏置</span>
                   <div class="equation-stack">
                     <div class="equation-row">
-                      <span>Σ products</span>
+                      <span>乘积求和</span>
                       <strong>{{ convExample.weightedSum.toFixed(3) }}</strong>
                     </div>
                     <div class="equation-row">
-                      <span>+ bias</span>
+                      <span>+ 偏置</span>
                       <strong>{{ formatSigned(convExample.bias, 3) }}</strong>
                     </div>
                     <div class="equation-row emphasis">
@@ -567,7 +567,7 @@
                       <strong>{{ formatSigned(convAccumulatedTotal(), 3) }}</strong>
                     </div>
                     <div class="equation-row">
-                      <span>+ bias</span>
+                      <span>+ 偏置</span>
                       <strong>{{ formatSigned(convExample.bias, 3) }}</strong>
                     </div>
                     <div class="equation-row emphasis">
@@ -584,7 +584,7 @@
                   </div>
                   <div class="hover-equation final-equation">
                     <strong>通道总和</strong>
-                    <span>{{ formatSigned(convContributionTotal(), 3) }} + bias {{ formatSigned(convExample.bias, 3) }} → {{ formatSigned(convExample.outputValue, 3) }}</span>
+                    <span>{{ formatSigned(convContributionTotal(), 3) }} + 偏置 {{ formatSigned(convExample.bias, 3) }} → {{ formatSigned(convExample.outputValue, 3) }}</span>
                   </div>
                 </article>
               </div>

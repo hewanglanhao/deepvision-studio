@@ -16,8 +16,8 @@ export class ModeCAssetsService {
     {
       id: 'espresso',
       title: '浓缩咖啡',
-      label: '咖啡纹理样例',
-      description: '默认教学样例，用来验证原生渲染外壳以及真实推理链是否工作正常。',
+      label: '咖啡杯样例',
+      description: '默认教学样例，适合观察卷积层如何逐步聚焦杯口、杯身和高对比边缘。',
       assetPath: '/mode-c/cnn-explainer/assets/img/espresso_1.jpeg',
       predictedClass: '',
       confidence: 0,
@@ -26,8 +26,8 @@ export class ModeCAssetsService {
     {
       id: 'panda',
       title: '熊猫',
-      label: '高对比度动物样例',
-      description: '适合观察类别概率展示以及中间激活图的解释效果。',
+      label: '动物样例',
+      description: '黑白对比明显，适合观察卷积通道对毛发纹理和轮廓区域的不同响应。',
       assetPath: '/mode-c/cnn-explainer/assets/img/panda_1.jpeg',
       predictedClass: '',
       confidence: 0,
@@ -36,8 +36,8 @@ export class ModeCAssetsService {
     {
       id: 'pizza',
       title: '披萨',
-      label: '食物类别样例',
-      description: '语义目标较明确，适合验证图像切换后的联动行为。',
+      label: '食物样例',
+      description: '纹理丰富，适合比较不同卷积通道对边缘、块状结构和表面细节的关注差异。',
       assetPath: '/mode-c/cnn-explainer/assets/img/pizza_1.jpeg',
       predictedClass: '',
       confidence: 0,
@@ -46,8 +46,8 @@ export class ModeCAssetsService {
     {
       id: 'bus',
       title: '公交车',
-      label: '交通工具类别样例',
-      description: '适合测试在输入差异较大的情况下，总览图更新是否仍然稳定。',
+      label: '交通工具样例',
+      description: '几何结构清晰，适合观察模型如何在较规整的目标上形成分类判断。',
       assetPath: '/mode-c/cnn-explainer/assets/img/bus_1.jpeg',
       predictedClass: '',
       confidence: 0,
@@ -56,73 +56,73 @@ export class ModeCAssetsService {
   ];
 
   readonly fallbackNetworkLayers: ModeCNetworkLayer[] = [
-    this.buildFallbackLayer('input', '输入图像', '输入', 'input', 3, 64, '64 x 64 x 3', '64 x 64 x 3', null, 0, 'RGB 图像会先被裁剪并标准化到 64×64，然后再送入 CNN。', 'encoder-a'),
-    this.buildFallbackLayer('conv_1_1', '卷积 1.1', '卷积 1.1', 'conv', 10, 62, '64 x 64 x 3', '62 x 62 x 10', '3 x 3', 280, '第一层空间特征提取层，负责检测边缘、斑块和基础纹理。', 'encoder-a'),
-    this.buildFallbackLayer('relu_1_1', 'ReLU 1.1', 'ReLU 1.1', 'relu', 10, 62, '62 x 62 x 10', '62 x 62 x 10', null, 0, '引入非线性，并压制第一组卷积响应中的负值部分。', 'encoder-a'),
-    this.buildFallbackLayer('conv_1_2', '卷积 1.2', '卷积 1.2', 'conv', 10, 60, '62 x 62 x 10', '60 x 60 x 10', '3 x 3', 910, '在第一组激活结果的基础上，进一步组合出更结构化的局部特征。', 'encoder-a'),
-    this.buildFallbackLayer('relu_1_2', 'ReLU 1.2', 'ReLU 1.2', 'relu', 10, 60, '60 x 60 x 10', '60 x 60 x 10', null, 0, '保留更具判别力的激活响应，并为第一次下采样做准备。', 'encoder-a'),
-    this.buildFallbackLayer('max_pool_1', '最大池化 1', '池化 1', 'pool', 10, 30, '60 x 60 x 10', '30 x 30 x 10', '2 x 2', 0, '降低特征图分辨率，同时尽量保留最强响应区域。', 'encoder-a'),
-    this.buildFallbackLayer('conv_2_1', '卷积 2.1', '卷积 2.1', 'conv', 10, 28, '30 x 30 x 10', '28 x 28 x 10', '3 x 3', 910, '在更紧凑的空间尺度上继续提取组合特征。', 'encoder-b'),
-    this.buildFallbackLayer('relu_2_1', 'ReLU 2.1', 'ReLU 2.1', 'relu', 10, 28, '28 x 28 x 10', '28 x 28 x 10', null, 0, '继续抑制负响应，保留更稳定的正向证据。', 'encoder-b'),
-    this.buildFallbackLayer('conv_2_2', '卷积 2.2', '卷积 2.2', 'conv', 10, 26, '28 x 28 x 10', '26 x 26 x 10', '3 x 3', 910, '进一步巩固类别相关的局部特征模式。', 'encoder-b'),
-    this.buildFallbackLayer('relu_2_2', 'ReLU 2.2', 'ReLU 2.2', 'relu', 10, 26, '26 x 26 x 10', '26 x 26 x 10', null, 0, '在进入第二次池化之前保留最后一层正向激活。', 'encoder-b'),
-    this.buildFallbackLayer('max_pool_2', '最大池化 2', '池化 2', 'pool', 10, 13, '26 x 26 x 10', '13 x 13 x 10', '2 x 2', 0, '再次压缩空间分辨率，为分类器提供更紧凑的特征表示。', 'encoder-b'),
-    this.buildFallbackLayer('flatten', 'Flatten 层', 'Flatten', 'flatten', 1690, 1, '13 x 13 x 10', '1690', null, 0, '将最后的特征堆栈展开成一维向量，供分类层使用。', 'bridge'),
-    this.buildFallbackLayer('output', '输出层', '输出', 'output', 10, 1, '1690', '10', null, 16910, '对 10 个训练类别生成 dense logits，随后再解释为最终类别概率。', 'classifier')
+    this.buildFallbackLayer('input', '输入图像', '输入', 'input', 3, 64, '64 x 64 x 3', '64 x 64 x 3', null, 0, '输入样本会先被整理成 64×64 的 RGB 张量，再送入 CNN。', 'encoder-a'),
+    this.buildFallbackLayer('conv_1_1', '卷积 1.1', '卷积 1.1', 'conv', 10, 62, '64 x 64 x 3', '62 x 62 x 10', '3 x 3', 280, '第一层卷积负责提取边缘、明暗变化和基础纹理。', 'encoder-a'),
+    this.buildFallbackLayer('relu_1_1', 'ReLU 1.1', 'ReLU 1.1', 'relu', 10, 62, '62 x 62 x 10', '62 x 62 x 10', null, 0, 'ReLU 会保留正向响应并压制负值，形成更稀疏的特征图。', 'encoder-a'),
+    this.buildFallbackLayer('conv_1_2', '卷积 1.2', '卷积 1.2', 'conv', 10, 60, '62 x 62 x 10', '60 x 60 x 10', '3 x 3', 910, '第二个卷积层在上一层基础上继续组合局部模式。', 'encoder-a'),
+    this.buildFallbackLayer('relu_1_2', 'ReLU 1.2', 'ReLU 1.2', 'relu', 10, 60, '60 x 60 x 10', '60 x 60 x 10', null, 0, '继续保留更有判别力的响应，为池化前的特征压缩做准备。', 'encoder-a'),
+    this.buildFallbackLayer('max_pool_1', '最大池化 1', '池化 1', 'pool', 10, 30, '60 x 60 x 10', '30 x 30 x 10', '2 x 2', 0, '第一次池化降低分辨率，同时尽量保留最强响应。', 'encoder-a'),
+    this.buildFallbackLayer('conv_2_1', '卷积 2.1', '卷积 2.1', 'conv', 10, 28, '30 x 30 x 10', '28 x 28 x 10', '3 x 3', 910, '在更紧凑的空间尺度上继续提取更抽象的局部结构。', 'encoder-b'),
+    this.buildFallbackLayer('relu_2_1', 'ReLU 2.1', 'ReLU 2.1', 'relu', 10, 28, '28 x 28 x 10', '28 x 28 x 10', null, 0, '保留对分类更有帮助的正向特征。', 'encoder-b'),
+    this.buildFallbackLayer('conv_2_2', '卷积 2.2', '卷积 2.2', 'conv', 10, 26, '28 x 28 x 10', '26 x 26 x 10', '3 x 3', 910, '进一步巩固类别相关模式，为最终分类做准备。', 'encoder-b'),
+    this.buildFallbackLayer('relu_2_2', 'ReLU 2.2', 'ReLU 2.2', 'relu', 10, 26, '26 x 26 x 10', '26 x 26 x 10', null, 0, '在进入第二次池化前，过滤掉负向响应。', 'encoder-b'),
+    this.buildFallbackLayer('max_pool_2', '最大池化 2', '池化 2', 'pool', 10, 13, '26 x 26 x 10', '13 x 13 x 10', '2 x 2', 0, '第二次池化得到更紧凑的高层特征表示。', 'encoder-b'),
+    this.buildFallbackLayer('flatten', 'Flatten 层', 'Flatten', 'flatten', 1690, 1, '13 x 13 x 10', '1690', null, 0, '将最后的特征图堆栈展开成一维向量，供输出层使用。', 'bridge'),
+    this.buildFallbackLayer('output', '输出层', '输出', 'output', 10, 1, '1690', '10', null, 16910, '对 10 个类别生成 logits，再转成最终概率分布。', 'classifier')
   ];
 
   readonly overviewStages: ModeCOverviewStage[] = [
-    { id: 'input', title: '输入样例', summary: '原生 Angular 版本中的图像选择与预处理入口。', status: 'ready' },
-    { id: 'graph', title: '网络总览', summary: '原生 Angular 的 SVG 总览已经可用，后续可继续承载更丰富的激活可视化。', status: 'ready' },
-    { id: 'detail', title: '细节面板', summary: '承载卷积、激活、池化和 softmax 的分步解释。', status: 'in-progress' },
-    { id: 'article', title: '教学文章', summary: '用结构化内容卡片替代原来冗长的单页文章区域。', status: 'planned' }
+    { id: 'input', title: '输入样本', summary: '选择教学样本并准备推理。', status: 'ready' },
+    { id: 'graph', title: 'CNN 总览图', summary: '查看各层特征图、通道和输出类别分布。', status: 'ready' },
+    { id: 'detail', title: '细节解释', summary: '展开卷积、ReLU、池化和 softmax 的具体过程。', status: 'ready' },
+    { id: 'article', title: '教学说明', summary: '补充术语、问题引导和答辩用解释路径。', status: 'ready' }
   ];
 
   readonly detailTopics: ModeCDetailTopic[] = [
-    { id: 'overview-graph', title: '总览图', description: '定义原生 Angular 图形的结构约定、布局槽位和交互状态。', priority: 'P0' },
-    { id: 'sample-switching', title: '样例切换', description: '在预设教学样例间切换，并保持平台原生的选中状态管理。', priority: 'P0' },
-    { id: 'conv-panel', title: '卷积面板', description: '在总览图 MVP 建好之后，优先深入实现的首个解释面板。', priority: 'P1' },
-    { id: 'softmax-panel', title: 'Softmax 面板', description: '用于展示概率解释和最终分类结果的说明界面。', priority: 'P1' }
+    { id: 'overview-graph', title: '总览图', description: '聚焦当前样本在整张 CNN 图上的层级响应。', priority: 'P0' },
+    { id: 'sample-switching', title: '样本切换', description: '比较不同样本在同一模型上的响应差异。', priority: 'P0' },
+    { id: 'conv-panel', title: '卷积解释', description: '展示 patch、kernel、products、加权求和与 bias。', priority: 'P1' },
+    { id: 'softmax-panel', title: '输出解释', description: '展示类别排序、概率分布与最终预测。', priority: 'P1' }
   ];
 
   readonly milestones: ModeCMilestone[] = [
-    { id: 'shell', title: '原生外壳已上线', note: 'Mode C 的顶层体验已经不再依赖 iframe。', status: 'ready' },
-    { id: 'state', title: '类型化状态服务', note: '共享 UI 状态已经改为用 Angular 服务管理，而不是 Svelte store。', status: 'ready' },
-    { id: 'graph', title: '总览图迁移', note: 'Angular 外壳已经能原生渲染总览图，并支持层选择和样例预测联动。', status: 'ready' },
-    { id: 'detail-ready', title: '细节联动接线', note: '总览图中选中的层已经可以驱动右侧细节面板的上下文切换。', status: 'in-progress' }
+    { id: 'shell', title: '原生页面壳', note: 'Mode C 已不再依赖 iframe 宿主。', status: 'ready' },
+    { id: 'state', title: '状态服务', note: '样本、图层、通道和推理结果都已纳入 Angular 状态管理。', status: 'ready' },
+    { id: 'graph', title: '总览图迁移', note: '主拓扑图和通道特征图已迁移到 Angular。', status: 'ready' },
+    { id: 'detail-ready', title: '细节联动', note: '细节面板可随选中层与通道实时切换。', status: 'ready' }
   ];
 
   readonly articleSections: ModeCArticleSection[] = [
     {
       id: 'goal',
-      eyebrow: 'Mode C 重写',
-      title: '原生外壳的作用',
+      eyebrow: 'Mode C',
+      title: 'CNN 卷积过程与中间特征解释',
       body: [
-        '这一版原生 Angular 切片首先为 DeepVision Studio 中的 Mode C 建立了长期稳定的宿主结构。',
-        '在图形逻辑和教学逻辑进一步迁移之前，它先提供稳定外壳、类型化状态以及与平台一致的界面基础。'
+        'Mode C 聚焦回答“CNN 为什么这样判断”。',
+        '它通过静态 TF.js 模型、特征图和中间过程视图，把卷积、激活、池化和输出解释串成一条完整教学链路。'
       ]
     },
     {
       id: 'mapping',
-      eyebrow: '结构映射',
-      title: '旧应用如何迁移到 Angular',
+      eyebrow: '解释重点',
+      title: '从输入到输出怎么被看懂',
       body: [
-        '原始 Svelte 应用把模型加载、全局状态、文章内容和 D3 交互都混在少量大文件中。',
-        '重写之后，这些职责被拆分为功能组件、服务和类型化模型，从而让模块能够像平台其他部分一样持续演进。'
+        '输入样本会先经过卷积层提取局部模式，再经过 ReLU 和池化逐步压缩成更有判别力的高层特征。',
+        '最后 flatten 和输出层把这些特征映射成类别分数，并通过 softmax 形成最终概率排序。'
       ],
       bullets: [
-        '总览图变成独立的功能组件',
-        '细节视图变成具备明确输入的面板组件',
-        '文章内容改造成结构化内容块，而不是一整段超长模板'
+        '看卷积如何从局部 patch 生成单个输出值',
+        '看不同通道为何会关注不同结构',
+        '看 softmax 如何把特征向量转成分类结果'
       ]
     },
     {
       id: 'next',
-      eyebrow: '下一步',
-      title: '第二阶段将替换什么',
+      eyebrow: '可解释性',
+      title: '当前页面适合怎样的答辩演示',
       body: [
-        '当前这个占位式总览区域是有意保持静态的，它标记出了后续 D3 或 SVG 图形重写的精确承载面。',
-        '当第二阶段开始时，我们可以直接替换内部实现，而不必再次重做页面外壳。'
+        '先选样本，再看总览图中的高响应通道，随后展开卷积、ReLU、池化和 softmax 的具体过程。',
+        '如果需要强调可解释性，可进一步结合通道响应和类别概率讲清模型是依据哪些区域做出判断的。'
       ]
     }
   ];
@@ -157,7 +157,7 @@ export class ModeCAssetsService {
         this.formatShape(inputShape),
         null,
         0,
-        'RGB 图像会先被裁剪并标准化到 64×64，然后再送入 CNN。',
+        'RGB 输入张量是整个 CNN 推理链路的起点。',
         'encoder-a'
       )
     ];
@@ -307,10 +307,10 @@ export class ModeCAssetsService {
 
   private buildDescription(name: string, type: ModeCNetworkLayer['type']): string {
     if (type === 'input') {
-      return 'RGB 输入张量，是整个 CNN 处理链条的起点。';
+      return 'RGB 输入张量是整个 CNN 推理链路的起点。';
     }
     if (type === 'conv') {
-      return `${name} 会应用学习得到的空间卷积核，逐步检测更有结构的视觉模式。`;
+      return `${name} 会应用卷积核逐步提取更有结构的空间特征。`;
     }
     if (type === 'relu') {
       return `${name} 会引入非线性，并保留更强的正向激活。`;
@@ -319,9 +319,9 @@ export class ModeCAssetsService {
       return `${name} 会降低空间分辨率，同时尽量保留局部最强响应。`;
     }
     if (type === 'flatten') {
-      return 'Flatten 会把最后的特征堆栈拉平成一维向量，供分类层使用。';
+      return 'Flatten 会把最后的特征图堆栈拉平成一维向量，供分类层使用。';
     }
-    return '输出层会为 10 个目标类别生成最终 logits，并进一步转成概率分布。';
+    return '输出层会为 10 个目标类别生成 logits，并进一步转成概率分布。';
   }
 
   private buildFallbackLayer(

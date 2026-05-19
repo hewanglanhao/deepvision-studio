@@ -8,15 +8,15 @@ export class ModeCModelService {
   readonly shellStatus = computed<ModeCModelStatusSummary>(() => {
     if (this.initialized()) {
       return {
-        title: 'Native shell ready',
-        description: 'The Angular structure is in place and ready for real model loading work in the next phase.',
+        title: '卷积解释已就绪',
+        description: '当前页面已加载为可交互的 CNN 卷积过程解释视图。',
         status: 'ready'
       };
     }
 
     return {
-      title: 'Bootstrapping',
-      description: 'Preparing the Mode C Angular shell.',
+      title: '正在准备',
+      description: '正在初始化 Mode C 页面。',
       status: 'in-progress'
     };
   });

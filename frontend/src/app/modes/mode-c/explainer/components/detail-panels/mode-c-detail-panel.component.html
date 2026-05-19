@@ -2,17 +2,149 @@
   <div class="panel-header">
     <div>
       <p class="eyebrow">细节面板</p>
-      <h2 id="mode-c-detail-title">解释与联动面板</h2>
+      <h2 id="mode-c-detail-title">卷积过程与输出解释</h2>
     </div>
-    <span class="status-badge" [class.ready]="model.shellStatus().status === 'ready'" [class.in-progress]="model.shellStatus().status === 'in-progress'">
-      {{ model.shellStatus().status }}
-    </span>
   </div>
 
-  <div class="status-block">
-    <strong>{{ model.shellStatus().title }}</strong>
-    <p>{{ model.shellStatus().description }}</p>
-  </div>
+  <section class="report-card" aria-labelledby="mode-c-report-title">
+    <div class="report-header">
+      <div>
+        <p class="eyebrow">解释报告</p>
+        <h3 id="mode-c-report-title">Mode C 可演示解释报告</h3>
+      </div>
+    </div>
+
+    @if (state.currentSample(); as sample) {
+      <div class="report-grid report-grid-top">
+        <article class="report-block">
+          <span class="mini-label">当前样本</span>
+          <div class="report-sample">
+            <img class="report-image" [src]="sample.assetPath" [alt]="sample.title + ' 当前样本'" />
+            <div class="report-copy">
+              <strong>{{ sample.title }}</strong>
+              <p>{{ sample.label }}</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="report-block" appTeachingTerm="top-k">
+          <span class="mini-label">Top-5 类别概率</span>
+          <div class="vector-list report-probability-list">
+            @for (candidate of getReportTopClasses(); track candidate.classIndex; let rank = $index) {
+              <div class="vector-row probability-row" [class.active]="rank === 0">
+                <span class="vector-index probability-rank">#{{ rank + 1 }}</span>
+                <span class="vector-index probability-label">{{ candidate.label }}</span>
+                <div class="vector-bar-track">
+                  <div class="vector-bar probability" [style.width.%]="candidate.score * 100"></div>
+                </div>
+                <strong>{{ formatPercent(candidate.score) }}</strong>
+              </div>
+            }
+          </div>
+        </article>
+      </div>
+    }
+
+    @if (getReportConvLayer(); as reportConvLayer) {
+      <article class="report-block" appTeachingTerm="channel">
+        <span class="mini-label">选中卷积层的通道特征图</span>
+        <div class="report-block-head">
+          <strong>{{ reportConvLayer.title }}</strong>
+          <span>{{ reportConvLayer.outputShapeLabel }}</span>
+        </div>
+        <div class="channel-grid report-channel-grid">
+          @for (channel of getReportConvChannelPreviews(); track channel.index) {
+            <button
+              type="button"
+              class="channel-card"
+              [class.active]="getReportActiveChannelPreview()?.index === channel.index"
+              (click)="selectChannel(channel.index)"
+            >
+              <img [src]="channel.dataUrl" [alt]="reportConvLayer.title + ' 通道 ' + channel.index" />
+              <span>通道 {{ channel.index }}</span>
+            </button>
+          }
+        </div>
+      </article>
+    }
+
+    @if (getReportConvExample(); as reportConvExample) {
+      <article class="report-block" appTeachingTerm="conv2d">
+        <span class="mini-label">选中通道的 patch / kernel / product 计算过程</span>
+        <div class="conv-grid report-conv-grid">
+          <div class="conv-card" appTeachingTerm="conv-patch">
+            <span class="mini-label">输入局部块</span>
+            <img class="layer-preview" [src]="reportConvExample.patchPreviewUrl" alt="卷积输入局部块" />
+            <div class="matrix-grid">
+              @for (row of reportConvExample.patch; track $index) {
+                @for (value of row; track $index) {
+                  <span>{{ formatSigned(value, 3) }}</span>
+                }
+              }
+            </div>
+          </div>
+
+          <div class="conv-card">
+            <span class="mini-label">卷积核</span>
+            <img class="layer-preview" [src]="reportConvExample.kernelPreviewUrl" alt="卷积核权重" />
+            <div class="matrix-grid">
+              @for (row of reportConvExample.kernel; track $index) {
+                @for (value of row; track $index) {
+                  <span>{{ formatSigned(value, 3) }}</span>
+                }
+              }
+            </div>
+          </div>
+
+          <div class="conv-card">
+            <span class="mini-label">逐元素乘积</span>
+            <div class="matrix-grid">
+              @for (row of reportConvExample.products; track $index) {
+                @for (value of row; track $index) {
+                  <span>{{ formatSigned(value, 3) }}</span>
+                }
+              }
+            </div>
+            <div class="metric-list report-metric-list">
+              <div class="metric-row">
+                <span>加权求和</span>
+                <strong>{{ formatSigned(reportConvExample.weightedSum, 3) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>偏置</span>
+                <strong>{{ formatSigned(reportConvExample.bias, 3) }}</strong>
+              </div>
+              <div class="metric-row">
+                <span>输出值</span>
+                <strong>{{ formatSigned(reportConvExample.outputValue, 3) }}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    }
+
+    @if (state.gradCamResult(); as gradCam) {
+      <article class="report-block" appTeachingTerm="intermediate-view">
+        <span class="mini-label">Grad-CAM 热力图叠加</span>
+        <div class="gradcam-grid report-gradcam-grid">
+          <div class="conv-card">
+            <span class="mini-label">热力图</span>
+            <img class="layer-preview" [src]="gradCam.heatmapPreviewUrl" [alt]="gradCam.targetLabel + ' 热力图'" />
+          </div>
+          <div class="conv-card">
+            <span class="mini-label">热力图叠加</span>
+            <img class="layer-preview" [src]="gradCam.overlayPreviewUrl" [alt]="gradCam.targetLabel + ' 热力图叠加'" />
+          </div>
+        </div>
+      </article>
+    }
+
+    <article class="report-block report-summary">
+      <span class="mini-label">自动生成的文字解释</span>
+      <p>{{ getGeneratedReportText() }}</p>
+    </article>
+  </section>
 
   @if (state.currentSample(); as sample) {
     <div class="context-card">
@@ -21,7 +153,7 @@
       <p>{{ sample.label }}</p>
       @if (state.currentSamplePrediction(); as prediction) {
         <div class="context-meta">
-          <span>预测结果：{{ prediction.label }}</span>
+          <span>当前预测：{{ prediction.label }}</span>
           <span>{{ (prediction.confidence * 100).toFixed(1) }}%</span>
         </div>
         <div class="score-list">
@@ -34,6 +166,105 @@
         </div>
       }
     </div>
+  }
+
+  @if (state.gradCamLoading()) {
+    <div class="context-card gradcam-card gradcam-loading">
+      <span class="context-label">Grad-CAM 解释</span>
+      <strong>正在生成热力图</strong>
+      <p>正在根据当前预测类别和最后一个卷积层计算关注区域。</p>
+    </div>
+  } @else if (state.gradCamError()) {
+    <div class="context-card gradcam-card gradcam-error">
+      <span class="context-label">Grad-CAM 解释</span>
+      <strong>热力图生成失败</strong>
+      <p>{{ state.gradCamError() }}</p>
+    </div>
+  } @else if (state.gradCamResult(); as gradCam) {
+    <section class="interactive-block gradcam-card" appTeachingTerm="intermediate-view">
+      <div class="interactive-header">
+        <span class="mini-label">Grad-CAM 热力图</span>
+        <span class="interactive-hint">
+          这块热力图用于说明当前预测类别最依赖输入图像的哪些区域。
+        </span>
+      </div>
+
+      <div class="softmax-summary gradcam-summary">
+        <div class="softmax-pill">
+          <span>解释类别</span>
+          <strong>{{ gradCam.targetLabel }}</strong>
+        </div>
+        <div class="softmax-pill">
+          <span>类别概率</span>
+          <strong>{{ formatPercent(gradCam.targetScore) }}</strong>
+        </div>
+        <div class="softmax-pill">
+          <span>解释层</span>
+          <strong>{{ gradCam.layerId }}</strong>
+        </div>
+      </div>
+
+      <div class="gradcam-targets">
+        @for (candidate of getProbabilityRows(); track candidate.classIndex) {
+          <button
+            type="button"
+            class="gradcam-target-chip"
+            [class.active]="isGradCamTarget(candidate.classIndex)"
+            (click)="selectGradCamTarget(candidate.classIndex)"
+          >
+            <span>{{ candidate.label }}</span>
+            <strong>{{ formatPercent(candidate.score) }}</strong>
+          </button>
+        }
+      </div>
+
+      <div class="gradcam-grid">
+        <div class="conv-card">
+          <span class="mini-label">原始输入</span>
+          <img
+            class="layer-preview"
+            [src]="state.currentSample()?.assetPath ?? ''"
+            [alt]="(state.currentSample()?.title ?? '当前样例') + ' 原始输入'"
+          />
+        </div>
+        <div class="conv-card">
+          <span class="mini-label">Grad-CAM 热力图</span>
+          <img class="layer-preview" [src]="gradCam.heatmapPreviewUrl" [alt]="gradCam.targetLabel + ' 热力图'" />
+        </div>
+        <div class="conv-card">
+          <span class="mini-label">热力图叠加</span>
+          <img class="layer-preview" [src]="gradCam.overlayPreviewUrl" [alt]="gradCam.targetLabel + ' 热力图叠加'" />
+        </div>
+      </div>
+
+      <div class="type-note gradcam-note">
+        <strong>解释结论：</strong>
+        当前热力图强调的是最能支持 <strong>{{ gradCam.targetLabel }}</strong> 这一类别判断的图像区域。
+        颜色越暖，表示该区域对当前类别分数的贡献越强。
+      </div>
+
+      @if (getGradCamDominantChannels().length) {
+        <div class="interactive-block gradcam-channel-block" appTeachingTerm="channel-response">
+          <div class="interactive-header">
+            <span class="mini-label">主导通道</span>
+            <span class="interactive-hint">下列通道权重表示它们在 Grad-CAM 汇聚时贡献最明显。</span>
+          </div>
+
+          <div class="vector-list">
+            @for (entry of getGradCamDominantChannels(); track entry.channelIndex; let rank = $index) {
+              <div class="vector-row probability-row">
+                <span class="vector-index probability-rank">#{{ rank + 1 }}</span>
+                <span class="vector-index probability-label">通道 {{ entry.channelIndex }}</span>
+                <div class="vector-bar-track">
+                  <div class="vector-bar gradcam-weight" [style.width.%]="getGradCamWeightWidth(entry.weight)"></div>
+                </div>
+                <strong>{{ formatSigned(entry.weight, 4) }}</strong>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </section>
   }
 
   @if (state.selectedLayer(); as layer) {
@@ -54,21 +285,21 @@
 
   @if (state.selectedLayer(); as layer) {
     <section class="focus-card live-data-card">
-      <span class="context-label">实时层数据</span>
+      <span class="context-label">当前层解释</span>
       <h3>{{ layer.title }}</h3>
       <p>{{ getLayerNarrative(layer) }}</p>
 
       <div class="live-grid">
         @if (state.selectedLayerPreview(); as preview) {
           <div class="preview-card" appTeachingTerm="feature-map">
-            <span class="mini-label">预览</span>
+            <span class="mini-label">特征图预览</span>
             <img class="layer-preview" [src]="preview.dataUrl" [alt]="layer.title + ' live preview'" />
           </div>
         }
 
         @if (state.selectedLayerSummary(); as summary) {
           <div class="metric-card" appTeachingTerm="tensor-stats">
-            <span class="mini-label">激活统计</span>
+            <span class="mini-label">张量统计</span>
             <div class="metric-list">
               <div class="metric-row">
                 <span>均值</span>
@@ -98,8 +329,8 @@
       @if ((isConvLayer(layer) || isReluLayer(layer) || isPoolLayer(layer) || isInputLayer(layer)) && state.selectedLayerDetail()?.channelPreviews?.length) {
         <div class="interactive-block" appTeachingTerm="channel">
           <div class="interactive-header">
-            <span class="mini-label">通道浏览器</span>
-            <span class="interactive-hint">选择一个通道，查看它的预览图和响应统计。</span>
+            <span class="mini-label">通道浏览</span>
+            <span class="interactive-hint">选择一个通道，查看它的特征图和响应统计。</span>
           </div>
 
           <div class="channel-grid">
@@ -121,7 +352,7 @@
               <img [src]="activeChannel.dataUrl" [alt]="layer.title + ' focused channel ' + activeChannel.index" />
               <div class="metric-list">
                 <div class="metric-row">
-                  <span>当前聚焦通道</span>
+                  <span>当前通道</span>
                   <strong>{{ activeChannel.index }}</strong>
                 </div>
                 <div class="metric-row">
@@ -142,7 +373,7 @@
         <div class="interactive-block" appTeachingTerm="flatten">
           <div class="interactive-header">
             <span class="mini-label">Flatten 向量</span>
-            <span class="interactive-hint">下方用带符号的条形图展示了拉平向量的前一部分。</span>
+            <span class="interactive-hint">下方条形图展示了展平后特征向量的前一部分数值。</span>
           </div>
           <div class="vector-list">
             @for (entry of getVisibleVectorValues(); track entry.index) {
@@ -160,16 +391,15 @@
 
       @if (isConvLayer(layer)) {
         <div class="type-note">
-          <strong>卷积层解读：</strong>
-          预览图强调的是卷积核在图像中响应最强的位置。正值占比较高通常说明这些卷积核响应得更广，较低则说明它们更具选择性。
+          <strong>卷积层解释：</strong>
+          这里重点展示卷积核怎样在局部 patch 上计算单个输出值，以及不同通道为什么会关注不同结构。
         </div>
         @if (getActiveConvExample(); as convExample) {
           <div class="interactive-block conv-process" appTeachingTerm="conv2d">
             <div class="interactive-header">
               <span class="mini-label">单通道卷积示例</span>
               <span class="interactive-hint">
-                当前展示的是输出通道 {{ convExample.outputChannelIndex }} 的一个真实示例，
-                位置取该通道响应最强的坐标 ({{ convExample.row }}, {{ convExample.col }})。
+                当前展示的是输出通道 {{ convExample.outputChannelIndex }} 在坐标 ({{ convExample.row }}, {{ convExample.col }}) 处的真实卷积计算。
               </span>
             </div>
 
@@ -186,7 +416,7 @@
                 </div>
               </div>
 
-              <div class="conv-card" appTeachingTerm="pool-window">
+              <div class="conv-card">
                 <span class="mini-label">卷积核</span>
                 <img class="layer-preview" [src]="convExample.kernelPreviewUrl" [alt]="layer.title + ' kernel'" />
                 <div class="matrix-grid">
@@ -216,7 +446,7 @@
                 <strong>{{ convExample.inputChannelIndex }}</strong>
               </div>
               <div class="metric-row">
-                <span>加权和</span>
+                <span>加权求和</span>
                 <strong>{{ formatSigned(convExample.weightedSum) }}</strong>
               </div>
               <div class="metric-row">
@@ -234,15 +464,15 @@
 
       @if (isReluLayer(layer)) {
         <div class="type-note">
-          <strong>ReLU 层解读：</strong>
-          这一层只保留正向证据。把它的正值占比和前一层卷积结果对比，可以看出特征图中有多少区域被抑制了。
+          <strong>ReLU 层解释：</strong>
+          ReLU 会把负值压到 0，保留正向证据，因此可以直观看到特征图哪些区域被保留、哪些区域被抑制。
         </div>
         @if (getActiveReluExample(); as reluExample) {
           <div class="interactive-block relu-process" appTeachingTerm="activation">
             <div class="interactive-header">
               <span class="mini-label">ReLU 前后对比</span>
               <span class="interactive-hint">
-                当前展示的是通道 {{ reluExample.channelIndex }} 的真实前后变化。
+                当前展示的是通道 {{ reluExample.channelIndex }} 在激活前后的真实变化。
               </span>
             </div>
             <div class="channel-focus">
@@ -279,19 +509,19 @@
 
       @if (isPoolLayer(layer)) {
         <div class="type-note">
-          <strong>池化层解读：</strong>
-          池化会降低分辨率，同时尽量保留最强结构。预览图会更块状，但重要响应区域通常仍然可见。
+          <strong>池化层解释：</strong>
+          池化会降低分辨率，但会尽量保留局部最强响应，是 CNN 压缩空间信息的重要步骤。
         </div>
         @if (getActivePoolExample(); as poolExample) {
           <div class="interactive-block pool-process" appTeachingTerm="pooling">
             <div class="interactive-header">
-              <span class="mini-label">2×2 最大池化步骤</span>
+              <span class="mini-label">2×2 最大池化</span>
               <span class="interactive-hint">
-                当前展示的是通道 {{ poolExample.channelIndex }} 在输出位置 ({{ poolExample.row }}, {{ poolExample.col }}) 的真实示例。
+                当前展示的是通道 {{ poolExample.channelIndex }} 在输出位置 ({{ poolExample.row }}, {{ poolExample.col }}) 的真实池化窗口。
               </span>
             </div>
             <div class="channel-focus">
-              <div class="conv-card">
+              <div class="conv-card" appTeachingTerm="pool-window">
                 <span class="mini-label">输入 2×2 局部块</span>
                 <img class="layer-preview" [src]="poolExample.patchPreviewUrl" [alt]="layer.title + ' pooling patch'" />
                 <div class="matrix-grid matrix-grid-2">
@@ -322,8 +552,8 @@
 
       @if (isFlattenLayer(layer)) {
         <div class="type-note">
-          <strong>Flatten 层解读：</strong>
-          到这里空间结构已经被展开，剩下的是可直接送去分类的特征向量，这里用紧凑平铺的方式显示。
+          <strong>Flatten 层解释：</strong>
+          到这里空间结构已经被展开，剩下的是可直接送入分类层的一维特征向量。
         </div>
       }
 
@@ -335,7 +565,7 @@
         <div class="interactive-block" appTeachingTerm="top-k">
           <div class="interactive-header">
             <span class="mini-label">类别概率</span>
-            <span class="interactive-hint">这里展示的是当前样例在真实输出层上的完整 10 类 softmax 排名。</span>
+            <span class="interactive-hint">这里展示的是当前样例在输出层上的完整 10 类 softmax 排名。</span>
           </div>
           <div class="softmax-summary">
             <div class="softmax-pill">
@@ -347,73 +577,39 @@
               <strong>{{ formatPercent(prediction.confidence) }}</strong>
             </div>
             <div class="softmax-pill">
-              <span>显示类别数</span>
+              <span>类别总数</span>
               <strong>{{ getProbabilityRows().length }}</strong>
             </div>
           </div>
           <div class="vector-list">
             @for (candidate of getProbabilityRows(); track candidate.label; let rank = $index) {
-              <div class="vector-row probability-row" [class.active]="candidate.label === prediction.label">
+              <button
+                type="button"
+                class="vector-row probability-row probability-button"
+                [class.active]="candidate.classIndex === state.gradCamTargetIndex()"
+                (click)="selectGradCamTarget(candidate.classIndex)"
+              >
                 <span class="vector-index probability-rank">#{{ rank + 1 }}</span>
                 <span class="vector-index probability-label">{{ candidate.label }}</span>
                 <div class="vector-bar-track">
                   <div class="vector-bar probability" [style.width.%]="candidate.score * 100"></div>
                 </div>
                 <strong>{{ formatPercent(candidate.score) }}</strong>
-              </div>
+              </button>
             }
           </div>
           <div class="softmax-footnote" appTeachingTerm="output-logit">
-            右侧输出轨和这里的面板现在都使用完整的 softmax 排名，而不是只截取前三类，因此像 <code>espresso</code> 这样的标签即使不是第一名也仍然可见。
+            输出轨和这里的列表都使用完整的 softmax 排名，因此可以清楚观察第一名和后续类别之间的竞争关系。
           </div>
         </div>
       }
 
       @if (isInputLayer(layer)) {
         <div class="type-note" appTeachingTerm="tensor">
-          <strong>输入层解读：</strong>
-          这里展示的就是送入 CNN 的原始图像张量，后续所有预览都可以理解为从这个起点信号演化而来的结果。
+          <strong>输入层解释：</strong>
+          这里展示的是送入 CNN 的原始输入张量，后续所有特征图都可以理解为从这份输入信号逐层变换而来。
         </div>
       }
     </section>
   }
-
-  <div class="topic-list" role="list" aria-label="Mode C rewrite topics">
-    @for (topic of state.detailTopics; track topic.id) {
-      <button
-        type="button"
-        class="topic-card"
-        [class.active]="state.selectedTopicId() === topic.id"
-        (click)="selectTopic(topic.id)"
-      >
-        <div class="topic-topline">
-          <strong>{{ topic.title }}</strong>
-          <span class="priority-pill">{{ topic.priority }}</span>
-        </div>
-        <p>{{ topic.description }}</p>
-      </button>
-    }
-  </div>
-
-  @if (state.selectedTopic(); as topic) {
-    <section class="focus-card">
-      <span class="context-label">Current focus</span>
-      <h3>{{ topic.title }}</h3>
-      <p>{{ topic.description }}</p>
-    </section>
-  }
-
-  <div class="milestone-list">
-    @for (item of state.milestones; track item.id) {
-      <article class="milestone-item">
-        <div class="milestone-topline">
-          <strong>{{ item.title }}</strong>
-          <span class="status-badge" [class.ready]="item.status === 'ready'" [class.in-progress]="item.status === 'in-progress'" [class.planned]="item.status === 'planned'">
-            {{ item.status }}
-          </span>
-        </div>
-        <p>{{ item.note }}</p>
-      </article>
-    }
-  </div>
 </aside>

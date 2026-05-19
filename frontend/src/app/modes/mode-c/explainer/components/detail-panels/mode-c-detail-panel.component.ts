@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
-import { ModeCNetworkLayer } from '../../models/mode-c.types';
+import { ModeCLayerChannelPreview, ModeCLayerDetailRuntime, ModeCNetworkLayer } from '../../models/mode-c.types';
 import { ModeCModelService } from '../../services/mode-c-model.service';
 import { ModeCStateService } from '../../services/mode-c-state.service';
 
@@ -16,10 +16,6 @@ export class ModeCDetailPanelComponent {
     readonly model: ModeCModelService,
     readonly state: ModeCStateService
   ) {}
-
-  selectTopic(topicId: string): void {
-    this.state.setSelectedTopic(topicId);
-  }
 
   isConvLayer(layer: ModeCNetworkLayer): boolean {
     return layer.type === 'conv';
@@ -56,21 +52,21 @@ export class ModeCDetailPanelComponent {
 
   getLayerNarrative(layer: ModeCNetworkLayer): string {
     if (layer.type === 'input') {
-      return '这里展示的是经过中心裁剪和缩放后，真正送入网络的标准化输入图像。';
+      return '这里展示的是经过裁剪与缩放后，真正送入网络的标准化输入图像。';
     }
     if (layer.type === 'conv') {
-      return '卷积层会用学习得到的卷积核去扫描局部区域。这里的预览图强调的是卷积核响应最强的位置。';
+      return '卷积层会用学习得到的卷积核扫描局部区域。这里的预览图强调的是卷积核响应最强的位置。';
     }
     if (layer.type === 'relu') {
-      return 'ReLU 会去掉负响应。这里的正值占比能帮助判断激活后的特征图到底有多稀疏。';
+      return 'ReLU 会去掉负响应。这里的正值占比可以帮助判断激活后的特征图到底有多稀疏。';
     }
     if (layer.type === 'pool') {
-      return '池化会压缩空间分辨率，同时尽量保留最强响应区域。预览会更粗糙，但通常仍会保留前一层中的高能区域。';
+      return '池化会压缩空间分辨率，同时尽量保留最强响应区域。预览会更粗糙，但通常仍能保留高能区域。';
     }
     if (layer.type === 'flatten') {
-      return 'Flatten 会把最后的特征堆栈拉平成一维向量，供分类层使用。这里的预览是这个向量的紧凑网格投影。';
+      return 'Flatten 会把最后的特征图堆栈拉平成一维向量，供分类层使用。这里的预览是这个向量的紧凑投影。';
     }
-    return '输出层会把拉平后的特征向量映射成各类别的 logits，下面的排名来自当前样例的真实 softmax 结果。';
+    return '输出层会把展平后的特征向量映射成各类别的 logits，下面的排名来自当前样例的真实 softmax 结果。';
   }
 
   selectChannel(index: number): void {
@@ -118,8 +114,91 @@ export class ModeCDetailPanelComponent {
     return this.state.currentSamplePrediction()?.topClasses ?? [];
   }
 
-  getPredictionRank(label: string): number | null {
-    const index = this.getProbabilityRows().findIndex(candidate => candidate.label === label);
-    return index >= 0 ? index + 1 : null;
+  getGradCamDominantChannels() {
+    return this.state.gradCamResult()?.dominantChannels ?? [];
+  }
+
+  getGradCamWeightWidth(weight: number): number {
+    return Math.min(100, Math.abs(weight) * 100);
+  }
+
+  isGradCamTarget(classIndex: number): boolean {
+    return this.state.gradCamResult()?.targetClassIndex === classIndex;
+  }
+
+  selectGradCamTarget(classIndex: number): void {
+    void this.state.setGradCamTargetIndex(classIndex);
+  }
+
+  getReportTopClasses() {
+    return (this.state.currentSamplePrediction()?.topClasses ?? []).slice(0, 5);
+  }
+
+  getReportConvLayer(): ModeCNetworkLayer | null {
+    const selected = this.state.selectedLayer();
+    if (selected?.type === 'conv') {
+      return selected;
+    }
+
+    const layers = this.state.networkLayers();
+    const selectedIndex = layers.findIndex(layer => layer.id === this.state.selectedLayerId());
+    if (selectedIndex > 0) {
+      for (let index = selectedIndex - 1; index >= 0; index -= 1) {
+        if (layers[index]?.type === 'conv') {
+          return layers[index];
+        }
+      }
+    }
+
+    return layers.find(layer => layer.type === 'conv') ?? null;
+  }
+
+  getReportConvLayerDetail(): ModeCLayerDetailRuntime | null {
+    const layer = this.getReportConvLayer();
+    if (!layer) return null;
+    return this.state.layerDetails()[layer.id] ?? null;
+  }
+
+  getReportConvChannelPreviews(): ModeCLayerChannelPreview[] {
+    return this.getReportConvLayerDetail()?.channelPreviews ?? [];
+  }
+
+  getReportActiveChannelPreview(): ModeCLayerChannelPreview | null {
+    const previews = this.getReportConvChannelPreviews();
+    if (!previews.length) return null;
+    return previews.find(preview => preview.index === this.state.selectedChannelIndex()) ?? previews[0];
+  }
+
+  getReportConvExample() {
+    const examples = this.getReportConvLayerDetail()?.convExamples ?? [];
+    if (!examples.length) return null;
+    return examples.find(example => example.outputChannelIndex === this.state.selectedChannelIndex()) ?? examples[0];
+  }
+
+  getGeneratedReportText(): string {
+    const sample = this.state.currentSample();
+    const prediction = this.state.currentSamplePrediction();
+    const gradCam = this.state.gradCamResult();
+    const convLayer = this.getReportConvLayer();
+    const convExample = this.getReportConvExample();
+    const activeChannel = this.getReportActiveChannelPreview();
+
+    if (!sample || !prediction || !gradCam || !convLayer || !convExample || !activeChannel) {
+      return '当前报告所需的解释数据尚未完整准备，稍后会自动补齐样本、卷积通道和热力图说明。';
+    }
+
+    const runnerUp = prediction.topClasses[1];
+    const topGap = runnerUp ? prediction.confidence - runnerUp.score : prediction.confidence;
+
+    return [
+      `当前样本为“${sample.title}”，模型将其预测为“${prediction.label}”，置信度为 ${this.formatPercent(prediction.confidence)}。`,
+      runnerUp
+        ? `与第二名“${runnerUp.label}”相比，当前类别的概率优势约为 ${this.formatPercent(topGap)}。`
+        : '当前预测结果没有明显的竞争类别干扰。',
+      `在卷积解释部分，报告聚焦于 ${convLayer.title} 的通道 ${activeChannel.index}，该通道的平均响应为 ${this.formatSigned(activeChannel.mean, 3)}，能量为 ${activeChannel.energy.toFixed(3)}。`,
+      `对应输出位置 (${convExample.row}, ${convExample.col}) 的局部卷积计算表明：输入局部块与卷积核逐元素相乘后，加权求和为 ${this.formatSigned(convExample.weightedSum, 3)}，再加上偏置 ${this.formatSigned(convExample.bias, 3)}，得到输出值 ${this.formatSigned(convExample.outputValue, 3)}。`,
+      `Grad-CAM 进一步说明，支持“${gradCam.targetLabel}”判断的关键区域主要集中在热力图高亮部分；当前解释基于卷积层 ${gradCam.layerId} 生成。`,
+      `综合来看，模型并不是依赖整张图平均判断，而是依赖若干高响应卷积通道和局部判别区域共同支持最终分类。`
+    ].join('');
   }
 }

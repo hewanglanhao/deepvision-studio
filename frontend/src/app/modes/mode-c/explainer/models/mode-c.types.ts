@@ -68,6 +68,7 @@ export interface ModeCNetworkLayer {
 }
 
 export interface ModeCClassScore {
+  classIndex: number;
   label: string;
   score: number;
 }
@@ -155,4 +156,18 @@ export interface ModeCSamplePrediction {
   label: string;
   confidence: number;
   topClasses: ModeCClassScore[];
+}
+
+export interface ModeCGradCamResult {
+  layerId: string;
+  targetClassIndex: number;
+  targetLabel: string;
+  targetScore: number;
+  heatmap: number[][];
+  heatmapPreviewUrl: string;
+  overlayPreviewUrl: string;
+  dominantChannels: Array<{
+    channelIndex: number;
+    weight: number;
+  }>;
 }

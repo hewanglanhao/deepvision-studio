@@ -2,6 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import { ModeCAssetsService } from './mode-c-assets.service';
 import {
   ModeCFocusArea,
+  ModeCGradCamResult,
   ModeCLayerActivationSummary,
   ModeCLayerDetailRuntime,
   ModeCNetworkLayer,
@@ -28,11 +29,15 @@ export class ModeCStateService {
   readonly selectedTopicId;
   readonly selectedLayerId;
   readonly selectedChannelIndex;
+  readonly gradCamTargetIndex;
 
   readonly currentSample;
   readonly selectedTopic;
   readonly selectedLayer;
   readonly currentSamplePrediction;
+  readonly gradCamResult;
+  readonly gradCamLoading;
+  readonly gradCamError;
   readonly layerSummaries;
   readonly layerPreviews;
   readonly layerDetails;
@@ -56,11 +61,14 @@ export class ModeCStateService {
     this.networkLayersError = signal('');
     this.inferenceLoading = signal(false);
     this.inferenceError = signal('');
+    this.gradCamLoading = signal(false);
+    this.gradCamError = signal('');
     this.activeFocus = signal<ModeCFocusArea>('overview');
     this.currentSampleId = signal(this.sampleOptions[0]?.id ?? '');
     this.selectedTopicId = signal(this.detailTopics[0]?.id ?? '');
     this.selectedLayerId = signal(this.networkLayers()[0]?.id ?? '');
     this.selectedChannelIndex = signal(0);
+    this.gradCamTargetIndex = signal(-1);
     this.layerSummaries = signal<Record<string, ModeCLayerActivationSummary>>({});
     this.layerPreviews = signal<Record<string, ModeCLayerPreview>>({});
     this.layerDetails = signal<Record<string, ModeCLayerDetailRuntime>>({});
@@ -74,6 +82,7 @@ export class ModeCStateService {
       this.networkLayers().find(layer => layer.id === this.selectedLayerId()) ?? null
     );
     this.currentSamplePrediction = signal<ModeCSamplePrediction | null>(null);
+    this.gradCamResult = signal<ModeCGradCamResult | null>(null);
     this.selectedLayerSummary = computed(() => {
       const layer = this.selectedLayer();
       if (!layer) return null;
@@ -117,7 +126,7 @@ export class ModeCStateService {
       }
       await this.refreshInference();
     } catch (error) {
-      this.networkLayersError.set(error instanceof Error ? error.message : 'Failed to load network layers.');
+      this.networkLayersError.set(error instanceof Error ? error.message : '加载网络结构失败。');
     } finally {
       this.networkLayersLoading.set(false);
     }
@@ -162,16 +171,53 @@ export class ModeCStateService {
     this.activeFocus.set('overview');
   }
 
+  async setGradCamTargetIndex(targetIndex: number): Promise<void> {
+    const sample = this.currentSample();
+    const prediction = this.currentSamplePrediction();
+    if (!sample || !prediction) return;
+    if (!prediction.topClasses.some(candidate => candidate.classIndex === targetIndex)) return;
+
+    this.gradCamTargetIndex.set(targetIndex);
+    this.gradCamLoading.set(true);
+    this.gradCamError.set('');
+
+    try {
+      const result = await this.inference.computeGradCamForTarget(sample.assetPath, targetIndex);
+      this.gradCamResult.set(result);
+    } catch (error) {
+      this.gradCamResult.set(null);
+      this.gradCamError.set(error instanceof Error ? error.message : '执行 Grad-CAM 解释失败。');
+    } finally {
+      this.gradCamLoading.set(false);
+    }
+  }
+
   private async refreshInference(): Promise<void> {
     const sample = this.currentSample();
     if (!sample || this.inferenceLoading()) return;
 
     this.inferenceLoading.set(true);
     this.inferenceError.set('');
+    this.gradCamLoading.set(true);
+    this.gradCamError.set('');
 
     try {
       const result = await this.inference.runSample(sample.assetPath);
       this.currentSamplePrediction.set(result.prediction);
+      const requestedTargetIndex = this.gradCamTargetIndex();
+      const resolvedTargetIndex = result.prediction.topClasses.some(
+        candidate => candidate.classIndex === requestedTargetIndex
+      )
+        ? requestedTargetIndex
+        : (result.gradCam?.targetClassIndex ?? result.prediction.topClasses[0]?.classIndex ?? -1);
+      this.gradCamTargetIndex.set(resolvedTargetIndex);
+      if (result.gradCam && result.gradCam.targetClassIndex === resolvedTargetIndex) {
+        this.gradCamResult.set(result.gradCam);
+      } else if (resolvedTargetIndex >= 0) {
+        this.gradCamResult.set(await this.inference.computeGradCamForTarget(sample.assetPath, resolvedTargetIndex));
+      } else {
+        this.gradCamResult.set(null);
+      }
       this.layerSummaries.set(
         result.summaries.reduce<Record<string, ModeCLayerActivationSummary>>((acc, summary) => {
           acc[summary.layerId] = summary;
@@ -200,12 +246,15 @@ export class ModeCStateService {
       }
     } catch (error) {
       this.currentSamplePrediction.set(null);
+      this.gradCamResult.set(null);
       this.layerSummaries.set({});
       this.layerPreviews.set({});
       this.layerDetails.set({});
-      this.inferenceError.set(error instanceof Error ? error.message : 'Failed to run Mode C inference.');
+      this.inferenceError.set(error instanceof Error ? error.message : '执行 Mode C 推理失败。');
+      this.gradCamError.set(error instanceof Error ? error.message : '执行 Grad-CAM 解释失败。');
     } finally {
       this.inferenceLoading.set(false);
+      this.gradCamLoading.set(false);
     }
   }
 }
