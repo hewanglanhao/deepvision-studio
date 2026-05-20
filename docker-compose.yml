@@ -1,0 +1,48 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    image: deepvision-frontend:local
+    ports:
+      - "4200:80"
+    depends_on:
+      - spring-backend
+
+  spring-backend:
+    build:
+      context: .
+      dockerfile: backend/spring/Dockerfile
+    image: deepvision-spring-backend:local
+    environment:
+      DEEPVISION_JWT_SECRET: ${DEEPVISION_JWT_SECRET:-please-change-this-secret-to-at-least-32-bytes}
+      DEEPVISION_FORWARD_BASE_URL: http://python-forward:5000
+      DEEPVISION_DB_URL: jdbc:h2:file:/app/data/deepvision
+      DEEPVISION_UPLOAD_ROOT: /app/uploads
+      DEEPVISION_DATASET_ROOT: /app/datasets
+      DEEPVISION_TRAINING_JOBS_ROOT: /app/training-jobs
+      DEEPVISION_TRAINING_PYTHON: python3
+      DEEPVISION_TRAINING_WORKER_SCRIPT: /app/python-training/training_worker.py
+      DEEPVISION_TRAINING_STREAM_BASE_URL: ""
+      ARK_BASE_URL: ${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}
+      ARK_API_KEY: ${ARK_API_KEY:-}
+      ARK_MODEL: ${ARK_MODEL:-doubao-seed-2-0-pro-260215}
+    volumes:
+      - spring-data:/app/data
+      - spring-uploads:/app/uploads
+      - spring-datasets:/app/datasets
+      - spring-training-jobs:/app/training-jobs
+    depends_on:
+      - python-forward
+
+  python-forward:
+    build:
+      context: ./backend/python-forward
+    image: deepvision-python-forward:local
+    expose:
+      - "5000"
+
+volumes:
+  spring-data:
+  spring-uploads:
+  spring-datasets:
+  spring-training-jobs:

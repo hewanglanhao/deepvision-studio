@@ -112,7 +112,7 @@ public class TrainingJobService {
         job.status(),
         totalEpochs,
         totalBatches,
-        streamBaseUrl + "/api/training/stream?jobId=" + jobId
+        streamUrl(jobId)
     );
   }
 
@@ -668,9 +668,14 @@ public class TrainingJobService {
 
   private String trimTrailingSlash(String value) {
     if (value == null || value.isBlank()) {
-      return "ws://127.0.0.1:8080";
+      return "";
     }
     return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+  }
+
+  private String streamUrl(String jobId) {
+    String path = "/api/training/stream?jobId=" + jobId;
+    return streamBaseUrl.isBlank() ? path : streamBaseUrl + path;
   }
 
   static String jobIdFromSession(WebSocketSession session) {

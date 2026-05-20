@@ -1,0 +1,15 @@
+.git
+.claude
+.vscode
+**/.venv
+**/node_modules
+**/dist
+**/target
+**/.angular
+**/.pytest_cache
+**/__pycache__
+**/*.pyc
+backend/spring/data
+backend/spring/uploads
+backend/spring/datasets
+backend/spring/training-jobs

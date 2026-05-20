@@ -141,6 +141,9 @@ export class TrainingCollaborationService implements OnDestroy {
   }
 
   private wsBaseUrl(): string {
-    return this.api.baseUrl.replace(/^http/i, 'ws');
+    if (this.api.baseUrl) {
+      return this.api.baseUrl.replace(/^http/i, 'ws');
+    }
+    return `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
   }
 }

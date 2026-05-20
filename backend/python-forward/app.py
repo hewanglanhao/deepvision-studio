@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -32,4 +34,7 @@ def forward():
 
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    host = os.getenv('FORWARD_HOST', '127.0.0.1')
+    port = int(os.getenv('FORWARD_PORT', '5000'))
+    debug = os.getenv('FORWARD_DEBUG', 'false').lower() == 'true'
+    app.run(host=host, port=port, debug=debug)

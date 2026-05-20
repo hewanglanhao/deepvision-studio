@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
 export class ApiClientService {
-  readonly baseUrl = 'http://127.0.0.1:8080';
+  readonly baseUrl: string = '';
   private readonly tokenKey = 'deepvision.auth.token';
 
   get token(): string {

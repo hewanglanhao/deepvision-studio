@@ -35,7 +35,7 @@ deepvision:
     connect-timeout-seconds: ${DEEPVISION_FORWARD_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${DEEPVISION_FORWARD_READ_TIMEOUT_SECONDS:180}
   training:
-    stream-base-url: ${DEEPVISION_TRAINING_STREAM_BASE_URL:ws://127.0.0.1:8080}
+    stream-base-url: ${DEEPVISION_TRAINING_STREAM_BASE_URL:}
     jobs-root: ${DEEPVISION_TRAINING_JOBS_ROOT:./training-jobs}
     python-executable: ${DEEPVISION_TRAINING_PYTHON:C:/Users/lizihan/miniconda3/envs/dl-platform/python.exe}
     worker-script: ${DEEPVISION_TRAINING_WORKER_SCRIPT:../python-training/training_worker.py}

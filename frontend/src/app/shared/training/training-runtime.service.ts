@@ -538,7 +538,9 @@ export class TrainingRuntimeService implements OnDestroy {
       return streamUrl;
     }
     if (streamUrl.startsWith('/')) {
-      const base = this.api.baseUrl.replace(/^http/, 'ws');
+      const base = this.api.baseUrl
+        ? this.api.baseUrl.replace(/^http/, 'ws')
+        : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
       return `${base}${streamUrl}`;
     }
     return streamUrl;
