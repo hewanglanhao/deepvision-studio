@@ -193,6 +193,10 @@ export class ModeDStateService {
 
   play(): void {
     if (this.isPlaying()) return;
+    // Auto-reset if previous run completed
+    if (this.currentIteration() >= this.trainingConfig().maxIterations) {
+      this.reset();
+    }
     this.isPlaying.set(true);
     this.status.set('running');
     const maxSteps = this.trainingConfig().maxIterations;
@@ -237,6 +241,7 @@ export class ModeDStateService {
     this.latestAccuracy.set(0);
     this.gradientNormHistory.set([]);
     this.decisionBoundary.set(null);
+    setTimeout(() => this.computeBoundary(), 100); // after layers reload
     this.subStep.set({ type: 'idle' });
     this.activePhase.set('forward');
     this.status.set('ready');
@@ -408,6 +413,9 @@ export class ModeDStateService {
     })));
     this.connections.set(preset.connections.map(c => ({ ...c })));
     this.currentDataset.set(dataset.samples.map(s => ({ input: [...s.input], label: s.label })));
+    // Sync currentActivation from the first dense layer's activation
+    const firstDense = preset.layers.find((l: any) => l.type === 'dense');
+    if (firstDense) this.currentActivation.set((firstDense as any).params['activation'] ?? 'relu');
     this.reset();
   }
 
@@ -421,6 +429,23 @@ export class ModeDStateService {
   }
 
   setFocusedArea(area: ModeDFocusArea): void { this.focusedArea.set(area); }
+
+  readonly currentActivation = signal('relu');
+
+  setActivation(act: string): void {
+    this.currentActivation.set(act);
+    // Reset first to get fresh random weights
+    this.reset();
+    // Then patch the activation on the freshly loaded layers
+    const layers = this.networkLayers();
+    for (const l of layers) {
+      if (l.type === 'dense' || l.type === 'output') {
+        l.params['activation'] = l.type === 'output' ? 'softmax' : act;
+      }
+    }
+    // Force signal update since we mutated in place
+    this.networkLayers.set([...layers]);
+  }
 
   /** Compute average loss + accuracy over all samples every 25 steps */
   private maybeRecordAvgLoss(itr: number): void {
@@ -444,28 +469,58 @@ export class ModeDStateService {
     if (alh.length > 200) alh.shift();
     this.avgLossHistory.set(alh);
     this.latestAccuracy.set(acc);
+    this.computeBoundary();
   }
 
   /** Latest full-dataset accuracy */
   readonly latestAccuracy = signal(0);
+
+  private computeBoundary(): void {
+    const layers = this.networkLayers();
+    if (layers.length < 2) return;
+    const dataset = this.currentDataset();
+    if (dataset.length === 0) return;
+    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+    for (const s of dataset) {
+      if (s.input[0] < xMin) xMin = s.input[0];
+      if (s.input[0] > xMax) xMax = s.input[0];
+      if (s.input[1] < yMin) yMin = s.input[1];
+      if (s.input[1] > yMax) yMax = s.input[1];
+    }
+    const xPad = Math.max((xMax - xMin) * 0.08, 0.02);
+    const yPad = Math.max((yMax - yMin) * 0.08, 0.02);
+    try {
+      const b = this.engine.computeDecisionBoundary(layers, 50, [xMin - xPad, xMax + xPad], [yMin - yPad, yMax + yPad]);
+      this.decisionBoundary.set(b);
+    } catch { /* ignore */ }
+  }
 
   /** Save current avg-loss curve for optimizer comparison (called on training complete) */
   saveCurrentCurve(): void {
     const points = this.avgLossHistory();
     if (points.length === 0) return;
     const config = this.trainingConfig();
-    const colors: Record<string, string> = { sgd: '#2563eb', momentum: '#7c3aed', adam: '#059669' };
-    const curves = this.savedCurves().filter(c => c.label !== `${config.optimizer.toUpperCase()}`);
+    const act = this.currentActivation();
+    const combo = `${config.optimizer}+${act}`;
+    const colorPalette = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#ca8a04', '#be185d'];
+    const usedColors = new Set(this.savedCurves().map(c => c.color));
+    const color = colorPalette.find(c => !usedColors.has(c)) ?? colorPalette[this.savedCurves().length % colorPalette.length];
     const last = points[points.length - 1];
+    const curves = this.savedCurves().filter(c => c.label.split(' (')[0] !== combo);
     curves.push({
-      label: `${config.optimizer.toUpperCase()} (Acc ${(last.accuracy * 100).toFixed(0)}%)`,
-      color: colors[config.optimizer] ?? '#94a3b8',
+      label: `${combo} (Acc ${(last.accuracy * 100).toFixed(0)}%)`,
+      color,
       points: [...points],
     });
     this.savedCurves.set(curves);
   }
 
-  /** Clear saved comparison curves */
+  deleteSavedCurve(idx: number): void {
+    const curves = [...this.savedCurves()];
+    curves.splice(idx, 1);
+    this.savedCurves.set(curves);
+  }
+
   clearSavedCurves(): void {
     this.savedCurves.set([]);
   }

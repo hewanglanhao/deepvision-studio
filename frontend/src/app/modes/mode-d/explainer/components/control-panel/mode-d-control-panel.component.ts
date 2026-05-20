@@ -17,8 +17,17 @@ export class ModeDControlPanelComponent {
   readonly presetId = computed(() => this.state.selectedPresetId());
   readonly config = computed(() => this.state.trainingConfig());
   readonly isPlaying = computed(() => this.state.isPlaying());
+  readonly isRunning = computed(() => this.state.isPlaying() || this.state.isAnimating());
   readonly iteration = computed(() => this.state.currentIteration());
   readonly status = computed(() => this.state.status());
+
+  readonly currentActivation = computed(() => this.state.currentActivation());
+
+  readonly activationOptions: { value: string; label: string }[] = [
+    { value: 'relu', label: 'ReLU' },
+    { value: 'sigmoid', label: 'Sigmoid' },
+    { value: 'tanh', label: 'Tanh' },
+  ];
 
   readonly optimizerOptions: { value: ModeDOptimizer; label: string }[] = [
     { value: 'sgd', label: 'SGD' },
@@ -44,6 +53,10 @@ export class ModeDControlPanelComponent {
 
   setOptimizer(value: ModeDOptimizer): void {
     this.state.setTrainingConfig({ optimizer: value });
+  }
+
+  setActivation(value: string): void {
+    this.state.setActivation(value);
   }
 
   setSpeed(ms: number): void {

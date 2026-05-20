@@ -36,10 +36,15 @@
 .curve-legend { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .curve-legend-item { display: flex; align-items: center; gap: 4px; font-size: 9px; color: #64748b; }
 .curve-dot { width: 8px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+.curve-del {
+  margin-left: 4px; padding: 0 4px; border: none; background: none;
+  color: #94a3b8; font-size: 11px; cursor: pointer; line-height: 1;
+}
+.curve-del:hover { color: #dc2626; }
 
 /* loss click hint */
-.loss-card { cursor: pointer; transition: box-shadow .15s; }
-.loss-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1); }
+.loss-card, .ds-card { cursor: pointer; transition: box-shadow .15s; }
+.loss-card:hover, .ds-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1); }
 .loss-hint { font-size: 9px; color: #94a3b8; margin-top: 4px; text-align: right; }
 
 /* ---- modal ---- */

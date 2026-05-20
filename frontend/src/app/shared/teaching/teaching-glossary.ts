@@ -441,6 +441,45 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
       '观察训练曲线与决策边界变化，通常能直观看到学习率设置是否合适。'
     ],
     mode: 'D'
+  },
+  {
+    id: 'activation-relu',
+    title: 'ReLU',
+    aliases: ['ReLU', '修正线性单元'],
+    category: '训练与优化',
+    summary: 'ReLU 输出 max(0, x)，反向传播时正半区梯度为 1，负半区为 0。',
+    details: [
+      '公式: f(x) = max(0, x)，导数: 正半区为 1、负半区为 0。',
+      '优点: 计算简单、梯度不衰减，深层网络也能有效训练。缺点: 负半区神经元可能永久死亡。',
+      '决策边界: 产生分段线性边界（多个半平面拼成），XOR 等直线分割用 ReLU 效果好，环形需要大量神经元。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'activation-sigmoid',
+    title: 'Sigmoid',
+    aliases: ['Sigmoid', 'Logistic'],
+    category: '训练与优化',
+    summary: 'Sigmoid 输出 (0,1)，导数最大 0.25，深层网络易梯度消失。',
+    details: [
+      '公式: f(x) = 1/(1+exp(-x))，导数: f(x)*(1-f(x)) ≤ 0.25。',
+      '优点: 输出平滑有界。缺点: 深层网络梯度指数衰减、非零中心收敛慢。',
+      '决策边界: 产生光滑弧形，适合同心圆等曲线边界。D 模式中同心圆用 Sigmoid 优于 ReLU。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'activation-tanh',
+    title: 'Tanh',
+    aliases: ['Tanh', '双曲正切'],
+    category: '训练与优化',
+    summary: 'Tanh 输出 (-1,1)，零中心化。梯度最大为 1，饱和时趋近 0。',
+    details: [
+      '公式: f(x) = tanh(x)，导数: 1 - tanh²(x)，x=0 时最大为 1。',
+      '优点: 零中心化、比 Sigmoid 梯度大。缺点: 远离原点时饱和导致梯度消失，多层叠加尤其严重。',
+      '决策边界: 也产生光滑弧形，但深层网络梯度衰减比 ReLU 严重得多。'
+    ],
+    mode: 'D'
   }
 ];
 

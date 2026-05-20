@@ -26,12 +26,6 @@ export class ModeDAssetsService {
         inputDim: 2, outputDim: 2, classLabels: ['蓝色类 (0)', '橙色类 (1)'],
       },
       {
-        id: 'spiral', name: '螺旋数据集',
-        description: '三条阿基米德螺旋线，验证神经网络拟合能力的经典非线性数据集。',
-        samples: ModeDBackpropEngine.generateSpiralData(450, 3, 0.18),
-        inputDim: 2, outputDim: 3, classLabels: ['蓝色类 (0)', '橙色类 (1)', '绿色类 (2)'],
-      },
-      {
         id: 'circle', name: '同心圆数据集',
         description: '内外两个同心圆，需要网络学习环形决策边界。',
         samples: ModeDBackpropEngine.generateCircleData(350, 0.12),
@@ -46,21 +40,14 @@ export class ModeDAssetsService {
     ];
 
     this.networkPresets = [
-      this.buildPreset('xor-mlp', 'XOR 双层 MLP', '2 输入 → 4 隐藏 → 2 输出', 'xor', [
+      this.buildPreset('xor-mlp', 'XOR 双层 MLP', '2 输入 → 12 隐藏 → 2 输出', 'xor', [
         makeLayer('input', '输入层', { width: 2, height: 1, channels: 1 }),
-        makeLayer('dense', '隐藏层 1', { units: 4, activation: 'relu' }),
+        makeLayer('dense', '隐藏层 1', { units: 12, activation: 'relu' }),
         makeLayer('output', '输出层', { units: 2, activation: 'softmax', labels: ['类 0', '类 1'] }),
       ]),
-      this.buildPreset('spiral-mlp', '螺旋三层 MLP', '2 输入 → 8 隐藏 → 8 隐藏 → 3 输出', 'spiral', [
+      this.buildPreset('circle-mlp', '同心圆 Sigmoid MLP', '2 输入 → 16 隐藏(Sigmoid) → 2 输出', 'circle', [
         makeLayer('input', '输入层', { width: 2, height: 1, channels: 1 }),
-        makeLayer('dense', '隐藏层 1', { units: 8, activation: 'relu' }),
-        makeLayer('dense', '隐藏层 2', { units: 8, activation: 'tanh' }),
-        makeLayer('output', '输出层', { units: 3, activation: 'softmax', labels: ['类 0', '类 1', '类 2'] }),
-      ]),
-      this.buildPreset('circle-mlp', '同心圆 Tanh MLP', '2 输入 → 6 隐藏(Tanh) → 6 隐藏(Tanh) → 2 输出', 'circle', [
-        makeLayer('input', '输入层', { width: 2, height: 1, channels: 1 }),
-        makeLayer('dense', '隐藏层 1', { units: 6, activation: 'tanh' }),
-        makeLayer('dense', '隐藏层 2', { units: 6, activation: 'tanh' }),
+        makeLayer('dense', '隐藏层 1', { units: 16, activation: 'sigmoid' }),
         makeLayer('output', '输出层', { units: 2, activation: 'softmax', labels: ['内圆', '外环'] }),
       ]),
       this.buildPreset('blobs-mlp', '高斯团 MLP', '2 输入 → 4 隐藏(Sigmoid) → 3 输出', 'blobs', [

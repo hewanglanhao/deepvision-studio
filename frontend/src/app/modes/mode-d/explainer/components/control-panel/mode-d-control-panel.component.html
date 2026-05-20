@@ -1,89 +1,114 @@
 <div class="control-panel">
-  <!-- Preset selector -->
-  <div class="ctrl-group">
-    <label>预设网络</label>
-    <div class="preset-list">
-      @for (preset of presets(); track preset.id) {
-        <button
-          class="preset-btn"
-          [class.selected]="preset.id === presetId()"
-          (click)="selectPreset(preset.id)"
-          [title]="preset.description"
-        >{{ preset.name }}</button>
-      }
+  <!-- Section 1: Network & Data -->
+  <div class="ctl-section">
+    <div class="section-label">网络</div>
+    <div class="section-body">
+      <div class="preset-list">
+        @for (preset of presets(); track preset.id) {
+          <button
+            class="preset-btn"
+            [class.selected]="preset.id === presetId()"
+            (click)="selectPreset(preset.id)"
+            [title]="preset.description"
+            [disabled]="isRunning()"
+          >{{ preset.name }}</button>
+        }
+      </div>
+      <div class="param-row">
+        <span class="param-label">激活</span>
+        <div class="chip-list">
+          @for (act of activationOptions; track act.value) {
+            <button
+              class="chip-btn"
+              [class.selected]="act.value === currentActivation()"
+              (click)="setActivation(act.value)"
+              [disabled]="isRunning()"
+              [appTeachingTerm]="'activation-' + act.value"
+            >{{ act.label }}</button>
+          }
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Hyperparameters -->
-  <div class="ctrl-group">
-    <label>学习率: <strong>{{ config().learningRate.toFixed(3) }}</strong></label>
-    <input
-      type="range"
-      min="0.001" max="2.0" step="0.001"
-      [value]="config().learningRate"
-      (input)="setLr($any($event.target).value)"
-      class="lr-slider"
-    />
-  </div>
-
-  <div class="ctrl-group">
-    <label>优化器</label>
-    <div class="opt-list">
-      @for (opt of optimizerOptions; track opt.value) {
-        <button
-          class="opt-btn"
-          [class.selected]="opt.value === config().optimizer"
-          (click)="setOptimizer(opt.value)"
-          [appTeachingTerm]="'optimizer-' + opt.value"
-        >{{ opt.label }}</button>
-      }
+  <!-- Section 2: Optimizer & LR -->
+  <div class="ctl-section">
+    <div class="section-label">优化器</div>
+    <div class="section-body">
+      <div class="chip-list">
+        @for (opt of optimizerOptions; track opt.value) {
+          <button
+            class="chip-btn"
+            [class.selected]="opt.value === config().optimizer"
+            (click)="setOptimizer(opt.value)"
+            [disabled]="isRunning()"
+            [appTeachingTerm]="'optimizer-' + opt.value"
+          >{{ opt.label }}</button>
+        }
+      </div>
+      <div class="param-row">
+        <span class="param-label">学习率</span>
+        <input
+          type="range"
+          min="0.001" max="2.0" step="0.001"
+          [value]="config().learningRate"
+          (input)="setLr($any($event.target).value)"
+          class="lr-slider"
+          [attr.disabled]="isRunning() ? '' : null"
+        />
+        <span class="param-val">{{ config().learningRate.toFixed(3) }}</span>
+      </div>
     </div>
   </div>
 
-  <div class="ctrl-group">
-    <label>训练步数</label>
-    <div class="steps-row">
-      <input type="number" class="steps-input" min="10" max="5000" step="10"
-             [value]="config().maxIterations"
-             (change)="setSteps($any($event.target).value)" />
-      @if (iteration() > 0) {
-        <span class="steps-progress">
-          已跑 <strong>{{ iteration() }}</strong> / 剩余 <strong>{{ config().maxIterations - iteration() }}</strong>
-        </span>
-      }
+  <!-- Section 3: Training control -->
+  <div class="ctl-section">
+    <div class="section-label">训练</div>
+    <div class="section-body">
+      <div class="param-row">
+        <span class="param-label">步数</span>
+        <input type="number" class="steps-input" min="10" max="5000" step="10"
+               [value]="config().maxIterations"
+               [attr.disabled]="isRunning() ? '' : null"
+               (change)="setSteps($any($event.target).value)" />
+        @if (iteration() > 0) {
+          <span class="steps-progress">已跑 <strong>{{ iteration() }}</strong> / 剩 <strong>{{ config().maxIterations - iteration() }}</strong></span>
+        }
+      </div>
+      <div class="param-row">
+        <span class="param-label">速度</span>
+        <div class="chip-list">
+          @for (sp of speedOptions; track sp.value) {
+            <button
+              class="chip-btn"
+              [class.selected]="sp.value === playSpeed()"
+              (click)="setSpeed(sp.value)"
+            >{{ sp.label }}</button>
+          }
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="ctrl-group">
-    <label>连续播放速度</label>
-    <div class="speed-list">
-      @for (sp of speedOptions; track sp.value) {
-        <button
-          class="speed-btn"
-          [class.selected]="sp.value === playSpeed()"
-          (click)="setSpeed(sp.value)"
-        >{{ sp.label }}</button>
-      }
-    </div>
-  </div>
-
-  <!-- Current prediction status -->
+  <!-- Section 4: Live status -->
   @if (state.currentStep(); as step) {
-    <div class="ctrl-group">
-      <label>当前状态</label>
-      <div class="status-row">
-        <span class="status-label">预测</span>
-        <span class="status-val" [class.correct]="step.predictedClass === step.trueClass">
-          {{ state.predictedClassLabel() }}
-        </span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">真实</span>
-        <span class="status-val">{{ state.trueClassLabel() }}</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">损失</span>
-        <span class="status-val">{{ step.loss?.toFixed(6) ?? '—' }}</span>
+    <div class="ctl-section">
+      <div class="section-label">状态</div>
+      <div class="section-body">
+        <div class="status-row">
+          <span class="status-label">预测</span>
+          <span class="status-val" [class.correct]="step.predictedClass === step.trueClass">
+            {{ state.predictedClassLabel() }}
+          </span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">真实</span>
+          <span class="status-val">{{ state.trueClassLabel() }}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">损失</span>
+          <span class="status-val mono">{{ step.loss?.toFixed(6) ?? '—' }}</span>
+        </div>
       </div>
     </div>
   }
