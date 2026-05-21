@@ -1,0 +1,40 @@
+<div class="museum-shell">
+  <div #stage class="museum-stage"></div>
+
+  <header class="museum-hud">
+    <a routerLink="/" class="back-link">返回首页</a>
+    <div>
+      <div class="kicker">AI History Museum</div>
+      <h1>人工智能发展史沉浸式博物馆</h1>
+    </div>
+    <button type="button" (click)="enterMuseum()">
+      {{ isLocked ? '正在漫游' : '进入第一人称' }}
+    </button>
+  </header>
+
+  <aside class="guide-panel" [class.compact]="isLocked">
+    <div class="guide-title">{{ activeExhibit?.year || '导览' }} {{ activeExhibit?.title || '欢迎入馆' }}</div>
+    <p>{{ activeExhibit?.description || '点击“进入第一人称”后，使用 WASD 或方向键移动，鼠标控制视角。靠近展墙即可阅读展品。' }}</p>
+    @if (activeExhibit) {
+      <div class="guide-tags">
+        @for (tag of activeExhibit.tags; track tag) {
+          <span>{{ tag }}</span>
+        }
+      </div>
+    }
+  </aside>
+
+  <div class="control-strip">
+    <span>WASD / 方向键移动</span>
+    <span>鼠标转向</span>
+    <span>Shift 加速</span>
+    <span>Esc 退出视角</span>
+  </div>
+
+  @if (!isLocked) {
+    <button type="button" class="start-overlay" (click)="enterMuseum()">
+      <strong>进入博物馆</strong>
+      <span>第一人称漫游 AI 从感知机到大模型的历史长廊</span>
+    </button>
+  }
+</div>

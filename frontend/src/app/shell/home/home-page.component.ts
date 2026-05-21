@@ -70,7 +70,7 @@ export class HomePageComponent {
 
   readonly metrics = [
     { label: '学习模式', value: '5' },
-    { label: '可视化主线', value: 'Forward / Train / Explain / Backprop / Transformer' },
-    { label: '高级能力', value: 'Web3D + AI + WebSocket + Attention' },
+    { label: '可视化主线', value: 'Forward / Train / Explain / Backprop / Museum' },
+    { label: '高级能力', value: 'Web3D + AI + WebSocket + First-person Museum' },
   ];
 }

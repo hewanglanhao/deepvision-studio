@@ -61,6 +61,11 @@ export const routes: Routes = [
       .then(m => m.ModeEPageComponent)
   },
   {
+    path: 'ai-museum',
+    loadComponent: () => import('@modes/ai-museum/ai-museum-page.component')
+      .then(m => m.AiMuseumPageComponent)
+  },
+  {
     path: 'network-3d',
     loadComponent: () => import('@shared/network-3d/network-3d-viewer.component')
       .then(m => m.Network3dViewerComponent)

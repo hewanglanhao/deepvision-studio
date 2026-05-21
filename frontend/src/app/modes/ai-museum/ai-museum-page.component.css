@@ -1,0 +1,203 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #111827;
+  color: #f8fafc;
+}
+
+.museum-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #111827;
+}
+
+.museum-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.museum-hud {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.museum-hud > * {
+  pointer-events: auto;
+}
+
+.back-link,
+.museum-hud button,
+.start-overlay {
+  color: inherit;
+  text-decoration: none;
+  font: inherit;
+}
+
+.back-link,
+.museum-hud button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(226, 232, 240, .26);
+  border-radius: 9px;
+  padding: 0 14px;
+  background: rgba(15, 23, 42, .72);
+  backdrop-filter: blur(14px);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.museum-hud button {
+  cursor: pointer;
+}
+
+.museum-hud button:hover,
+.back-link:hover {
+  border-color: rgba(125, 211, 252, .72);
+  background: rgba(14, 116, 144, .38);
+}
+
+.kicker {
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 3px 0 0;
+  color: #fff;
+  font-size: clamp(20px, 3vw, 34px);
+  line-height: 1.1;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, .42);
+}
+
+.guide-panel {
+  position: absolute;
+  right: 18px;
+  bottom: 72px;
+  z-index: 4;
+  width: min(380px, calc(100vw - 36px));
+  padding: 16px;
+  border: 1px solid rgba(226, 232, 240, .22);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, .78);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .32);
+  backdrop-filter: blur(14px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.guide-panel.compact {
+  opacity: .86;
+}
+
+.guide-title {
+  color: #fef3c7;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.guide-panel p {
+  margin: 9px 0 0;
+  color: #dbeafe;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.guide-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.guide-tags span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(125, 211, 252, .14);
+  color: #bae6fd;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.control-strip {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.control-strip span {
+  padding: 7px 10px;
+  border: 1px solid rgba(226, 232, 240, .2);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .68);
+  color: #cbd5e1;
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.start-overlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  width: min(420px, calc(100vw - 40px));
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(254, 243, 199, .42);
+  border-radius: 14px;
+  padding: 20px 24px;
+  background: rgba(15, 23, 42, .82);
+  color: #fff;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .44);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  text-align: center;
+}
+
+.start-overlay strong {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.start-overlay span {
+  color: #dbeafe;
+  line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+  .museum-hud {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .museum-hud h1 {
+    font-size: 23px;
+  }
+
+  .guide-panel {
+    left: 18px;
+    right: 18px;
+    bottom: 92px;
+    width: auto;
+  }
+}
