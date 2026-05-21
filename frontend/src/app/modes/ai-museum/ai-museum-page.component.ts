@@ -387,6 +387,9 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.renderer.setSize(host.clientWidth, host.clientHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.12;
     host.appendChild(this.renderer.domElement);
     this.resizeObserver.observe(host);
 
@@ -400,6 +403,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
 
     this.addLights();
     this.addArchitecture();
+    this.addLuxuryDetails();
     this.addExhibits();
     this.addCentralTimeline();
     this.addWayfinding();
@@ -428,10 +432,12 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     if (!this.scene) return;
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(HALL_WIDTH, HALL_LENGTH),
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshPhysicalMaterial({
         color: '#d7c7ad',
-        roughness: 0.45,
-        metalness: 0.04
+        roughness: 0.24,
+        metalness: 0.05,
+        clearcoat: 0.52,
+        clearcoatRoughness: 0.38
       })
     );
     floor.rotation.x = -Math.PI / 2;
@@ -479,6 +485,163 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
       ]);
       this.scene.add(new THREE.Line(geometry, lineMaterial));
     }
+  }
+
+  private addLuxuryDetails(): void {
+    this.addCentralRunner();
+    this.addCeilingRibs();
+    this.addSkylightBands();
+    this.addWallAlcoves();
+    this.addEntranceSculpture();
+    this.addAtmosphericParticles();
+  }
+
+  private addCentralRunner(): void {
+    if (!this.scene) return;
+    const runner = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.8, HALL_LENGTH - 12),
+      new THREE.MeshPhysicalMaterial({
+        color: '#1e293b',
+        roughness: 0.18,
+        metalness: 0.18,
+        clearcoat: 0.7,
+        clearcoatRoughness: 0.22
+      })
+    );
+    runner.rotation.x = -Math.PI / 2;
+    runner.position.y = 0.018;
+    runner.receiveShadow = true;
+    this.scene.add(runner);
+
+    const glowMat = new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.34 });
+    [-1.58, 1.58].forEach(x => {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(0.035, HALL_LENGTH - 16), glowMat);
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(x, 0.026, 0);
+      this.scene?.add(line);
+    });
+  }
+
+  private addCeilingRibs(): void {
+    if (!this.scene) return;
+    const mat = new THREE.MeshStandardMaterial({ color: '#d6c6a8', roughness: 0.34, metalness: 0.2 });
+    for (let z = -72; z <= 80; z += 12) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(HALL_WIDTH - 1.2, 0.16, 0.18), mat);
+      beam.position.set(0, WALL_HEIGHT - 0.32, z);
+      beam.castShadow = true;
+      this.scene.add(beam);
+
+      const archGlow = new THREE.Mesh(
+        new THREE.BoxGeometry(HALL_WIDTH - 2.2, 0.035, 0.08),
+        new THREE.MeshBasicMaterial({ color: '#fde68a', transparent: true, opacity: 0.55 })
+      );
+      archGlow.position.set(0, WALL_HEIGHT - 0.52, z + 0.12);
+      this.scene.add(archGlow);
+    }
+  }
+
+  private addSkylightBands(): void {
+    if (!this.scene) return;
+    const glass = new THREE.MeshBasicMaterial({
+      color: '#93c5fd',
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide
+    });
+    for (let z = -66; z <= 78; z += 24) {
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 7.4), glass);
+      pane.position.set(0, WALL_HEIGHT - 0.05, z);
+      pane.rotation.x = Math.PI / 2;
+      this.scene.add(pane);
+
+      const light = new THREE.RectAreaLight('#bfdbfe', 1.2, 5.4, 6.8);
+      light.position.set(0, WALL_HEIGHT - 0.25, z);
+      light.rotation.x = -Math.PI / 2;
+      this.scene.add(light);
+    }
+  }
+
+  private addWallAlcoves(): void {
+    if (!this.scene) return;
+    for (const exhibit of this.exhibits) {
+      const side = exhibit.position.x < 0 ? -1 : 1;
+      const halo = new THREE.Mesh(
+        new THREE.PlaneGeometry(5.7, 4.55),
+        new THREE.MeshBasicMaterial({
+          color: exhibit.accent,
+          transparent: true,
+          opacity: 0.13,
+          side: THREE.DoubleSide,
+          blending: THREE.AdditiveBlending
+        })
+      );
+      halo.position.set(side * 8.93, 2.72, exhibit.position.z);
+      halo.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+      this.scene.add(halo);
+
+      const frameMat = new THREE.MeshStandardMaterial({ color: exhibit.accent, roughness: 0.24, metalness: 0.42, emissive: exhibit.accent, emissiveIntensity: 0.06 });
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 5.9), frameMat);
+      const bottom = top.clone();
+      top.position.set(side * 8.78, 4.98, exhibit.position.z);
+      bottom.position.set(side * 8.78, 0.46, exhibit.position.z);
+      const left = new THREE.Mesh(new THREE.BoxGeometry(0.08, 4.55, 0.08), frameMat);
+      const right = left.clone();
+      left.position.set(side * 8.78, 2.72, exhibit.position.z - 2.95);
+      right.position.set(side * 8.78, 2.72, exhibit.position.z + 2.95);
+      this.scene.add(top, bottom, left, right);
+    }
+  }
+
+  private addEntranceSculpture(): void {
+    if (!this.scene) return;
+    const group = new THREE.Group();
+    group.position.set(0, 2.3, -72);
+    const coreMat = new THREE.MeshStandardMaterial({ color: '#38bdf8', roughness: 0.18, metalness: 0.42, emissive: '#0ea5e9', emissiveIntensity: 0.22 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.22, metalness: 0.38, emissive: '#92400e', emissiveIntensity: 0.14 });
+    for (let i = 0; i < 7; i += 1) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.65 + i * 0.18, 0.018, 8, 72), i % 2 ? goldMat : coreMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.rotation.y = i * 0.38;
+      ring.rotation.z = i * 0.72;
+      group.add(ring);
+    }
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 2), coreMat);
+    group.add(core);
+    this.scene.add(group);
+    this.animatedObjects.push({ mesh: group, speed: 0.24 });
+
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.25, 1.45, 0.34, 36),
+      new THREE.MeshPhysicalMaterial({ color: '#334155', roughness: 0.2, metalness: 0.22, clearcoat: 0.6 })
+    );
+    pedestal.position.set(0, 0.18, -72);
+    pedestal.castShadow = true;
+    pedestal.receiveShadow = true;
+    this.scene.add(pedestal);
+  }
+
+  private addAtmosphericParticles(): void {
+    if (!this.scene) return;
+    const count = 520;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) {
+      positions[i * 3] = (Math.random() - 0.5) * (HALL_WIDTH - 2);
+      positions[i * 3 + 1] = 1.2 + Math.random() * 5.1;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * (HALL_LENGTH - 8);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const particles = new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({
+        color: '#e0f2fe',
+        size: 0.035,
+        transparent: true,
+        opacity: 0.38,
+        depthWrite: false
+      })
+    );
+    this.scene.add(particles);
   }
 
   private addWall(x: number, y: number, z: number, width: number, height: number, rotationY: number, color: string): void {
@@ -959,6 +1122,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     artifact.position.set(0, -2.0, 1.1);
     artifact.scale.setScalar(0.86);
     group.add(artifact);
+    this.addArtifactCase(artifact, exhibit.accent);
 
     if (exhibit.kind === 'svm') {
       this.addSvmArtifact(artifact, exhibit.accent);
@@ -1029,6 +1193,48 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
       return;
     }
     this.addNeuronArtifact(artifact, exhibit.accent);
+  }
+
+  private addArtifactCase(group: THREE.Group, accent: string): void {
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.36, 1.52, 0.18, 40),
+      new THREE.MeshPhysicalMaterial({
+        color: '#111827',
+        roughness: 0.18,
+        metalness: 0.34,
+        clearcoat: 0.78,
+        clearcoatRoughness: 0.2
+      })
+    );
+    base.position.y = -1.02;
+    base.castShadow = true;
+    base.receiveShadow = true;
+    group.add(base);
+
+    const glow = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.18, 1.18, 0.035, 40),
+      new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.48 })
+    );
+    glow.position.y = -0.9;
+    group.add(glow);
+
+    const glass = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 1.2, 1.52, 48, 1, true),
+      new THREE.MeshPhysicalMaterial({
+        color: '#dbeafe',
+        roughness: 0.02,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.12,
+        transmission: 0.52,
+        clearcoat: 1,
+        clearcoatRoughness: 0.04,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      })
+    );
+    glass.position.y = -0.12;
+    group.add(glass);
   }
 
   private addNeuronArtifact(group: THREE.Group, accent: string): void {
