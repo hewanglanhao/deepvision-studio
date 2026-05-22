@@ -3,6 +3,8 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@ang
 import { RouterLink } from '@angular/router';
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import { ApiClientService } from '@core/api/api-client.service';
+import { AuthService } from '@core/auth/auth.service';
 
 type ExhibitKind =
   | 'logic'
@@ -38,6 +40,24 @@ interface MuseumExhibit {
   accent: string;
   source: string;
 }
+
+interface MuseumPeer {
+  id: string;
+  roomId: string;
+  username: string;
+  displayName: string;
+  color: string;
+  x: number;
+  y: number;
+  z: number;
+  ry: number;
+}
+
+type MuseumPresenceMessage =
+  | { type: 'welcome'; selfId: string; roomId: string; limit: number; participants: MuseumPeer[] }
+  | { type: 'join'; participant: MuseumPeer }
+  | { type: 'pose'; participant: MuseumPeer }
+  | { type: 'leave'; id: string };
 
 interface MovingState {
   forward: boolean;
@@ -353,6 +373,16 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
   private readonly exhibitObjects = new Map<THREE.Object3D, MuseumExhibit>();
   private readonly animatedObjects: Array<{ mesh: THREE.Object3D; speed: number; radius?: number }> = [];
   private readonly resizeObserver = new ResizeObserver(() => this.resizeRenderer());
+  private readonly remoteAvatars = new Map<string, THREE.Group>();
+  private presenceSocket?: WebSocket;
+  private presenceRoomId = '';
+  private presenceSelfId = '';
+  private lastPoseSentAt = 0;
+
+  constructor(
+    private readonly auth: AuthService,
+    private readonly api: ApiClientService
+  ) {}
 
   ngAfterViewInit(): void {
     const host = this.stageRef?.nativeElement;
@@ -366,6 +396,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.resizeObserver.disconnect();
     this.controls?.disconnect();
     this.renderer?.dispose();
+    this.presenceSocket?.close();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
   }
@@ -407,6 +438,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.addExhibits();
     this.addCentralTimeline();
     this.addWayfinding();
+    void this.connectPresence();
   }
 
   private addLights(): void {
@@ -790,9 +822,6 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
       bulletY += 50;
     }
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '500 22px Segoe UI, sans-serif';
-    this.wrapText(ctx, `资料线索：${exhibit.source}`, 74, 790, 1010, 28, 1);
     this.paintFormulaRibbon(ctx, exhibit);
     this.paintMiniIllustration(ctx, exhibit);
     return canvas;
@@ -1755,6 +1784,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.previousTime = now;
     this.updateMovement(delta);
     this.updateActiveExhibit();
+    this.sendPresencePose(now);
 
     const elapsed = now / 1000;
     for (const item of this.animatedObjects) {
@@ -1776,7 +1806,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.direction.x = Number(this.moving.right) - Number(this.moving.left);
     this.direction.normalize();
 
-    const speed = this.moving.sprint ? 38 : 24;
+    const speed = this.moving.sprint ? 57 : 36;
     if (this.moving.forward || this.moving.backward) this.velocity.z -= this.direction.z * speed * delta;
     if (this.moving.left || this.moving.right) this.velocity.x -= this.direction.x * speed * delta;
 
@@ -1812,5 +1842,133 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+  }
+
+  private async connectPresence(): Promise<void> {
+    if (this.api.token) {
+      await this.auth.restoreSession();
+    }
+
+    const query = new URLSearchParams();
+    if (this.api.token && this.auth.currentUser) {
+      query.set('token', this.api.token);
+    } else {
+      query.set('guest', 'anonymous');
+    }
+
+    const socket = new WebSocket(`${this.wsBaseUrl()}/api/museum/presence?${query.toString()}`);
+    this.presenceSocket = socket;
+    socket.onmessage = event => this.handlePresenceMessage(event.data);
+    socket.onclose = () => {
+      this.presenceRoomId = '';
+      this.presenceSelfId = '';
+      for (const avatar of this.remoteAvatars.values()) {
+        this.scene?.remove(avatar);
+      }
+      this.remoteAvatars.clear();
+    };
+  }
+
+  private wsBaseUrl(): string {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}`;
+  }
+
+  private handlePresenceMessage(raw: string): void {
+    let message: MuseumPresenceMessage;
+    try {
+      message = JSON.parse(raw) as MuseumPresenceMessage;
+    } catch {
+      return;
+    }
+    if (message.type === 'welcome') {
+      this.presenceSelfId = message.selfId;
+      this.presenceRoomId = message.roomId;
+      for (const participant of message.participants) {
+        if (participant.id !== this.presenceSelfId) {
+          this.upsertAvatar(participant);
+        }
+      }
+      return;
+    }
+    if (message.type === 'join' || message.type === 'pose') {
+      if (message.participant.id !== this.presenceSelfId) {
+        this.upsertAvatar(message.participant);
+      }
+      return;
+    }
+    if (message.type === 'leave') {
+      const avatar = this.remoteAvatars.get(message.id);
+      if (avatar) {
+        this.scene?.remove(avatar);
+        this.remoteAvatars.delete(message.id);
+      }
+    }
+  }
+
+  private sendPresencePose(now: number): void {
+    if (!this.presenceSocket || this.presenceSocket.readyState !== WebSocket.OPEN || !this.controls) return;
+    if (now - this.lastPoseSentAt < 90) return;
+    this.lastPoseSentAt = now;
+    const position = this.controls.object.position;
+    const rotation = this.controls.object.rotation;
+    this.presenceSocket.send(JSON.stringify({
+      type: 'pose',
+      x: Number(position.x.toFixed(3)),
+      y: Number(position.y.toFixed(3)),
+      z: Number(position.z.toFixed(3)),
+      ry: Number(rotation.y.toFixed(4))
+    }));
+  }
+
+  private upsertAvatar(peer: MuseumPeer): void {
+    if (!this.scene) return;
+    let avatar = this.remoteAvatars.get(peer.id);
+    if (!avatar) {
+      avatar = this.createAvatar(peer);
+      this.remoteAvatars.set(peer.id, avatar);
+      this.scene.add(avatar);
+    }
+    avatar.position.set(peer.x, 0, peer.z);
+    avatar.rotation.y = peer.ry;
+  }
+
+  private createAvatar(peer: MuseumPeer): THREE.Group {
+    const group = new THREE.Group();
+    group.userData['peerId'] = peer.id;
+    const color = new THREE.Color(peer.color || '#38bdf8');
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.22,
+      metalness: 0.12,
+      emissive: color,
+      emissiveIntensity: 0.16
+    });
+    const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72 });
+
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 1.1, 18), coreMat);
+    torso.position.y = 0.88;
+    torso.castShadow = true;
+    group.add(torso);
+
+    const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.34, 20), coreMat);
+    pointer.position.set(0, 0.82, -0.36);
+    pointer.rotation.x = Math.PI / 2;
+    group.add(pointer);
+
+    const name = this.createTextSprite(peer.displayName || peer.username, '#f8fafc', 360, 86, 28);
+    name.position.set(0, 1.72, 0);
+    name.scale.set(1.25, 0.3, 1);
+    group.add(name);
+
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.022, 8, 42), glowMat);
+    ring.position.y = 0.045;
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.28, 10), glowMat);
+    beam.position.y = 0.72;
+    group.add(beam);
+    return group;
   }
 }

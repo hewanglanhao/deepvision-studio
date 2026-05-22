@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '@core/auth/auth.service';
 import { PlatformTopbarComponent } from '@shared/components/platform-topbar.component';
 
 interface PortalEntry {
@@ -20,6 +21,13 @@ interface PortalEntry {
   styleUrl: './home-page.component.css',
 })
 export class HomePageComponent {
+  private readonly authSvc = inject(AuthService);
+  readonly user$ = this.authSvc.user$;
+
+  constructor() {
+    void this.authSvc.restoreSession();
+  }
+
   readonly entries: PortalEntry[] = [
     {
       id: 'A',
@@ -73,4 +81,8 @@ export class HomePageComponent {
     { label: '可视化主线', value: 'Forward / Train / Explain / Backprop / Museum' },
     { label: '高级能力', value: 'Web3D + AI + WebSocket + First-person Museum' },
   ];
+
+  logout(): void {
+    this.authSvc.logout();
+  }
 }

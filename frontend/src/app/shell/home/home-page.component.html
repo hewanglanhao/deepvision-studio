@@ -1,5 +1,5 @@
 <div class="portal-shell">
-  <app-platform-topbar />
+  <app-platform-topbar [user]="user$ | async" (logoutRequested)="logout()" />
 
   <main class="portal-main">
     <section class="hero-band" aria-labelledby="home-title">
