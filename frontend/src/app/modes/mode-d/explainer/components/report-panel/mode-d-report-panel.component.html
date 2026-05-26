@@ -1,0 +1,17 @@
+<section class="panel-card report-card">
+  <div class="card-head">
+    <div>
+      <p class="eyebrow">解释报告</p>
+      <h2>Transformer 解释报告</h2>
+    </div>
+  </div>
+
+  <div class="report-grid">
+    @for (section of state.reportSections(); track section.title) {
+      <article class="report-block">
+        <h3>{{ section.title }}</h3>
+        <p>{{ section.body }}</p>
+      </article>
+    }
+  </div>
+</section>

@@ -1,0 +1,63 @@
+<section class="panel-card attention-card">
+  <div class="card-head">
+    <div>
+      <p class="eyebrow">注意力</p>
+      <h2>单层单头注意力矩阵</h2>
+    </div>
+    <div class="matrix-caption">
+      {{ state.blockOptions[state.selectedBlockIndex()]?.label }}
+      /
+      {{ state.headOptions[state.selectedHeadIndex()]?.label }}
+    </div>
+  </div>
+
+  <div class="matrix-shell" [style.--token-count]="state.tokens().length">
+    <div class="matrix-axis axis-corner"></div>
+    @for (token of state.tokens(); track $index) {
+      <div class="matrix-axis axis-top" [class.axis-active]="isHighlightedCol($index)">{{ token }}</div>
+    }
+    @for (rowToken of state.tokens(); track $index; let rowIndex = $index) {
+      <div class="matrix-axis axis-left" [class.axis-active]="isHighlightedRow(rowIndex)">{{ rowToken }}</div>
+      @for (value of state.attentionMatrix()[rowIndex]; track $index) {
+        <div
+          class="matrix-cell"
+          [class.cell-focused]="isFocusedCell(rowIndex, $index)"
+          [class.cell-dimmed]="isDimmedCell(rowIndex, $index)"
+          [style.background]="'rgba(37, 99, 235,' + cellOpacity(value) + ')'"
+          [attr.aria-label]="rowToken + ' 关注 ' + state.tokens()[$index] + '，权重 ' + formatWeight(value)"
+          (mouseenter)="state.hoverAttentionCell(rowIndex, $index)"
+          (mouseleave)="state.clearHoveredAttentionCell()"
+          (click)="state.selectAttentionCell(rowIndex, $index)"
+        >
+          {{ formatWeight(value) }}
+        </div>
+      }
+    }
+  </div>
+
+  <section class="focus-card">
+    <div class="focus-head">
+      <strong>当前聚焦单元</strong>
+      <span class="focus-mode">
+        {{
+          state.activeAttentionDetail().mode === 'selected'
+            ? '已锁定'
+            : state.activeAttentionDetail().mode === 'hovered'
+              ? '悬停中'
+              : '自动聚焦'
+        }}
+      </span>
+    </div>
+    <p class="focus-relation">
+      <span>{{ state.activeAttentionDetail().sourceToken }}</span>
+      <span class="arrow">→</span>
+      <span>{{ state.activeAttentionDetail().targetToken }}</span>
+      <span class="weight">{{ formatWeight(state.activeAttentionDetail().weight) }}</span>
+    </p>
+    <p class="focus-text">{{ state.activeAttentionDetail().interpretation }}</p>
+  </section>
+
+  <p class="matrix-summary">
+    {{ state.strongestAttention().narrative }}
+  </p>
+</section>

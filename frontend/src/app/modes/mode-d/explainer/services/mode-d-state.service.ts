@@ -1,532 +1,333 @@
-import { Injectable, computed, signal } from '@angular/core';
-import type {
-  ModeDBackpropStep,
-  ModeDTrainingConfig,
-  ModeDFocusArea,
-  ModeDVisualStatus,
-  ModeDNetworkPreset,
-  ModeDDatasetPreset,
-  ModeDDatasetSample,
+import { Injectable, computed, inject, signal } from '@angular/core';
+import {
+  ModeDAttentionSummary,
+  ModeDExample,
+  ModeDInferenceResult,
+  ModeDQkvTeachingData,
+  ModeDReportSection,
+  ModeDTokenScore,
+  ModeDVectorBar
 } from '../models/mode-d.types';
-import type { Connection } from '@shared/simulation/sim-models';
-import { ModeDBackpropEngine } from '../engine/mode-d-backprop-engine';
 import { ModeDAssetsService } from './mode-d-assets.service';
-
-// ---- sub-step animation state machine ------------------------------------
-
-export type SubStep =
-  | { type: 'idle' }
-  | { type: 'forward'; layerPair: number }   // forward from layerPair to layerPair+1
-  | { type: 'loss' }
-  | { type: 'backward'; layerPair: number }  // backward from layerPair+1 to layerPair
-  | { type: 'update'; layerIdx: number }     // update weights for layer layerIdx
-  | { type: 'done' };
-
-interface LayerMeta {
-  id: number; type: string; name: string; params: Record<string, any>;
-}
+import { ModeDInferenceService } from './mode-d-inference.service';
 
 @Injectable({ providedIn: 'root' })
 export class ModeDStateService {
-  private engine = new ModeDBackpropEngine();
+  private readonly assets = inject(ModeDAssetsService);
+  private readonly inference = inject(ModeDInferenceService);
 
-  // ---- writable signals -------------------------------------------------
+  readonly examples = this.assets.examples;
+  readonly blockOptions = this.assets.blockOptions;
+  readonly headOptions = this.assets.headOptions;
 
-  readonly status = signal<ModeDVisualStatus>('idle');
-  readonly focusedArea = signal<ModeDFocusArea>('overview');
-  readonly selectedPresetId = signal<string>('xor-mlp');
+  readonly selectedExampleId = signal(this.examples[0]?.id ?? '');
+  readonly inputText = signal(this.examples[0]?.text ?? '');
+  readonly selectedBlockIndex = signal(0);
+  readonly selectedHeadIndex = signal(0);
+  readonly hoveredCell = signal<{ row: number; col: number } | null>(null);
+  readonly selectedCell = signal<{ row: number; col: number } | null>(null);
+  readonly inferenceLoading = signal(false);
+  readonly inferenceError = signal('');
+  readonly inferenceResult = signal<ModeDInferenceResult | null>(null);
 
-  readonly networkLayers = signal<LayerMeta[]>([]);
-  readonly connections = signal<Connection[]>([]);
-  readonly currentDataset = signal<ModeDDatasetSample[]>([]);
-  readonly datasetMeta = signal<ModeDDatasetPreset | null>(null);
-  readonly networkMeta = signal<ModeDNetworkPreset | null>(null);
+  readonly currentExample = computed<ModeDExample | null>(() =>
+    this.examples.find(example => example.id === this.selectedExampleId()) ?? null
+  );
 
-  readonly trainingConfig = signal<ModeDTrainingConfig>({
-    learningRate: 0.1, optimizer: 'adam', lossFunction: 'crossEntropy', maxIterations: 1000,
+  readonly tokens = computed(() => this.inferenceResult()?.tokenTexts ?? this.fallbackTokens());
+  readonly tokenIds = computed(() => this.inferenceResult()?.tokenIds ?? this.fallbackTokenIds());
+  readonly topK = computed<ModeDTokenScore[]>(() => this.inferenceResult()?.topK ?? this.buildFallbackTopK());
+
+  readonly attentionMatrix = computed<number[][]>(() => {
+    const result = this.inferenceResult();
+    const key = this.getAttentionKey();
+    const matrix = key ? result?.attentionByKey[key] : undefined;
+    if (matrix && matrix.length) {
+      return matrix;
+    }
+
+    const tokens = this.tokens();
+    return tokens.map((_, row) => {
+      const raw = tokens.map((__, col) => {
+        const distance = Math.abs(row - col);
+        const recency = row >= col ? 1 / (distance + 1.5) : 0.05;
+        return recency + (col === row ? 0.14 : 0);
+      });
+      const total = raw.reduce((sum, value) => sum + value, 0);
+      return raw.map(value => value / total);
+    });
   });
 
-  readonly currentStep = signal<ModeDBackpropStep | null>(null);
-  readonly stepHistory = signal<ModeDBackpropStep[]>([]);
-  readonly currentIteration = signal(0);
-  readonly currentSampleIndex = signal(0);
+  readonly strongestAttention = computed<ModeDAttentionSummary>(() => {
+    const matrix = this.attentionMatrix();
+    const tokens = this.tokens();
+    const strongest = this.findStrongestCell(matrix) ?? { row: 0, col: 0 };
+    const sourceToken = tokens[strongest.row] ?? '';
+    const targetToken = tokens[strongest.col] ?? '';
+    const narrative = this.selectedHeadIndex() === 0
+      ? '当前这个头更偏向最近上下文，适合解释局部续写线索。'
+      : '当前这个头更偏向句首或结构锚点，适合解释全局依赖与主题回看。';
 
-  readonly activeLayerId = signal<number | null>(null);
-  readonly selectedNeuronRef = signal<{ layerIdx: number; neuronIdx: number } | null>(null);
-
-  // ---- sub-step animation -------------------------------------------------
-
-  readonly subStep = signal<SubStep>({ type: 'idle' });
-  readonly isAnimating = signal(false);
-  readonly activePhase = signal<'forward' | 'loss' | 'backward' | 'update'>('forward');
-
-  private pendingSubSteps = signal<SubStep[]>([]);
-  private currentSubIdx = signal(0);
-
-  /** Layer count for sub-step sequence generation */
-  private get layerCount(): number { return this.networkLayers().length; }
-
-  /** Build sub-step sequence from current network */
-  private buildSubSteps(): SubStep[] {
-    const n = this.layerCount;
-    if (n < 2) return [];
-    const steps: SubStep[] = [];
-    for (let i = 0; i < n - 1; i++) steps.push({ type: 'forward', layerPair: i });
-    steps.push({ type: 'loss' });
-    for (let i = n - 2; i >= 0; i--) steps.push({ type: 'backward', layerPair: i });
-    const layers = this.networkLayers();
-    for (let i = 0; i < n; i++) {
-      if (layers[i].type === 'dense' || layers[i].type === 'output') {
-        steps.push({ type: 'update', layerIdx: i });
-      }
-    }
-    return steps;
-  }
-
-  /** Compute full training step and freeze at first sub-step for manual inspection */
-  startAnimatedStep(): void {
-    if (this.isAnimating()) return;
-    this.isAnimating.set(true);
-    this.status.set('running');
-
-    const layers = this.networkLayers();
-    if (layers.length === 0) { this.isAnimating.set(false); return; }
-    const dataset = this.currentDataset();
-    const sample = dataset[this.currentSampleIndex()];
-    if (!sample) { this.isAnimating.set(false); return; }
-
-    const config = this.trainingConfig();
-    const iteration = this.currentIteration();
-    const step = this.engine.trainingStep(layers, sample.input, sample.label, config, iteration);
-
-    this.currentStep.set(step);
-    this.currentIteration.set(iteration + 1);
-    const history = [...this.stepHistory(), step];
-    if (history.length > 500) history.shift();
-    this.stepHistory.set(history);
-    if (step.loss != null) {
-      const lh = [...this.lossHistory(), { iteration, loss: step.loss }];
-      if (lh.length > 500) lh.shift();
-      this.lossHistory.set(lh);
-    }
-    this.maybeRecordAvgLoss(iteration + 1);
-
-    const nextIdx = Math.floor(Math.random() * dataset.length);
-    this.currentSampleIndex.set(nextIdx);
-
-    this.pendingSubSteps.set(this.buildSubSteps());
-    this.currentSubIdx.set(0);
-    if (this.pendingSubSteps().length > 0) {
-      this.applySubStep(this.pendingSubSteps()[0]);
-    } else {
-      this.finishAnimation();
-    }
-  }
-
-  /** Advance to next sub-step (called by user clicking "继续") */
-  advanceSubStep(): void {
-    if (!this.isAnimating()) return;
-    this.currentSubIdx.update(n => n + 1);
-    if (this.currentSubIdx() >= this.pendingSubSteps().length) {
-      this.finishAnimation();
-    } else {
-      this.applySubStep(this.pendingSubSteps()[this.currentSubIdx()]);
-    }
-  }
-
-  /** Whether there are more sub-steps remaining */
-  readonly hasMoreSubSteps = computed(() => {
-    return this.isAnimating() && this.currentSubIdx() < this.pendingSubSteps().length - 1;
-  });
-
-  /** Total sub-steps in current sequence */
-  readonly totalPendingSubSteps = computed(() => this.pendingSubSteps().length);
-  /** Remaining sub-steps after current */
-  readonly remainingSubSteps = computed(() => Math.max(0, this.pendingSubSteps().length - this.currentSubIdx() - 1));
-
-  private applySubStep(ss: SubStep): void {
-    this.subStep.set(ss);
-    this.activePhase.set(
-      ss.type === 'loss' ? 'loss' :
-      ss.type === 'update' ? 'update' :
-      ss.type === 'backward' ? 'backward' : 'forward'
-    );
-  }
-
-  private finishAnimation(): void {
-    this.subStep.set({ type: 'done' });
-    this.activePhase.set('update');
-    this.isAnimating.set(false);
-    this.pendingSubSteps.set([]);
-    this.currentSubIdx.set(0);
-    this.status.set('ready');
-  }
-
-  /** Fast-forward: reveal all sub-steps instantly (called during continuous play) */
-  instantStep(): void {
-    const layers = this.networkLayers();
-    if (layers.length === 0) return;
-    const dataset = this.currentDataset();
-    const sample = dataset[this.currentSampleIndex()];
-    if (!sample) return;
-    const config = this.trainingConfig();
-    const iteration = this.currentIteration();
-    const step = this.engine.trainingStep(layers, sample.input, sample.label, config, iteration);
-    this.currentStep.set(step);
-    this.currentIteration.set(iteration + 1);
-    this.activePhase.set('update');
-    this.subStep.set({ type: 'done' });
-    const history = [...this.stepHistory(), step];
-    if (history.length > 500) history.shift();
-    this.stepHistory.set(history);
-    if (step.loss != null) {
-      const lh = [...this.lossHistory(), { iteration, loss: step.loss }];
-      if (lh.length > 500) lh.shift();
-      this.lossHistory.set(lh);
-    }
-    this.maybeRecordAvgLoss(iteration + 1);
-    const nextIdx = Math.floor(Math.random() * dataset.length);
-    this.currentSampleIndex.set(nextIdx);
-  }
-
-  private animPlayTimer: ReturnType<typeof setInterval> | null = null;
-
-  play(): void {
-    if (this.isPlaying()) return;
-    // Auto-reset if previous run completed
-    if (this.currentIteration() >= this.trainingConfig().maxIterations) {
-      this.reset();
-    }
-    this.isPlaying.set(true);
-    this.status.set('running');
-    const maxSteps = this.trainingConfig().maxIterations;
-    const run = () => {
-      if (this.currentIteration() >= maxSteps) {
-        this.saveCurrentCurve();
-        this.pause();
-        return;
-      }
-      if (!this.isAnimating()) {
-        this.instantStep();
-      }
+    return {
+      sourceToken,
+      targetToken,
+      weight: matrix[strongest.row]?.[strongest.col] ?? 0,
+      narrative
     };
-    run(); // first step immediately
-    this.animPlayTimer = setInterval(run, this.playSpeed());
-  }
+  });
 
-  togglePlay(): void {
-    if (this.isPlaying()) { this.pause(); } else { this.play(); }
-  }
+  readonly activeAttentionDetail = computed<{
+    row: number;
+    col: number;
+    weight: number;
+    sourceToken: string;
+    targetToken: string;
+    interpretation: string;
+    mode: 'selected' | 'hovered' | 'strongest';
+  }>(() => {
+    const matrix = this.attentionMatrix();
+    const tokens = this.tokens();
+    const selected = this.selectedCell();
+    const hovered = this.hoveredCell();
+    const fallback = this.findStrongestCell(matrix);
+    const current = selected ?? hovered ?? fallback ?? { row: 0, col: 0 };
 
-  readonly isPlaying = signal(false);
-  readonly playSpeed = signal(200);
+    const row = current.row;
+    const col = current.col;
+    const weight = matrix[row]?.[col] ?? 0;
+    const sourceToken = tokens[row] ?? '';
+    const targetToken = tokens[col] ?? '';
 
-  pause(): void {
-    if (this.animPlayTimer) { clearInterval(this.animPlayTimer); this.animPlayTimer = null; }
-    this.isPlaying.set(false);
-    this.status.set('paused');
-  }
-
-  reset(): void {
-    this.pause();
-    this.isAnimating.set(false);
-    this.pendingSubSteps.set([]);
-    this.currentSubIdx.set(0);
-    this.engine.reset();
-    this.currentStep.set(null);
-    this.stepHistory.set([]);
-    this.currentIteration.set(0);
-    this.lossHistory.set([]);
-    this.avgLossHistory.set([]);
-    this.latestAccuracy.set(0);
-    this.gradientNormHistory.set([]);
-    this.decisionBoundary.set(null);
-    setTimeout(() => this.computeBoundary(), 100); // after layers reload
-    this.subStep.set({ type: 'idle' });
-    this.activePhase.set('forward');
-    this.status.set('ready');
-    const preset = this.networkMeta();
-    if (preset) {
-      this.networkLayers.set(preset.layers.map(l => ({
-        id: l.id, type: l.type, name: l.name,
-        params: JSON.parse(JSON.stringify((l as any).params ?? {})),
-      })));
+    let interpretation = '这一格表示当前 token 对另一个 token 的注意力分配。';
+    if (row === col) {
+      interpretation = '这是自注意力位置，说明当前 token 会保留自身信息。';
+    } else if (col === Math.max(0, row - 1)) {
+      interpretation = '这一格通常对应最近上下文依赖，适合解释语言建模中的局部续写。';
+    } else if (col === 0) {
+      interpretation = '这一格说明当前头会回看序列开头，常用来捕捉句首结构或全局主题。';
+    } else if (col < row) {
+      interpretation = '这一格说明模型正在利用更早出现的上下文来决定当前 token 的表示。';
     }
-  }
 
-  // ---- computed signals (mostly same) ------------------------------------
-
-  readonly presetOptions = computed(() => this.assets.networkPresets);
-  readonly datasetPresets = computed(() => this.assets.datasetPresets);
-
-  readonly readableStatus = computed(() => {
-    const map: Record<string, string> = { idle: '就绪', ready: '已加载', running: '训练中', paused: '已暂停' };
-    return map[this.status()] ?? this.status();
+    return {
+      row,
+      col,
+      weight,
+      sourceToken,
+      targetToken,
+      interpretation,
+      mode: selected ? 'selected' : hovered ? 'hovered' : 'strongest'
+    };
   });
 
-  readonly totalTrainableParams = computed(() => {
-    // Compute from architecture (neuron counts × input sizes), not from weight existence
-    const counts = this.neuronCounts();
-    let total = 0;
-    for (let i = 1; i < this.networkLayers().length; i++) {
-      const layer = this.networkLayers()[i];
-      if (layer.type === 'dense' || layer.type === 'output') {
-        const inCount = counts[i - 1]; // neurons from previous layer
-        const outCount = counts[i];     // neurons in this layer
-        total += outCount * inCount;    // weights
-        total += outCount;              // biases
+  readonly qkvTeaching = computed<ModeDQkvTeachingData>(() => {
+    const focus = this.activeAttentionDetail();
+    const tokenIds = this.tokenIds();
+    const queryId = tokenIds[focus.row] ?? focus.row + 1;
+    const keyId = tokenIds[focus.col] ?? focus.col + 1;
+    const attentionWeight = focus.weight;
+
+    const queryVector = this.createTeachingVector(queryId, 0.42);
+    const keyVector = this.createTeachingVector(keyId, 0.34);
+    const valueVector = this.createTeachingVector(keyId + 7, 0.27);
+
+    const summary = [
+      `在教学视角下，“${focus.sourceToken}”被看作 Query，它携带“当前想找什么”的检索意图。`,
+      `“${focus.targetToken}”被看作 Key 和 Value：Key 用来回答“我是否相关”，Value 负责在匹配后把语义内容传回输出。`,
+      `当前这条注意力连接的权重约为 ${(attentionWeight * 100).toFixed(1)}%，说明这个头会把一部分来自“${focus.targetToken}”的信息传回给“${focus.sourceToken}”。`
+    ].join('');
+
+    return {
+      queryToken: focus.sourceToken,
+      keyToken: focus.targetToken,
+      valueToken: focus.targetToken,
+      queryIndex: focus.row,
+      keyIndex: focus.col,
+      attentionWeight,
+      queryVector,
+      keyVector,
+      valueVector,
+      summary
+    };
+  });
+
+  readonly reportSections = computed<ModeDReportSection[]>(() => {
+    const example = this.currentExample();
+    const topK = this.topK();
+    const strongest = this.strongestAttention();
+    const focus = this.activeAttentionDetail();
+    const qkv = this.qkvTeaching();
+    const summary = this.generatedExplanation();
+
+    return [
+      {
+        title: '当前样例',
+        body: example
+          ? `${example.title}：${example.subtitle}。当前输入为“${this.inputText()}”。`
+          : `当前输入为“${this.inputText()}”。`
+      },
+      {
+        title: 'Top-5 预测',
+        body: topK
+          .slice(0, 5)
+          .map(item => `${item.rank}. ${item.token} ${(item.probability * 100).toFixed(1)}%`)
+          .join('；')
+      },
+      {
+        title: '注意力观察',
+        body: `在 ${this.blockOptions[this.selectedBlockIndex()]?.label ?? '当前层'} 的 ${this.headOptions[this.selectedHeadIndex()]?.label ?? '当前头'} 中，token “${strongest.sourceToken}” 对 “${strongest.targetToken}” 的注意力最高，权重约 ${(strongest.weight * 100).toFixed(1)}%。`
+      },
+      {
+        title: '当前聚焦单元',
+        body: `当前聚焦在第 ${focus.row + 1} 行、第 ${focus.col + 1} 列，对应 “${focus.sourceToken}” -> “${focus.targetToken}”，权重 ${(focus.weight * 100).toFixed(1)}%。${focus.interpretation}`
+      },
+      {
+        title: 'QKV 教学解释',
+        body: qkv.summary
+      },
+      {
+        title: '自动解释',
+        body: summary
       }
-    }
-    return total;
+    ];
   });
 
-  readonly predictedClassLabel = computed(() => {
-    const step = this.currentStep();
-    if (!step || step.predictedClass == null) return '—';
-    return this.datasetMeta()?.classLabels[step.predictedClass] ?? `类 ${step.predictedClass}`;
-  });
-
-  readonly trueClassLabel = computed(() => {
-    const step = this.currentStep();
-    if (!step || step.trueClass == null) return '—';
-    return this.datasetMeta()?.classLabels[step.trueClass] ?? `类 ${step.trueClass}`;
-  });
-
-  readonly lossHistory = signal<{ iteration: number; loss: number }[]>([]);
-  /** Periodically computed average loss over all samples — smooth trend line */
-  readonly avgLossHistory = signal<{ iteration: number; loss: number; accuracy: number }[]>([]);
-
-  /** Saved loss curves for optimizer comparison */
-  readonly savedCurves = signal<{ label: string; color: string; points: { iteration: number; loss: number; accuracy?: number }[] }[]>([]);
-  readonly gradientNormHistory = signal<{ iteration: number; norm: number }[]>([]);
-  readonly decisionBoundary = signal<any>(null);
-
-  // ---- neuron-level data ------------------------------------------------
-
-  readonly neuronCounts = computed(() => {
-    return this.networkLayers().map(l => {
-      if (l.type === 'dense' || l.type === 'output') return l.params['units'] as number;
-      if (l.type === 'input') {
-        const w = l.params['width'] as number ?? 2;
-        return w * (l.params['channels'] as number ?? 1);
-      }
-      const cache = this.currentStep()?.forwardCache;
-      if (cache) {
-        const entry = cache.find(e => e.layerId === l.id);
-        if (entry?.output?.[0]) return entry.output[0].length;
-      }
-      return 2;
+  constructor() {
+    queueMicrotask(() => {
+      void this.runInference();
     });
-  });
+  }
 
-  readonly neuronActivations = computed(() => {
-    const step = this.currentStep();
-    const counts = this.neuronCounts();
-    if (!step?.forwardCache) return counts.map(n => new Array(n).fill(0));
-    return counts.map((n, li) => {
-      const cache = step.forwardCache?.find(e => e.layerIndex === li);
-      return cache?.output?.[0]?.slice(0, n) ?? new Array(n).fill(0);
-    });
-  });
+  applyExample(exampleId: string): void {
+    const example = this.examples.find(item => item.id === exampleId);
+    if (!example) return;
+    this.selectedExampleId.set(example.id);
+    this.inputText.set(example.text);
+    void this.runInference();
+  }
 
-  readonly weightEdges = computed(() => {
-    const layers = this.networkLayers();
-    const step = this.currentStep();
-    const edges: { layerFrom: number; neuronFrom: number; layerTo: number; neuronTo: number; weight: number; gradient?: number; before?: number; after?: number }[] = [];
-    for (let li = 0; li < layers.length - 1; li++) {
-      const toLayer = layers[li + 1];
-      if (toLayer.type !== 'dense' && toLayer.type !== 'output') continue;
-      const W = toLayer.params['weights'] as number[][] | undefined;
-      if (!W) continue;
-      const snap = step?.parameterSnapshots.find(s => s.layerId === toLayer.id);
-      const grad = step?.layerGradients.find(g => g.layerId === toLayer.id);
-      for (let ni = 0; ni < W.length; ni++) {
-        for (let nj = 0; nj < W[ni].length; nj++) {
-          edges.push({
-            layerFrom: li, neuronFrom: nj, layerTo: li + 1, neuronTo: ni,
-            weight: W[ni][nj],
-            gradient: grad?.weightGradients?.[ni]?.[nj],
-            before: snap?.weightsBefore?.[ni]?.[nj],
-            after: snap?.weightsAfter?.[ni]?.[nj],
-          });
-        }
-      }
+  updateInputText(value: string): void {
+    this.inputText.set(value);
+  }
+
+  selectBlock(index: number): void {
+    this.selectedBlockIndex.set(index);
+    this.selectedCell.set(null);
+    this.hoveredCell.set(null);
+  }
+
+  selectHead(index: number): void {
+    this.selectedHeadIndex.set(index);
+    this.selectedCell.set(null);
+    this.hoveredCell.set(null);
+  }
+
+  hoverAttentionCell(row: number, col: number): void {
+    this.hoveredCell.set({ row, col });
+  }
+
+  clearHoveredAttentionCell(): void {
+    this.hoveredCell.set(null);
+  }
+
+  selectAttentionCell(row: number, col: number): void {
+    const current = this.selectedCell();
+    if (current?.row === row && current?.col === col) {
+      this.selectedCell.set(null);
+      return;
     }
-    return edges;
-  });
-
-  readonly biasValues = computed(() => {
-    const layers = this.networkLayers();
-    const step = this.currentStep();
-    const result: { layerIdx: number; neuronIdx: number; bias: number; gradient?: number; before?: number; after?: number }[] = [];
-    for (let li = 0; li < layers.length; li++) {
-      if (layers[li].type !== 'dense' && layers[li].type !== 'output') continue;
-      const b = layers[li].params['bias'] as number[] | undefined;
-      if (!b) continue;
-      const snap = step?.parameterSnapshots.find(s => s.layerId === layers[li].id);
-      const grad = step?.layerGradients.find(g => g.layerId === layers[li].id);
-      for (let ni = 0; ni < b.length; ni++) {
-        result.push({
-          layerIdx: li, neuronIdx: ni, bias: b[ni],
-          gradient: grad?.biasGradients?.[ni],
-          before: snap?.biasBefore?.[ni], after: snap?.biasAfter?.[ni],
-        });
-      }
-    }
-    return result;
-  });
-
-  readonly selectedNeuron = computed(() => {
-    const ref = this.selectedNeuronRef();
-    if (!ref) return null;
-    const acts = this.neuronActivations();
-    const val = acts[ref.layerIdx]?.[ref.neuronIdx] ?? 0;
-    const incoming = this.weightEdges().filter(e => e.layerTo === ref.layerIdx && e.neuronTo === ref.neuronIdx);
-    const outgoing = this.weightEdges().filter(e => e.layerFrom === ref.layerIdx && e.neuronFrom === ref.neuronIdx);
-    const bias = this.biasValues().find(b => b.layerIdx === ref.layerIdx && b.neuronIdx === ref.neuronIdx);
-    const layers = this.networkLayers();
-    return { ...ref, activation: val, incoming, outgoing, bias, layerName: layers[ref.layerIdx]?.name ?? '', layerType: layers[ref.layerIdx]?.type ?? '' };
-  });
-
-  selectNeuron(layerIdx: number, neuronIdx: number): void {
-    this.selectedNeuronRef.set({ layerIdx, neuronIdx });
-    this.focusedArea.set('detail');
+    this.selectedCell.set({ row, col });
   }
 
-  clearNeuronSelection(): void { this.selectedNeuronRef.set(null); }
+  generatedExplanation(): string {
+    const example = this.currentExample();
+    const top1 = this.topK()[0];
+    const strongest = this.strongestAttention();
+    const focus = this.activeAttentionDetail();
+    const qkv = this.qkvTeaching();
+    const block = this.blockOptions[this.selectedBlockIndex()]?.label ?? '当前层';
+    const head = this.headOptions[this.selectedHeadIndex()]?.label ?? '当前头';
 
-  // ---- misc ------------------------------------------------------------
-
-  constructor(private readonly assets: ModeDAssetsService) {}
-
-  loadPreset(presetId: string): void {
-    const preset = this.assets.networkPresets.find(p => p.id === presetId);
-    if (!preset) return;
-    const dataset = this.assets.datasetPresets.find(d => d.id === preset.datasetId);
-    if (!dataset) return;
-    this.selectedPresetId.set(presetId);
-    this.networkMeta.set(preset);
-    this.datasetMeta.set(dataset);
-    this.networkLayers.set(preset.layers.map(l => ({
-      id: l.id, type: l.type, name: l.name,
-      params: JSON.parse(JSON.stringify((l as any).params ?? {})),
-    })));
-    this.connections.set(preset.connections.map(c => ({ ...c })));
-    this.currentDataset.set(dataset.samples.map(s => ({ input: [...s.input], label: s.label })));
-    // Sync currentActivation from the first dense layer's activation
-    const firstDense = preset.layers.find((l: any) => l.type === 'dense');
-    if (firstDense) this.currentActivation.set((firstDense as any).params['activation'] ?? 'relu');
-    this.reset();
+    return [
+      '当前页面重点解释下一词预测和单头注意力如何共同决定模型输出。',
+      `当前输入末尾语境让模型最倾向输出“${top1?.token ?? ''}”，概率约 ${(((top1?.probability) ?? 0) * 100).toFixed(1)}%。`,
+      `${block} 的 ${head} 主要把注意力从“${strongest.sourceToken}”指向“${strongest.targetToken}”，说明模型正在利用这部分上下文决定下一词分布。`,
+      `当前聚焦单元展示的是“${focus.sourceToken}”如何关注“${focus.targetToken}”，其权重约 ${(focus.weight * 100).toFixed(1)}%。${focus.interpretation}`,
+      qkv.summary,
+      example?.focus ?? ''
+    ].join('');
   }
 
-  setTrainingConfig(partial: Partial<ModeDTrainingConfig>): void {
-    this.trainingConfig.set({ ...this.trainingConfig(), ...partial });
-  }
-
-  setPlaySpeed(ms: number): void {
-    this.playSpeed.set(ms);
-    if (this.isPlaying()) { this.pause(); this.play(); }
-  }
-
-  setFocusedArea(area: ModeDFocusArea): void { this.focusedArea.set(area); }
-
-  readonly currentActivation = signal('relu');
-
-  setActivation(act: string): void {
-    this.currentActivation.set(act);
-    // Reset first to get fresh random weights
-    this.reset();
-    // Then patch the activation on the freshly loaded layers
-    const layers = this.networkLayers();
-    for (const l of layers) {
-      if (l.type === 'dense' || l.type === 'output') {
-        l.params['activation'] = l.type === 'output' ? 'softmax' : act;
-      }
-    }
-    // Force signal update since we mutated in place
-    this.networkLayers.set([...layers]);
-  }
-
-  /** Compute average loss + accuracy over all samples every 25 steps */
-  private maybeRecordAvgLoss(itr: number): void {
-    if (itr % 25 !== 0) return;
-    const layers = this.networkLayers();
-    if (layers.length === 0) return;
-    const dataset = this.currentDataset();
-    if (dataset.length === 0) return;
-    let totalLoss = 0;
-    let correct = 0;
-    const lossFn = this.trainingConfig().lossFunction;
-    for (const sample of dataset) {
-      const { output } = this.engine.forwardPass(layers, sample.input);
-      const { loss } = this.engine.computeLoss(output, sample.label, lossFn);
-      totalLoss += loss;
-      if (output.indexOf(Math.max(...output)) === sample.label) correct++;
-    }
-    const avg = totalLoss / dataset.length;
-    const acc = correct / dataset.length;
-    const alh = [...this.avgLossHistory(), { iteration: itr, loss: avg, accuracy: acc }];
-    if (alh.length > 200) alh.shift();
-    this.avgLossHistory.set(alh);
-    this.latestAccuracy.set(acc);
-    this.computeBoundary();
-  }
-
-  /** Latest full-dataset accuracy */
-  readonly latestAccuracy = signal(0);
-
-  private computeBoundary(): void {
-    const layers = this.networkLayers();
-    if (layers.length < 2) return;
-    const dataset = this.currentDataset();
-    if (dataset.length === 0) return;
-    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-    for (const s of dataset) {
-      if (s.input[0] < xMin) xMin = s.input[0];
-      if (s.input[0] > xMax) xMax = s.input[0];
-      if (s.input[1] < yMin) yMin = s.input[1];
-      if (s.input[1] > yMax) yMax = s.input[1];
-    }
-    const xPad = Math.max((xMax - xMin) * 0.08, 0.02);
-    const yPad = Math.max((yMax - yMin) * 0.08, 0.02);
+  async runInference(): Promise<void> {
+    this.inferenceLoading.set(true);
+    this.inferenceError.set('');
     try {
-      const b = this.engine.computeDecisionBoundary(layers, 50, [xMin - xPad, xMax + xPad], [yMin - yPad, yMax + yPad]);
-      this.decisionBoundary.set(b);
-    } catch { /* ignore */ }
+      const result = await this.inference.runInference(this.inputText(), 10);
+      this.inferenceResult.set(result);
+      this.hoveredCell.set(null);
+      this.selectedCell.set(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Transformer 推理失败。';
+      this.inferenceError.set(message);
+    } finally {
+      this.inferenceLoading.set(false);
+    }
   }
 
-  /** Save current avg-loss curve for optimizer comparison (called on training complete) */
-  saveCurrentCurve(): void {
-    const points = this.avgLossHistory();
-    if (points.length === 0) return;
-    const config = this.trainingConfig();
-    const act = this.currentActivation();
-    const combo = `${config.optimizer}+${act}`;
-    const colorPalette = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#ca8a04', '#be185d'];
-    const usedColors = new Set(this.savedCurves().map(c => c.color));
-    const color = colorPalette.find(c => !usedColors.has(c)) ?? colorPalette[this.savedCurves().length % colorPalette.length];
-    const last = points[points.length - 1];
-    const curves = this.savedCurves().filter(c => c.label.split(' (')[0] !== combo);
-    curves.push({
-      label: `${combo} (Acc ${(last.accuracy * 100).toFixed(0)}%)`,
-      color,
-      points: [...points],
+  private fallbackTokens(): string[] {
+    const normalized = this.inputText().trim().replace(/\s+/g, ' ');
+    return normalized ? normalized.split(' ').slice(0, 12) : ['<blank>'];
+  }
+
+  private fallbackTokenIds(): number[] {
+    return this.fallbackTokens().map((token, index) => {
+      const seed = Array.from(token).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      return seed + index;
     });
-    this.savedCurves.set(curves);
   }
 
-  deleteSavedCurve(idx: number): void {
-    const curves = [...this.savedCurves()];
-    curves.splice(idx, 1);
-    this.savedCurves.set(curves);
+  private buildFallbackTopK(): ModeDTokenScore[] {
+    const candidates = this.currentExample()?.candidateTokens ?? ['token', 'context', 'head', 'attention', 'model'];
+    const rawScores = candidates.slice(0, 5).map((_, index) => 1 / (index + 2));
+    const total = rawScores.reduce((sum, value) => sum + value, 0);
+
+    return candidates.slice(0, 5).map((token, index) => ({
+      tokenId: index,
+      token,
+      probability: rawScores[index]! / total,
+      rank: index + 1
+    }));
   }
 
-  clearSavedCurves(): void {
-    this.savedCurves.set([]);
+  private getAttentionKey(): string | null {
+    const block = this.selectedBlockIndex();
+    const head = this.selectedHeadIndex();
+    return `block_${block}_attn_head_${head}_attn_dropout`;
   }
-  setPreset(presetId: string): void { this.loadPreset(presetId); }
-  setActiveLayer(layerId: number | null): void {
-    this.activeLayerId.set(layerId);
-    if (layerId) this.focusedArea.set('detail');
+
+  private findStrongestCell(matrix: number[][]): { row: number; col: number } | null {
+    let best = { row: 0, col: 0, value: -Infinity };
+
+    matrix.forEach((rowValues, row) => {
+      rowValues.forEach((value, col) => {
+        if (value > best.value) {
+          best = { row, col, value };
+        }
+      });
+    });
+
+    return Number.isFinite(best.value) ? { row: best.row, col: best.col } : null;
+  }
+
+  private createTeachingVector(seed: number, amplitude: number): ModeDVectorBar[] {
+    return Array.from({ length: 6 }, (_, index) => {
+      const angle = seed * 0.17 + index * 0.81;
+      const wave = Math.sin(angle) * amplitude + Math.cos(angle * 0.63) * 0.12;
+      const value = Math.max(-1, Math.min(1, wave));
+      return {
+        label: `d${index + 1}`,
+        value: Number(value.toFixed(3))
+      };
+    });
   }
 }

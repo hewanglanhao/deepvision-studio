@@ -1,0 +1,23 @@
+<section class="panel-card topk-card">
+  <div class="card-head">
+    <div>
+      <p class="eyebrow">预测结果</p>
+      <h2>下一词 Top-K</h2>
+    </div>
+  </div>
+
+  <div class="rank-list">
+    @for (candidate of state.topK(); track candidate.tokenId) {
+      <div class="rank-row">
+        <div class="rank-meta">
+          <span class="rank-index">#{{ candidate.rank }}</span>
+          <strong>{{ candidate.token }}</strong>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" [style.width.%]="candidate.probability * 100"></div>
+        </div>
+        <span class="rank-score">{{ (candidate.probability * 100).toFixed(1) }}%</span>
+      </div>
+    }
+  </div>
+</section>

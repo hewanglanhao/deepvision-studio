@@ -1,0 +1,63 @@
+﻿.topk-card {
+  display: grid;
+  gap: 16px;
+}
+
+.card-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rank-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.rank-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rank-index {
+  width: 36px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #10b981, #3b82f6);
+}
+
+.rank-score {
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 800;
+}
+

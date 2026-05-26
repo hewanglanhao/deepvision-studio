@@ -1,0 +1,166 @@
+﻿.attention-card {
+  display: grid;
+  gap: 18px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.card-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.matrix-caption {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.matrix-shell {
+  display: grid;
+  grid-template-columns: 112px repeat(var(--token-count, 1), minmax(84px, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.axis-corner {
+  background: transparent;
+}
+
+.matrix-axis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  word-break: break-word;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.axis-left {
+  justify-content: flex-start;
+}
+
+.axis-active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+.matrix-cell {
+  min-height: 68px;
+  padding: 10px 8px;
+  border-radius: 14px;
+  color: #eff6ff;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.matrix-cell:hover {
+  transform: translateY(-1px);
+}
+
+.cell-focused {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.72),
+    0 12px 30px rgba(37, 99, 235, 0.22);
+  transform: translateY(-1px);
+}
+
+.cell-dimmed {
+  opacity: 0.42;
+}
+
+.matrix-summary {
+  margin: 0;
+  color: #475569;
+  line-height: 1.65;
+}
+
+.focus-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #eff6ff, #f8fbff);
+  display: grid;
+  gap: 10px;
+}
+
+.focus-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.focus-mode {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.focus-relation {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.arrow {
+  color: #2563eb;
+}
+
+.weight {
+  margin-left: auto;
+  color: #1d4ed8;
+}
+
+.focus-text {
+  margin: 0;
+  color: #475569;
+  line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .matrix-shell {
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+}
+

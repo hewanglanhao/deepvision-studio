@@ -1,0 +1,312 @@
+<section class="panel-card qkv-card">
+  <div class="card-head">
+    <div>
+      <p class="eyebrow">QKV 可视化</p>
+      <h2>当前注意力焦点的 Query / Key / Value 流程</h2>
+    </div>
+    <span class="card-pill">{{ focusModeLabel(state.activeAttentionDetail().mode) }}</span>
+  </div>
+
+  <p class="intro">
+    这块面板把当前注意力矩阵里的聚焦单元翻译成 QKV 教学流程：
+    谁在发起检索、谁被匹配到、注意力得分如何形成、Value 又如何加权回流到输出。
+  </p>
+
+  <div class="stage-popover-slot">
+    @if (activeStage(); as stage) {
+      <div class="stage-popover">
+        <div>
+          <p class="stage-popover-label">当前聚焦步骤</p>
+          <strong>{{ stageTitle(stage) }}</strong>
+          <p>{{ stageExplanation(stage) }}</p>
+        </div>
+        @if (lockedStage) {
+          <button type="button" class="stage-popover-close" (click)="clearLockedStage()">取消锁定</button>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="focus-rail">
+    <article
+      class="token-card query-token"
+      [class.focused]="isStageFocused('query')"
+      [class.dimmed]="isStageDimmed(['query', 'score'])"
+      (mouseenter)="hoverStage('query')"
+      (mouseleave)="leaveStage('query')"
+      (click)="toggleStage('query')">
+      <span class="token-role">Query token</span>
+      <strong>{{ state.qkvTeaching().queryToken }}</strong>
+      <span>第 {{ state.qkvTeaching().queryIndex + 1 }} 个 token</span>
+    </article>
+    <div
+      class="focus-connector"
+      [class.active]="isStageFocused('query') || isStageFocused('key') || isStageFocused('score')"
+      [class.dimmed]="isStageDimmed(['query', 'key', 'score'])"
+      aria-hidden="true">
+      <span class="focus-line"></span>
+      <span class="focus-pulse"></span>
+      <span class="focus-arrow">→</span>
+    </div>
+    <article
+      class="token-card key-token"
+      [class.focused]="isStageFocused('key')"
+      [class.dimmed]="isStageDimmed(['key', 'score'])"
+      (mouseenter)="hoverStage('key')"
+      (mouseleave)="leaveStage('key')"
+      (click)="toggleStage('key')">
+      <span class="token-role">Key token</span>
+      <strong>{{ state.qkvTeaching().keyToken }}</strong>
+      <span>第 {{ state.qkvTeaching().keyIndex + 1 }} 个 token</span>
+    </article>
+    <div
+      class="focus-connector"
+      [class.active]="isStageFocused('score')"
+      [class.dimmed]="isStageDimmed(['score'])"
+      aria-hidden="true">
+      <span class="focus-line"></span>
+      <span class="focus-pulse"></span>
+      <span class="focus-arrow">→</span>
+    </div>
+    <article
+      class="token-card value-token"
+      [class.focused]="isStageFocused('value')"
+      [class.dimmed]="isStageDimmed(['value', 'output'])"
+      (mouseenter)="hoverStage('value')"
+      (mouseleave)="leaveStage('value')"
+      (click)="toggleStage('value')">
+      <span class="token-role">Value token</span>
+      <strong>{{ state.qkvTeaching().valueToken }}</strong>
+      <span>按 {{ attentionPercent() }} 的权重汇入输出</span>
+    </article>
+    <div
+      class="focus-connector"
+      [class.active]="isStageFocused('value') || isStageFocused('output')"
+      [class.dimmed]="isStageDimmed(['value', 'output'])"
+      aria-hidden="true">
+      <span class="focus-line"></span>
+      <span class="focus-pulse"></span>
+      <span class="focus-arrow">→</span>
+    </div>
+    <article
+      class="token-card output-token"
+      [class.focused]="isStageFocused('output')"
+      [class.dimmed]="isStageDimmed(['output'])"
+      (mouseenter)="hoverStage('output')"
+      (mouseleave)="leaveStage('output')"
+      (click)="toggleStage('output')">
+      <span class="token-role">输出更新</span>
+      <strong>{{ state.qkvTeaching().queryToken }}</strong>
+      <span>获得来自 {{ state.qkvTeaching().valueToken }} 的补充信息</span>
+    </article>
+  </div>
+
+  <div class="pipeline-grid">
+    <article class="stage-card source-card" [class.dimmed]="isStageDimmed(['query', 'key', 'score'])">
+      <span class="stage-tag">起点</span>
+      <h3>{{ state.activeAttentionDetail().sourceToken }} → {{ state.activeAttentionDetail().targetToken }}</h3>
+      <p>{{ state.activeAttentionDetail().interpretation }}</p>
+    </article>
+
+    <article
+      class="stage-card query-card"
+      [class.focused]="isStageFocused('query')"
+      [class.dimmed]="isStageDimmed(['query', 'score'])"
+      (mouseenter)="hoverStage('query')"
+      (mouseleave)="leaveStage('query')"
+      (click)="toggleStage('query')">
+      <span class="stage-tag">Query</span>
+      <h3>{{ state.qkvTeaching().queryToken }}</h3>
+      <p>{{ querySummary() }}</p>
+      <div class="mini-popover">
+        <strong>{{ stageMiniTitle('query') }}</strong>
+        <p>{{ stageMiniCopy('query') }}</p>
+      </div>
+      <div class="vector-list">
+        @for (vector of state.qkvTeaching().queryVector; track vector.label) {
+          <div
+            class="vector-row"
+            [class.dimension-highlight]="isDimensionHighlighted($index)"
+            (mouseenter)="hoverDimension($index)"
+            (mouseleave)="clearHoveredDimension()">
+            <span class="vector-label">{{ vector.label }}</span>
+            <div class="vector-track">
+              <div class="vector-fill" [class]="barTrackClass(vector.value)" [style.width]="barWidth(vector.value)"></div>
+            </div>
+            <span class="vector-value">{{ vector.value.toFixed(3) }}</span>
+          </div>
+        }
+      </div>
+    </article>
+
+    <article
+      class="stage-card key-card"
+      [class.focused]="isStageFocused('key')"
+      [class.dimmed]="isStageDimmed(['key', 'score'])"
+      (mouseenter)="hoverStage('key')"
+      (mouseleave)="leaveStage('key')"
+      (click)="toggleStage('key')">
+      <span class="stage-tag">Key</span>
+      <h3>{{ state.qkvTeaching().keyToken }}</h3>
+      <p>{{ keySummary() }}</p>
+      <div class="mini-popover">
+        <strong>{{ stageMiniTitle('key') }}</strong>
+        <p>{{ stageMiniCopy('key') }}</p>
+      </div>
+      <div class="vector-list">
+        @for (vector of state.qkvTeaching().keyVector; track vector.label) {
+          <div
+            class="vector-row"
+            [class.dimension-highlight]="isDimensionHighlighted($index)"
+            (mouseenter)="hoverDimension($index)"
+            (mouseleave)="clearHoveredDimension()">
+            <span class="vector-label">{{ vector.label }}</span>
+            <div class="vector-track">
+              <div class="vector-fill" [class]="barTrackClass(vector.value)" [style.width]="barWidth(vector.value)"></div>
+            </div>
+            <span class="vector-value">{{ vector.value.toFixed(3) }}</span>
+          </div>
+        }
+      </div>
+    </article>
+
+    <article
+      class="stage-card score-card"
+      [class.focused]="isStageFocused('score')"
+      [class.dimmed]="isStageDimmed(['score'])"
+      (mouseenter)="hoverStage('score')"
+      (mouseleave)="leaveStage('score')"
+      (click)="toggleStage('score')">
+      <span class="stage-tag">匹配得分</span>
+      <h3>Q × K → softmax 权重</h3>
+      <div class="mini-popover">
+        <strong>{{ scoreMiniTitle() }}</strong>
+        <p>{{ scoreMiniCopy() }}</p>
+      </div>
+      <div class="dimension-chip">
+        <span class="dimension-chip-label">当前高亮维度</span>
+        <strong>{{ currentDimensionLabel() }}</strong>
+      </div>
+      <p class="dimension-hint">{{ currentDimensionHint() }}</p>
+      <div class="score-flow">
+        <div class="score-flow-node">
+          <span>Q × K</span>
+          <strong>{{ dotProduct().toFixed(3) }}</strong>
+        </div>
+        <span class="score-flow-arrow">→</span>
+        <div class="score-flow-node">
+          <span>缩放</span>
+          <strong>{{ scaledScore().toFixed(3) }}</strong>
+        </div>
+        <span class="score-flow-arrow">→</span>
+        <div class="score-flow-node highlight">
+          <span>softmax</span>
+          <strong>{{ attentionPercent() }}</strong>
+        </div>
+      </div>
+      <div class="metric-stack">
+        <div class="metric-row">
+          <span>点积</span>
+          <strong>{{ dotProduct().toFixed(3) }}</strong>
+        </div>
+        <div class="metric-row">
+          <span>缩放分数</span>
+          <strong>{{ scaledScore().toFixed(3) }}</strong>
+        </div>
+        <div class="metric-row highlight">
+          <span>当前注意力权重</span>
+          <strong>{{ attentionPercent() }}</strong>
+        </div>
+      </div>
+      <p>点积越大，说明当前 Query 与这个 Key 越匹配；经过缩放和 softmax 后，就得到最终分给这个 Value 的权重。</p>
+    </article>
+  </div>
+
+  <div class="merge-board">
+    <article
+      class="stage-card value-card"
+      [class.focused]="isStageFocused('value')"
+      [class.dimmed]="isStageDimmed(['value', 'output'])"
+      (mouseenter)="hoverStage('value')"
+      (mouseleave)="leaveStage('value')"
+      (click)="toggleStage('value')">
+      <span class="stage-tag">Value</span>
+      <h3>{{ state.qkvTeaching().valueToken }}</h3>
+      <p>{{ valueSummary() }}</p>
+      <div class="mini-popover">
+        <strong>{{ stageMiniTitle('value') }}</strong>
+        <p>{{ stageMiniCopy('value') }}</p>
+      </div>
+      <div class="vector-list">
+        @for (vector of state.qkvTeaching().valueVector; track vector.label) {
+          <div
+            class="vector-row"
+            [class.dimension-highlight]="isDimensionHighlighted($index)"
+            (mouseenter)="hoverDimension($index)"
+            (mouseleave)="clearHoveredDimension()">
+            <span class="vector-label">{{ vector.label }}</span>
+            <div class="vector-track">
+              <div class="vector-fill" [class]="barTrackClass(vector.value)" [style.width]="barWidth(vector.value)"></div>
+            </div>
+            <span class="vector-value">{{ vector.value.toFixed(3) }}</span>
+          </div>
+        }
+      </div>
+    </article>
+
+    <div class="merge-arrow" [class.focused]="isStageFocused('output')" [class.dimmed]="isStageDimmed(['value', 'output'])" aria-hidden="true">
+      <span>加权回流</span>
+      <div class="merge-track">
+        <span class="merge-line"></span>
+        <span class="merge-pulse"></span>
+        <strong>→</strong>
+      </div>
+    </div>
+
+    <article
+      class="stage-card output-card"
+      [class.focused]="isStageFocused('output')"
+      [class.dimmed]="isStageDimmed(['output'])"
+      (mouseenter)="hoverStage('output')"
+      (mouseleave)="leaveStage('output')"
+      (click)="toggleStage('output')">
+      <span class="stage-tag">Value 汇入输出</span>
+      <h3>加权后的 Value 如何改变当前 token</h3>
+      <p class="value-flow-copy">
+        当前被关注的 token 会把自己的 Value 按注意力权重缩放后，汇入到 Query token 的新表示里。
+        下面展示的是每个分量在乘上当前权重之后，对输出的贡献大小。
+      </p>
+      <div class="value-bars">
+        @for (vector of state.qkvTeaching().valueVector; track vector.label) {
+          <div class="value-row">
+            <div class="value-meta">
+              <span>{{ vector.label }}</span>
+              <strong>{{ weightedValue(vector).toFixed(3) }}</strong>
+            </div>
+            <div class="value-track">
+              <div
+                class="value-fill"
+                [class]="barTrackClass(weightedValue(vector))"
+                [style.width]="barWidth(weightedValue(vector))">
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </article>
+  </div>
+
+  <div class="notes-grid">
+    <article class="note-card">
+      <h3>教学视角说明</h3>
+      <p>
+        这里优先强调 QKV 的逻辑关系和信息流向，让页面能稳定讲清楚“为什么会有这条注意力”。
+        如果后续继续扩展，再把它升级成更细的分量动画或弹窗式矩阵演示。
+      </p>
+    </article>
+    <article class="note-card">
+      <h3>当前结论</h3>
+      <p>{{ state.qkvTeaching().summary }}</p>
+    </article>
+  </div>
+</section>

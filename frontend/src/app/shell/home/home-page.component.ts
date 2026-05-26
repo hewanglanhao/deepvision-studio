@@ -33,7 +33,7 @@ export class HomePageComponent {
       id: 'A',
       title: '模式 A',
       label: '前向传播实验室',
-      description: '导入图片、编辑网络结构，观察卷积核、公式和每层激活如何共同完成一次真实前向传播。',
+      description: '导入图片并编辑网络结构，观察卷积核、公式和每层激活如何共同完成一次真实前向传播。',
       route: '/mode-a',
       accent: 'blue',
       highlights: ['卷积核对比', '层公式解释', 'AI 分析'],
@@ -59,16 +59,16 @@ export class HomePageComponent {
     {
       id: 'D',
       title: '模式 D',
-      label: '反向传播沙盒',
-      description: '在二维数据和 MLP 上逐步观察 loss、梯度、优化器与参数更新，理解模型如何学习。',
+      label: 'Transformer 下一词预测解释',
+      description: '输入文本并观察 Top-K 概率、单层单头注意力矩阵和 QKV 教学演示，理解 Transformer 如何形成下一词预测。',
       route: '/mode-d',
       accent: 'purple',
-      highlights: ['梯度回传', '优化器对比', '决策边界'],
+      highlights: ['Top-K 概率', '注意力矩阵', 'QKV 演示'],
     },
     {
       id: 'E',
       title: '模式 E',
-      label: 'Transformer 解剖台',
+      label: 'Transformer 架构解剖台',
       description: '用小型显式矩阵真实计算 Q/K/V、注意力、多头拼接、残差归一化和 FFN，理解 Transformer 架构原理。',
       route: '/mode-e',
       accent: 'teal',
@@ -78,7 +78,7 @@ export class HomePageComponent {
 
   readonly metrics = [
     { label: '学习模式', value: '5' },
-    { label: '可视化主线', value: 'Forward / Train / Explain / Backprop / Museum' },
+    { label: '可视化主线', value: 'Forward / Train / CNN Explain / Transformer / Museum' },
     { label: '高级能力', value: 'Web3D + AI + WebSocket + First-person Museum' },
   ];
 

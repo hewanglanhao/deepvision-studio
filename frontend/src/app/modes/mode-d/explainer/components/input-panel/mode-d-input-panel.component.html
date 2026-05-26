@@ -1,0 +1,79 @@
+<section class="panel-card input-card">
+  <div class="card-head">
+    <div>
+      <p class="eyebrow">输入</p>
+      <h2>文本与解释视角</h2>
+    </div>
+    <span class="card-pill">Top-K / 注意力 / QKV</span>
+  </div>
+
+  <div class="preset-row">
+    @for (example of state.examples; track example.id) {
+      <button
+        type="button"
+        class="preset-chip"
+        [class.active]="state.selectedExampleId() === example.id"
+        (click)="state.applyExample(example.id)"
+      >
+        {{ example.title }}
+      </button>
+    }
+  </div>
+
+  <label class="field">
+    <span>输入文本</span>
+    <textarea
+      [ngModel]="state.inputText()"
+      (ngModelChange)="state.updateInputText($event)"
+      rows="3"
+    ></textarea>
+  </label>
+
+  <div class="selector-grid">
+    <label class="field">
+      <span>Transformer 层</span>
+      <select
+        [ngModel]="state.selectedBlockIndex()"
+        (ngModelChange)="state.selectBlock($event)"
+      >
+        @for (option of state.blockOptions; track option.id) {
+          <option [ngValue]="option.id">{{ option.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>注意力头</span>
+      <select
+        [ngModel]="state.selectedHeadIndex()"
+        (ngModelChange)="state.selectHead($event)"
+      >
+        @for (option of state.headOptions; track option.id) {
+          <option [ngValue]="option.id">{{ option.label }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <div class="phase-zero-head">
+    <strong>真实推理</strong>
+    <button
+      type="button"
+      class="probe-btn"
+      [disabled]="state.inferenceLoading()"
+      (click)="state.runInference()"
+    >
+      {{ state.inferenceLoading() ? '推理中...' : '重新推理' }}
+    </button>
+  </div>
+
+  @if (state.inferenceError()) {
+    <p class="probe-error">{{ state.inferenceError() }}</p>
+  }
+
+  <div class="token-strip" aria-label="当前 token 序列">
+    @for (token of state.tokens(); track $index) {
+      <span>{{ token }}</span>
+    }
+  </div>
+</section>

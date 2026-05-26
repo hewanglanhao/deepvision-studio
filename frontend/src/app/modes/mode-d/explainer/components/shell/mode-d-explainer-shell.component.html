@@ -1,34 +1,19 @@
-<div class="mode-d-shell">
-  <app-mode-d-floating-charts />
-
+<div class="app-shell mode-d-shell">
   <app-platform-topbar
     modeLabel="模式 D"
-    modeTitle="反向传播沙盒"
+    modeTitle="Transformer 下一词预测解释"
     [statusPills]="statusPills"
     [user]="user"
     (logoutRequested)="requestLogout()"
   />
 
-  <section class="hero-card">
-    <p class="eyebrow">模式 D</p>
-    <h1>反向传播 · 单步数据流可视化</h1>
-    <p class="hero-desc">
-      点击图中的<strong>神经元</strong>查看前向计算，切换阶段观察梯度回传与参数更新。
-    </p>
-  </section>
-
-  <main class="workspace">
-    <app-mode-d-control-panel />
-    <app-mode-d-overview />
-    <app-mode-d-detail-panel />
+  <main class="mode-d-main">
+    <section class="workspace-grid">
+      <app-mode-d-input-panel />
+      <app-mode-d-topk-panel />
+      <app-mode-d-attention-matrix class="span-all" />
+      <app-mode-d-qkv-panel class="span-all" />
+      <app-mode-d-report-panel class="span-all" />
+    </section>
   </main>
-
-  <app-teaching-search-fab />
-
-  <app-llm-floating-assistant
-    title="模式D AI 分析"
-    [systemPrompt]="modeDLlmSystemPrompt"
-    [contextProvider]="modeDLlmContextProvider"
-    [quickPrompts]="modeDLlmQuickPrompts"
-  />
 </div>
