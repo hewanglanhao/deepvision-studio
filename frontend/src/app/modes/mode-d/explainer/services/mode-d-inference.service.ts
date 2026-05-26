@@ -26,6 +26,7 @@ type OrtTensorLike = {
 
 @Injectable({ providedIn: 'root' })
 export class ModeDInferenceService {
+  private readonly assetBase = '/mode-d-assets';
   private tokenizerPromise: Promise<BrowserTokenizer> | null = null;
   private sessionPromise: Promise<InferenceSession> | null = null;
   private runtimeModulePromise: Promise<BrowserTransformersModule> | null = null;
@@ -97,7 +98,7 @@ export class ModeDInferenceService {
         if (runtime.env) {
           runtime.env.allowRemoteModels = true;
           runtime.env.allowLocalModels = true;
-          runtime.env.localModelPath = '/mode-d/models/';
+          runtime.env.localModelPath = `${this.assetBase}/models/`;
         }
 
         try {
@@ -118,13 +119,16 @@ export class ModeDInferenceService {
       this.sessionPromise = (async () => {
         const ort = await import('onnxruntime-web');
         ort.env.wasm.wasmPaths = {
-          mjs: '/mode-d/vendor/onnxruntime/ort-wasm-simd-threaded.jsep.js',
-          wasm: '/mode-d/vendor/onnxruntime/ort-wasm-simd-threaded.jsep.wasm'
+          mjs: `${this.assetBase}/vendor/onnxruntime/ort-wasm-simd-threaded.jsep.js`,
+          wasm: `${this.assetBase}/vendor/onnxruntime/ort-wasm-simd-threaded.jsep.wasm`
         };
         ort.env.logLevel = 'error';
 
         const chunkCount = 63;
-        const chunkUrls = Array.from({ length: chunkCount }, (_, index) => `/mode-d/model-v2/gpt2.onnx.part${index}`);
+        const chunkUrls = Array.from(
+          { length: chunkCount },
+          (_, index) => `${this.assetBase}/model-v2/gpt2.onnx.part${index}`
+        );
         const mergedArray = await this.fetchAndMergeChunks(chunkUrls);
         const blob = new Blob([mergedArray], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
@@ -216,7 +220,7 @@ export class ModeDInferenceService {
 
   private async loadTransformersModule(): Promise<BrowserTransformersModule> {
     if (!this.runtimeModulePromise) {
-      this.runtimeModulePromise = this.runtimeImporter('/mode-d/vendor/transformers/transformers.min.js');
+      this.runtimeModulePromise = this.runtimeImporter(`${this.assetBase}/vendor/transformers/transformers.min.js`);
     }
     return this.runtimeModulePromise;
   }

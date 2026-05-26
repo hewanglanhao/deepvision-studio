@@ -56,3 +56,14 @@ backend/python-training/.venv/
 # System files
 .DS_Store
 Thumbs.db
+
+# Mode D / Transformer assets
+/frontend/public/mode-d-assets/model-v2/
+/frontend/public/mode-d-assets/article_assets/
+/frontend/public/mode-d-assets/preview/
+/frontend/public/mode-d-assets/vendor/
+!/frontend/public/mode-d-assets/README.md
+
+# Legacy local transformer asset mirrors
+/frontend/public/mode-d/
+/frontend/public/mode-f/

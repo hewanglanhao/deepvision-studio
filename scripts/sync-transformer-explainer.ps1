@@ -1,12 +1,13 @@
 param(
   [string]$SourceRoot = "D:\VS Code\transformer-explainer",
-  [string]$FrontendRoot = "D:\VS Code\deep-learning-plat-form\frontend"
+  [string]$FrontendRoot = "D:\VS Code\deep-learning-plat-form\frontend",
+  [string]$TargetName = "mode-d-assets"
 )
 
 $ErrorActionPreference = "Stop"
 
 $sourceStatic = Join-Path $SourceRoot "static"
-$targetRoot = Join-Path $FrontendRoot "public\mode-d"
+$targetRoot = Join-Path $FrontendRoot "public\$TargetName"
 $vendorRoot = Join-Path $targetRoot "vendor\onnxruntime"
 $transformersVendorRoot = Join-Path $targetRoot "vendor\transformers"
 $onnxRuntimeDistRoot = Join-Path $FrontendRoot "node_modules\onnxruntime-web\dist"
