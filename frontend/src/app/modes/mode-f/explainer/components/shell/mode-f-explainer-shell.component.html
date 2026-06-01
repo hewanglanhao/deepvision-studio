@@ -1,0 +1,15 @@
+<div class="mode-f-shell">
+  <app-platform-topbar modeLabel="模式 F" modeTitle="RNN 循环神经网络" [statusPills]="statusPills" [user]="user" (logoutRequested)="requestLogout()" />
+  <section class="hero-card">
+    <p class="eyebrow">模式 F</p>
+    <h1>RNN · 时间序列与隐状态</h1>
+    <p class="hero-desc">观察 RNN 如何处理序列数据，隐状态如何在时间步之间传递信息，以及 BPTT 如何穿越时间训练网络。</p>
+  </section>
+  <main class="workspace">
+    <app-mode-f-control-panel />
+    <app-mode-f-overview />
+    <app-mode-f-detail-panel />
+  </main>
+  <app-teaching-search-fab />
+  <app-llm-floating-assistant title="模式F AI 分析" [systemPrompt]="systemPrompt" [contextProvider]="contextProvider" [quickPrompts]="quickPrompts" />
+</div>

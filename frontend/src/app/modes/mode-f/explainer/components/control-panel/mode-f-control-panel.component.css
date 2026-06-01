@@ -1,0 +1,108 @@
+:host { display: block; }
+
+.control-panel {
+  display: flex; gap: 0;
+  background: #fff; border: 1px solid #e2e6ea; border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+
+/* ---- section ---- */
+.ctl-section {
+  flex: 1; min-width: 0;
+  padding: 14px 16px;
+  border-right: 1px solid #f1f5f9;
+}
+.ctl-section:last-child { border-right: none; }
+.section-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+  color: #94a3b8; font-weight: 700; margin-bottom: 10px;
+}
+.section-body { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---- param row ---- */
+.param-row { display: flex; align-items: center; gap: 8px; }
+.param-label { font-size: 11px; color: #64748b; min-width: 32px; flex-shrink: 0; }
+.param-val { font-size: 11px; color: #4a5568; font-family: 'Courier New', monospace; font-weight: 600; }
+
+/* ---- presets ---- */
+.preset-list { display: flex; flex-direction: column; gap: 3px; }
+.preset-btn {
+  width: 100%; padding: 6px 10px; border: 1px solid #e2e6ea; border-radius: 6px;
+  background: #fff; color: #4a5568; font-size: 11px; font-weight: 500;
+  cursor: pointer; transition: all .15s; text-align: left; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.preset-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
+.preset-btn.selected { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+.preset-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---- chip buttons ---- */
+.chip-list { display: flex; gap: 3px; }
+.chip-btn {
+  padding: 5px 12px; border: 1px solid #e2e6ea; border-radius: 6px;
+  background: #fff; color: #64748b; font-size: 11px; font-weight: 500;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.chip-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+.chip-btn.selected { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+.chip-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---- slider ---- */
+.lr-slider {
+  flex: 1; min-width: 60px; height: 4px;
+  -webkit-appearance: none; appearance: none;
+  background: #e2e6ea; border-radius: 2px; outline: none; cursor: pointer;
+}
+.lr-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: #2563eb; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.lr-slider:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---- steps ---- */
+.steps-input {
+  width: 64px; padding: 4px 6px; border: 1px solid #e2e6ea; border-radius: 6px;
+  font-size: 11px; color: #4a5568; outline: none; font-family: 'Courier New', monospace;
+}
+.steps-input:focus { border-color: #2563eb; }
+.steps-input:disabled { opacity: .4; cursor: not-allowed; background: #f8fafc; }
+.steps-progress { font-size: 10px; color: #94a3b8; white-space: nowrap; }
+.steps-progress strong { color: #475569; }
+
+/* ---- action buttons ---- */
+.btn-row { display: flex; gap: 4px; }
+.play-btn, .step-btn, .reset-btn {
+  padding: 6px 14px; border: 1px solid #e2e6ea; border-radius: 6px;
+  font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.play-btn { background: #2563eb; color: #fff; border-color: #2563eb; }
+.play-btn:hover:not(:disabled) { background: #1d4ed8; }
+.play-btn.running { background: #d97706; border-color: #d97706; }
+.play-btn.running:hover:not(:disabled) { background: #b45309; }
+.play-btn:disabled { opacity: .4; cursor: not-allowed; }
+.step-btn { background: #fff; color: #4a5568; }
+.step-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
+.step-btn:disabled { opacity: .4; cursor: not-allowed; }
+.reset-btn { background: #fff; color: #ef4444; border-color: #fecaca; }
+.reset-btn:hover { background: #fef2f2; border-color: #fca5a5; }
+
+/* ---- status ---- */
+.status-row { display: flex; gap: 8px; font-size: 11px; }
+.status-label { color: #94a3b8; min-width: 48px; }
+.status-val { color: #475569; font-weight: 600; }
+.status-val.correct { color: #059669; }
+.status-val.mono { font-family: 'Courier New', monospace; }
+
+/* teaching highlight */
+.chip-btn.teaching-term-active {
+  background: rgba(204, 251, 241, .68) !important;
+  outline: 1px dashed rgba(15, 118, 110, .48);
+  outline-offset: 2px;
+  cursor: help;
+  color: #0f766e !important;
+}
+
+@media (max-width: 950px) {
+  .control-panel { flex-wrap: wrap; }
+  .ctl-section { flex: 1 1 160px; border-right: none; border-bottom: 1px solid #f1f5f9; }
+}

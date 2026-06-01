@@ -1,0 +1,114 @@
+<div class="detail-panel">
+  <!-- Weight matrix summary -->
+  <div class="detail-card">
+    <h4>权重矩阵</h4>
+    <div class="shape-list">
+      @for (w of weightShapes(); track w.name) {
+        <div class="shape-row">
+          <span class="shape-name">{{ w.name }}</span>
+          <span class="shape-dims">{{ w.shape }}</span>
+          <span class="shape-desc">{{ w.desc }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Gradient Norm -->
+  @if (gradientNorm(); as gn) {
+    <div class="detail-card">
+      <h4>梯度范数</h4>
+      <div class="grad-row">
+        <div class="grad-bar-track">
+          <div class="grad-bar-fill" [style.width.%]="min(gn * 10, 100)" [style.background]="gradColor(gn)"></div>
+        </div>
+        <span class="grad-val">{{ gn.toFixed(4) }}</span>
+      </div>
+    </div>
+  }
+
+  <!-- Hidden state per time step -->
+  @if (hiddenStates().length > 0) {
+    <div class="detail-card">
+      <h4>隐状态向量 (h_t)</h4>
+      <div class="hidden-list">
+        @for (hs of hiddenStates(); track tIdx; let tIdx = $index) {
+          <div class="hidden-time-row">
+            <span class="time-label">t={{ tIdx }}</span>
+            <div class="hidden-bars">
+              @for (val of hs.hidden; track dIdx; let dIdx = $index) {
+                <div class="hidden-bar-row">
+                  <span class="dim-label">h{{ dIdx }}</span>
+                  <div class="hidden-bar-track">
+                    <div class="hidden-bar-fill"
+                         [style.width.%]="min(abs(val) * 50, 100)"
+                         [style.background]="barColor(val)">
+                    </div>
+                  </div>
+                  <span class="dim-val" [style.color]="val >= 0 ? '#2563eb' : '#dc2626'">{{ fmt(val) }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Output probabilities per time step -->
+  @if (outputProbs().length > 0) {
+    <div class="detail-card">
+      <h4>输出概率 (每时间步)</h4>
+      <div class="probs-section">
+        @if (step()?.forwardResult?.predictions; as predMatrix) {
+          @for (preds of predMatrix; track tIdx; let tIdx = $index) {
+            <div class="prob-time-row">
+              <span class="time-label">t={{ tIdx }}</span>
+              <div class="prob-bars">
+                @for (p of preds; track cIdx; let cIdx = $index) {
+                  <div class="prob-row">
+                    <span class="prob-label">{{ classLabels()[cIdx] || '类'+cIdx }}</span>
+                    <div class="prob-track">
+                      <div class="prob-fill" [style.width.%]="p * 100"
+                           [class.winner]="p === maxArray(preds)">
+                      </div>
+                    </div>
+                    <span class="prob-pct">{{ (p * 100).toFixed(1) }}%</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Current loss info -->
+  @if (step(); as s) {
+    <div class="detail-card">
+      <h4>当前训练状态</h4>
+      <div class="meta-list">
+        <div class="meta-row">
+          <span>迭代</span>
+          <span>{{ s.iteration }}</span>
+        </div>
+        <div class="meta-row">
+          <span>损失</span>
+          <span class="mono">{{ s.loss.toFixed(6) }}</span>
+        </div>
+        <div class="meta-row">
+          <span>预测类别</span>
+          <span [class.correct]="s.predictedClass === s.trueClass">{{ classLabels()[s.predictedClass] || s.predictedClass }}</span>
+        </div>
+        <div class="meta-row">
+          <span>真实类别</span>
+          <span>{{ classLabels()[s.trueClass] || s.trueClass }}</span>
+        </div>
+        <div class="meta-row">
+          <span>时间步数</span>
+          <span>{{ s.timeSteps }}</span>
+        </div>
+      </div>
+    </div>
+  }
+</div>

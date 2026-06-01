@@ -1,51 +1,87 @@
-import { CommonModule, DecimalPipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { Subscription, interval } from 'rxjs';
+import { Subscription } from 'rxjs';
+import { AuthUser } from '@core/auth/auth.models';
 import { AuthService } from '@core/auth/auth.service';
-import { PlatformTopbarComponent } from '@shared/components/platform-topbar.component';
-import type { AuthUser } from '@core/auth/auth.models';
-import { MODE_E_VOCABULARY, runTransformerBlock } from './mode-e-transformer.engine';
-import type { AttentionHeadTrace, Matrix, TransformerPreset, TransformerTrace } from './mode-e.types';
+import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
+import { LlmChatContext } from '@shared/llm/llm.models';
+import { TeachingSearchFabComponent } from '@shared/teaching/teaching-search-fab.component';
+import { ModeEExplainerShellComponent } from './explainer/components/shell/mode-e-explainer-shell.component';
+import { ModeEStateService } from './explainer/services/mode-e-state.service';
 
 @Component({
   selector: 'app-mode-e-page',
-  imports: [CommonModule, FormsModule, DecimalPipe, PlatformTopbarComponent],
+  imports: [
+    CommonModule,
+    ModeEExplainerShellComponent,
+    TeachingSearchFabComponent,
+    LlmFloatingAssistantComponent
+  ],
   templateUrl: './mode-e-page.component.html',
-  styleUrl: './mode-e-page.component.css',
+  styleUrl: './mode-e-page.component.css'
 })
 export class ModeEPageComponent implements OnInit, OnDestroy {
-  readonly presets: TransformerPreset[] = [
-    { id: 'basic', label: '上下文关系', text: 'transformer learns context' },
-    { id: 'attention', label: '注意力分配', text: 'attention tokens share meaning' },
-    { id: 'causal', label: 'GPT Mask', text: 'words build future relation' },
+  readonly modeELlmSystemPrompt = [
+    '你是 DeepVision Studio 中的反向传播学习助手。',
+    '当前页面是模式 E 的反向传播沙盒模块，重点解释神经网络前向传播、损失计算、梯度回传、优化器更新和决策边界变化。',
+    '回答时优先结合页面上下文中的网络结构、激活值、权重、梯度、损失曲线和决策边界，使用清晰、教学化、适合答辩讲解的中文。'
+  ].join('\n');
+
+  readonly modeELlmQuickPrompts: LlmQuickPrompt[] = [
+    {
+      label: '解释当前梯度',
+      question: '请结合当前页面的网络结构和训练状态，解释当前梯度流动的方向及其意义。'
+    },
+    {
+      label: '分析优化器差异',
+      question: '请比较当前页面中 SGD、Momentum、Adam 三种优化器的差异，说明为什么在这个任务上某种优化器可能更好。'
+    },
+    {
+      label: '解释激活函数',
+      question: '请解释当前网络中使用的激活函数的特点，包括公式、导数和决策边界形状。'
+    },
+    {
+      label: '答辩式总结',
+      question: '请把当前反向传播页面内容整理成一段适合课程答辩讲解的说明。'
+    }
   ];
-  readonly vocabulary = MODE_E_VOCABULARY;
+
+  readonly modeELlmContextProvider = (): LlmChatContext => {
+    const step = this.state.currentStep();
+    const config = this.state.trainingConfig();
+    const networkName = this.state.networkMeta()?.name ?? '当前网络';
+    const datasetName = this.state.datasetMeta()?.name ?? '当前数据集';
+
+    const lines = [
+      '当前页面是 DeepVision Studio 的模式 E，用于演示反向传播与参数更新。',
+      `当前网络：${networkName}。数据集：${datasetName}。`,
+      `优化器：${config.optimizer}，学习率：${config.learningRate}，损失函数：${config.lossFunction}。`,
+      `当前迭代：${this.state.currentIteration()}。`,
+      step ? `损失值：${step.loss?.toFixed(6) ?? '—'}。预测：${this.state.predictedClassLabel()}，真实：${this.state.trueClassLabel()}。` : '',
+      `训练参数总数：${this.state.totalTrainableParams()}。`,
+      `当前状态：${this.state.readableStatus()}。`,
+    ].filter(Boolean);
+
+    return {
+      text: lines.join('\n'),
+      images: []
+    };
+  };
 
   user: AuthUser | null = null;
-  text = this.presets[0]!.text;
-  selectedPresetId = this.presets[0]!.id;
-  causalMask = false;
-  selectedHead = 0;
-  activeStepIndex = 0;
-  playing = true;
-
-  trace: TransformerTrace = runTransformerBlock(this.text, this.causalMask);
 
   private readonly subs = new Subscription();
 
-  constructor(private readonly authSvc: AuthService) {}
+  constructor(
+    private readonly authSvc: AuthService,
+    private readonly state: ModeEStateService
+  ) {}
 
   ngOnInit(): void {
-    this.subs.add(this.authSvc.user$.subscribe(user => { this.user = user; }));
-    this.authSvc.restoreSession();
-    this.subs.add(
-      interval(2400).subscribe(() => {
-        if (this.playing) {
-          this.activeStepIndex = (this.activeStepIndex + 1) % this.trace.steps.length;
-        }
-      }),
-    );
+    this.subs.add(this.authSvc.user$.subscribe(user => {
+      this.user = user;
+    }));
+    void this.authSvc.restoreSession();
   }
 
   ngOnDestroy(): void {
@@ -54,119 +90,5 @@ export class ModeEPageComponent implements OnInit, OnDestroy {
 
   logout(): void {
     this.authSvc.logout();
-  }
-
-  applyPreset(id: string): void {
-    const preset = this.presets.find(item => item.id === id);
-    if (!preset) {
-      return;
-    }
-    this.selectedPresetId = id;
-    this.text = preset.text;
-    this.causalMask = preset.id === 'causal';
-    this.recompute();
-  }
-
-  recompute(): void {
-    this.trace = runTransformerBlock(this.text, this.causalMask);
-    if (this.selectedHead >= this.trace.heads.length) {
-      this.selectedHead = 0;
-    }
-    if (this.activeStepIndex >= this.trace.steps.length) {
-      this.activeStepIndex = 0;
-    }
-  }
-
-  selectStep(index: number): void {
-    this.activeStepIndex = index;
-    this.playing = false;
-  }
-
-  nextStep(): void {
-    this.activeStepIndex = (this.activeStepIndex + 1) % this.trace.steps.length;
-  }
-
-  previousStep(): void {
-    this.activeStepIndex = (this.activeStepIndex + this.trace.steps.length - 1) % this.trace.steps.length;
-  }
-
-  selectHead(index: number): void {
-    this.selectedHead = index;
-  }
-
-  diagramActive(...ids: string[]): boolean {
-    return ids.includes(this.activeStep.id);
-  }
-
-  get activeStep() {
-    return this.trace.steps[this.activeStepIndex]!;
-  }
-
-  get activeHead(): AttentionHeadTrace {
-    return this.trace.heads[this.selectedHead]!;
-  }
-
-  get attentionRowSums(): number[] {
-    return this.activeHead.weights.map(row => row.reduce((sum, value) => sum + value, 0));
-  }
-
-  get maxAbsActiveMatrix(): number {
-    return this.maxAbs(this.activeStep.matrix);
-  }
-
-  get maxAbsBlockOutput(): number {
-    return this.maxAbs(this.trace.blockOutput);
-  }
-
-  cellBackground(value: number, maxAbs: number): string {
-    if (!Number.isFinite(value)) {
-      return '#f1f5f9';
-    }
-    const intensity = maxAbs === 0 ? 0 : Math.min(Math.abs(value) / maxAbs, 1);
-    if (value >= 0) {
-      return `rgba(37, 99, 235, ${0.08 + intensity * 0.36})`;
-    }
-    return `rgba(217, 119, 6, ${0.08 + intensity * 0.34})`;
-  }
-
-  attentionBackground(value: number): string {
-    const alpha = 0.08 + Math.min(Math.max(value, 0), 1) * 0.72;
-    return `rgba(5, 150, 105, ${alpha})`;
-  }
-
-  formatNumber(value: number): string {
-    if (!Number.isFinite(value)) {
-      return '-inf';
-    }
-    const abs = Math.abs(value);
-    if (abs < 0.0001) {
-      return '0.0000';
-    }
-    return value.toFixed(4);
-  }
-
-  formatRow(row: number[]): string {
-    return row.map(value => this.formatNumber(value)).join('  ');
-  }
-
-  rowLabel(index: number): string {
-    return this.trace.tokens[index] ?? `t${index}`;
-  }
-
-  colLabel(index: number): string {
-    return this.trace.tokens[index] ?? `c${index}`;
-  }
-
-  matrixColumns(matrix: Matrix): number[] {
-    return Array.from({ length: matrix[0]?.length ?? 0 }, (_, index) => index);
-  }
-
-  matrixRows(matrix: Matrix): number[] {
-    return Array.from({ length: matrix.length }, (_, index) => index);
-  }
-
-  private maxAbs(matrix: Matrix): number {
-    const values = matrix.flat().filter(Number.isFinite).map(Math.abs);
-    return values.length ? Math.max(...values, 1e-9) : 1;
   }
 }

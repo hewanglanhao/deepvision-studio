@@ -1,0 +1,56 @@
+:host { display: block; }
+
+.detail-panel { display: flex; flex-direction: column; gap: 10px; }
+
+.detail-card {
+  background: #fff; border: 1px solid #e2e6ea;
+  border-radius: 12px; padding: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+.detail-card h4 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: #8a9ab0; margin: 0 0 8px; font-weight: 600;
+}
+
+/* ---- weight shapes ---- */
+.shape-list { display: flex; flex-direction: column; gap: 4px; }
+.shape-row { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: #f8fafc; border-radius: 6px; border: 1px solid #f1f5f9; }
+.shape-name { font-size: 11px; color: #475569; font-family: 'Courier New', monospace; font-weight: 600; min-width: 160px; }
+.shape-dims { font-size: 11px; color: #2563eb; font-family: 'Courier New', monospace; font-weight: 600; min-width: 60px; }
+.shape-desc { font-size: 10px; color: #94a3b8; }
+
+/* ---- gradient norm ---- */
+.grad-row { display: flex; align-items: center; gap: 8px; }
+.grad-bar-track { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.grad-bar-fill { height: 100%; border-radius: 4px; transition: width .3s ease; }
+.grad-val { font-size: 12px; color: #d97706; font-family: 'Courier New', monospace; font-weight: 600; }
+
+/* ---- hidden states ---- */
+.hidden-list { display: flex; flex-direction: column; gap: 8px; }
+.hidden-time-row { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; background: #fafbfc; border-radius: 8px; border: 1px solid #f1f5f9; }
+.time-label { font-size: 10px; color: #8a9ab0; font-weight: 700; min-width: 20px; text-align: center; }
+.hidden-bars { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.hidden-bar-row { display: flex; align-items: center; gap: 4px; }
+.dim-label { font-size: 10px; color: #94a3b8; font-family: 'Courier New', monospace; width: 22px; text-align: right; flex-shrink: 0; }
+.hidden-bar-track { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.hidden-bar-fill { height: 100%; border-radius: 4px; transition: width .2s ease; min-width: 2px; }
+.dim-val { font-size: 10px; font-family: 'Courier New', monospace; width: 52px; text-align: right; flex-shrink: 0; }
+
+/* ---- output probabilities ---- */
+.probs-section { display: flex; flex-direction: column; gap: 8px; }
+.prob-time-row { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; background: #fafbfc; border-radius: 8px; border: 1px solid #f1f5f9; }
+.prob-bars { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.prob-row { display: flex; align-items: center; gap: 4px; }
+.prob-label { font-size: 11px; color: #64748b; width: 48px; text-align: right; flex-shrink: 0; }
+.prob-track { flex: 1; height: 6px; background: #e2e6ea; border-radius: 3px; overflow: hidden; }
+.prob-fill { height: 100%; background: #2563eb; border-radius: 3px; transition: width .2s ease; }
+.prob-fill.winner { background: #059669; }
+.prob-pct { font-size: 10px; color: #94a3b8; font-family: 'Courier New', monospace; width: 36px; text-align: right; flex-shrink: 0; }
+
+/* ---- meta info ---- */
+.meta-list { display: flex; flex-direction: column; gap: 3px; }
+.meta-row { display: flex; justify-content: space-between; font-size: 12px; }
+.meta-row span:first-child { color: #8a9ab0; }
+.meta-row span:last-child { color: #4a5568; font-family: 'Courier New', monospace; font-size: 11px; }
+.meta-row .correct { color: #059669; }
+.meta-row .mono { font-family: 'Courier New', monospace; }

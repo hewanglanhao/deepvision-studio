@@ -5,7 +5,7 @@ export interface TeachingTerm {
   category: string;
   summary: string;
   details: string[];
-  mode: 'A' | 'C' | 'D';
+  mode: 'A' | 'C' | 'D' | 'E' | 'F';
 }
 
 export const MODE_A_TEACHING_TERMS: TeachingTerm[] = [
@@ -369,7 +369,7 @@ export const MODE_C_TEACHING_TERMS: TeachingTerm[] = [
   }
 ];
 
-export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
+export const MODE_E_TEACHING_TERMS: TeachingTerm[] = [
   {
     id: 'optimizer-sgd',
     title: 'SGD 优化器',
@@ -377,10 +377,10 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
     category: '训练与优化',
     summary: 'SGD 是最基础的优化器，会直接沿着负梯度方向更新参数。',
     details: [
-      '它的更新规则简单直接，适合教学中展示“梯度如何驱动参数变化”的基本过程。',
+      '它的更新规则简单直接，适合教学中展示”梯度如何驱动参数变化”的基本过程。',
       '缺点是对学习率更敏感，在复杂损失面上也可能收敛较慢。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'optimizer-momentum',
@@ -390,9 +390,9 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
     summary: 'Momentum 在 SGD 的基础上累积历史更新方向，用惯性帮助参数更稳定地前进。',
     details: [
       '它能减轻来回震荡的问题，并在较平坦区域保持前进速度。',
-      '教学上常把它类比成滚动的小球，帮助理解“为什么它比纯 SGD 更稳”。'
+      '教学上常把它类比成滚动的小球，帮助理解”为什么它比纯 SGD 更稳”。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'optimizer-adam',
@@ -404,7 +404,7 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
       '它会根据一阶和二阶统计量自动调节参数更新尺度，因此通常收敛更快。',
       '教学上适合和 SGD、Momentum 做对比，观察不同优化器对训练曲线的影响。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'backpropagation',
@@ -414,9 +414,9 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
     summary: '反向传播利用链式法则把输出误差逐层回传，得到每层参数的梯度。',
     details: [
       '它是神经网络训练的核心机制，因为只有先得到梯度，优化器才能更新参数。',
-      '前向传播负责算结果，反向传播负责告诉模型“哪里错了以及该怎么改”。'
+      '前向传播负责算结果，反向传播负责告诉模型”哪里错了以及该怎么改”。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'gradient-descent',
@@ -428,7 +428,7 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
       '它是大多数神经网络训练算法背后的基本思想，区别主要在于更新步子的设计方式。',
       '教学页面常用它来解释为什么多次迭代后模型会逐渐学会分类边界。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'learning-rate',
@@ -440,7 +440,7 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
       '学习率太大可能导致训练震荡甚至发散，太小则会让训练极慢。',
       '观察训练曲线与决策边界变化，通常能直观看到学习率设置是否合适。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'activation-relu',
@@ -453,7 +453,7 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
       '优点: 计算简单、梯度不衰减，深层网络也能有效训练。缺点: 负半区神经元可能永久死亡。',
       '决策边界: 产生分段线性边界（多个半平面拼成），XOR 等直线分割用 ReLU 效果好，环形需要大量神经元。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'activation-sigmoid',
@@ -462,11 +462,11 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
     category: '训练与优化',
     summary: 'Sigmoid 输出 (0,1)，导数最大 0.25，深层网络易梯度消失。',
     details: [
-      '公式: f(x) = 1/(1+exp(-x))，导数: f(x)*(1-f(x)) ≤ 0.25。',
+      '公式: f(x) = 1/(1+exp(-x))，导数: f(x)*(1-f(x)) <= 0.25。',
       '优点: 输出平滑有界。缺点: 深层网络梯度指数衰减、非零中心收敛慢。',
       '决策边界: 产生光滑弧形，适合同心圆等曲线边界。D 模式中同心圆用 Sigmoid 优于 ReLU。'
     ],
-    mode: 'D'
+    mode: 'E'
   },
   {
     id: 'activation-tanh',
@@ -475,18 +475,123 @@ export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
     category: '训练与优化',
     summary: 'Tanh 输出 (-1,1)，零中心化。梯度最大为 1，饱和时趋近 0。',
     details: [
-      '公式: f(x) = tanh(x)，导数: 1 - tanh²(x)，x=0 时最大为 1。',
+      '公式: f(x) = tanh(x)，导数: 1 - tanh^2(x)，x=0 时最大为 1。',
       '优点: 零中心化、比 Sigmoid 梯度大。缺点: 远离原点时饱和导致梯度消失，多层叠加尤其严重。',
       '决策边界: 也产生光滑弧形，但深层网络梯度衰减比 ReLU 严重得多。'
     ],
-    mode: 'D'
+    mode: 'E'
   }
+];
+
+export const MODE_F_TEACHING_TERMS: TeachingTerm[] = [
+  {
+    id: 'rnn-cell',
+    title: 'RNN 单元',
+    aliases: ['rnn cell', '循环单元', 'RNN 细胞'],
+    category: '序列模型',
+    summary: 'RNN 单元是循环网络的基本计算单元，在每一时间步接收输入和上一隐状态，产生新的隐状态和输出。',
+    details: [
+      '每个 RNN 单元的核心操作是: h_t = tanh(W_xh * x_t + W_hh * h_{t-1} + b_h)。',
+      '隐状态 h_t 是 RNN 的"记忆"，它在时间步之间传递，捕捉序列中的模式。',
+      '在 Mode F 中，可以直观看到每个时间步中隐状态向量的数值变化。'
+    ],
+    mode: 'F'
+  },
+  {
+    id: 'bptt',
+    title: 'BPTT (穿越时间反向传播)',
+    aliases: ['BPTT', 'Backpropagation Through Time', '时间反向传播'],
+    category: '序列模型',
+    summary: 'BPTT 是 RNN 训练的核心算法，将网络沿时间展开后，用链式法则从最后一个时间步反向传播梯度到第一个时间步。',
+    details: [
+      'BPTT 把 RNN 沿时间维度展开成一个深层前馈网络，每个时间步对应一层。',
+      '梯度从 t = T 开始回传，经过每个时间步的 tanh 导数，容易产生梯度消失或爆炸。',
+      'Mode F 可视化了梯度的流动过程，可以观察梯度范数随训练如何变化。'
+    ],
+    mode: 'F'
+  },
+  {
+    id: 'hidden-state',
+    title: '隐状态 (Hidden State)',
+    aliases: ['hidden state', '隐层状态', 'RNN 记忆'],
+    category: '序列模型',
+    summary: '隐状态是 RNN 在时间步之间传递信息的向量，承载了网络对前序输入的记忆和摘要。',
+    details: [
+      '隐状态的维度是网络的"记忆容量"，更宽的隐层可以存储更丰富的历史信息。',
+      '每个时间步，隐状态会根据当前输入和上一状态进行更新: 新的输入加入，旧的部分信息通过非线性变换保留。',
+      '在 Mode F 中，隐状态向量以柱状图形式在每个时间步展示，可以观察信息如何在时间步间演化。'
+    ],
+    mode: 'F'
+  },
+  {
+    id: 'gradient-vanishing',
+    title: '梯度消失',
+    aliases: ['vanishing gradient', '梯度衰减', '梯度消失问题'],
+    category: '序列模型',
+    summary: '在 BPTT 中，当梯度沿时间反向传播时，经过多层 tanh 导数连乘，梯度迅速衰减到接近零。',
+    details: [
+      'tanh 的导数最大为 1，在饱和区接近 0，多个小于 1 的数连乘导致指数级衰减。',
+      '梯度消失使得 RNN 难以学习长距离依赖——早期时间步的信息几乎无法影响权重更新。',
+      '这是 LSTM 和 GRU 等改进结构诞生的主要原因，它们用门控机制缓解了这个问题。'
+    ],
+    mode: 'F'
+  },
+  {
+    id: 'optimizer-sgd',
+    title: 'SGD 优化器',
+    aliases: ['SGD', '随机梯度下降'],
+    category: '序列模型',
+    summary: 'SGD 是最基础的优化器，直接沿负梯度方向更新参数。',
+    details: [
+      '在 RNN 训练中，SGD 对学习率更敏感，可能因梯度范数波动而震荡。',
+      '对比 SGD、Momentum、Adam 在 RNN 任务上的表现，可以直观理解优化器的差异。'
+    ],
+    mode: 'F'
+  },
+  {
+    id: 'optimizer-momentum',
+    title: 'Momentum 优化器',
+    aliases: ['Momentum', '动量优化'],
+    category: '序列模型',
+    summary: 'Momentum 在 SGD 基础上累积历史更新方向，帮助参数在梯度震荡的维度上更稳定地前进。',
+    details: [
+      '在 BPTT 中梯度在各时间步之间可能波动较大，Momentum 的惯性有助于平滑更新。',
+      '可以对比观察 Momentum 和纯 SGD 在相同 RNN 任务上的损失曲线差异。'
+    ],
+    mode: 'F'
+  },
+  {
+    id: 'optimizer-adam',
+    title: 'Adam 优化器',
+    aliases: ['Adam', '自适应优化器'],
+    category: '序列模型',
+    summary: 'Adam 结合动量和自适应学习率，对每个参数维护一阶和二阶矩估计，通常收敛更快更稳。',
+    details: [
+      'Adam 对 RNN 中可能出现的梯度范数波动有天然的适应能力，自动调节每个参数的步长。',
+      '在 Mode F 中，可以切换 Adam 观察训练曲线和最终准确率的变化。'
+    ],
+    mode: 'F'
+  },
+  {
+    id: 'sequence-classification',
+    title: '序列分类',
+    aliases: ['sequence classification', '时序分类'],
+    category: '序列模型',
+    summary: '序列分类任务要求模型在看完整个输入序列后，判断序列属于哪一类别。',
+    details: [
+      '在 Mode F 中，RNN 在最后一个时间步输出类别概率，用 softmax + 交叉熵计算损失。',
+      '例如"延迟记忆"任务需要模型记住第 0 步看到的 bit，经过几步延迟后正确分类。',
+      '这考验 RNN 的长期记忆能力——早期的关键信息能否被隐状态保留到最后。'
+    ],
+    mode: 'F'
+  },
 ];
 
 export const TEACHING_TERMS = [
   ...MODE_A_TEACHING_TERMS,
   ...MODE_C_TEACHING_TERMS,
-  ...MODE_D_TEACHING_TERMS
+  ...MODE_E_TEACHING_TERMS,
+  ...MODE_F_TEACHING_TERMS
 ];
 
 export function findTeachingTerm(id: string): TeachingTerm | undefined {

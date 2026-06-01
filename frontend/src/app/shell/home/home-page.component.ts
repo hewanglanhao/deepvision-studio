@@ -68,11 +68,20 @@ export class HomePageComponent {
     {
       id: 'E',
       title: '模式 E',
-      label: 'Transformer 架构解剖台',
-      description: '用小型显式矩阵真实计算 Q/K/V、注意力、多头拼接、残差归一化和 FFN，理解 Transformer 架构原理。',
+      label: '反向传播沙盒',
+      description: '在沙盒中训练小型神经网络，逐阶段观察前向传播、梯度回传和参数更新。对比 SGD / Momentum / Adam 优化器效果与决策边界的变化。',
       route: '/mode-e',
-      accent: 'teal',
-      highlights: ['自注意力', '多头机制', 'LayerNorm'],
+      accent: 'purple',
+      highlights: ['梯度回传', '优化器对比', '决策边界'],
+    },
+    {
+      id: 'F',
+      title: '模式 F',
+      label: 'RNN 循环神经网络',
+      description: '观察简单 RNN 处理序列数据，隐状态在时间步之间传递信息，以及 BPTT 如何穿越时间反向传播梯度。',
+      route: '/mode-f',
+      accent: 'cyan',
+      highlights: ['时间展开', '隐状态', 'BPTT'],
     },
   ];
 

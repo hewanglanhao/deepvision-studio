@@ -1,0 +1,75 @@
+<div class="ov-board">
+  <div class="top-bar">
+    <span class="iter">迭代 {{ iter() }}</span>
+    <span class="loss">Loss {{ loss() }}</span>
+    @if (+accuracy() > 0) { <span class="acc">Acc {{ accuracy() }}%</span> }
+  </div>
+
+  <!-- Loss chart (small) -->
+  <div class="chart-row">
+    <div class="mini-chart">
+      <h4>损失曲线</h4>
+      <svg viewBox="0 0 200 60" class="mini-svg">
+        <rect width="200" height="60" fill="#f8fafc" rx="4"/>
+        @if (lossPoints()) { <polyline [attr.points]="lossPoints()" fill="none" stroke="#d97706" stroke-width="1.5"/> }
+      </svg>
+    </div>
+    <div class="mini-info">
+      <span>网络: {{ meta()?.name ?? '—' }}</span>
+      <span>隐层维度: {{ hiddenDim() }}</span>
+      <span>时间步: {{ timeSteps() }}</span>
+    </div>
+  </div>
+
+  <!-- Unrolled RNN -->
+  <div class="rnn-card">
+    <h4>RNN 时间展开</h4>
+    <div class="rnn-scroll">
+      <svg [attr.viewBox]="'0 0 ' + svgW() + ' ' + svgH()" class="rnn-svg">
+        @for (t of [].constructor(timeSteps()); track t; let ti = $index) {
+          @let cx = cellX(ti); @let cy = cellY();
+          <!-- Cell box -->
+          <rect [attr.x]="cx" [attr.y]="cy" [attr.width]="CELL_W" [attr.height]="CELL_H" fill="#fff" stroke="#cbd5e1" stroke-width="1" rx="6"/>
+          <text [attr.x]="cx + CELL_W/2" [attr.y]="cy - 6" text-anchor="middle" fill="#64748b" font-size="10">t={{ ti }}</text>
+
+          <!-- Input label -->
+          @if (step()?.forwardResult; as fr) {
+            <text [attr.x]="cx - 4" [attr.y]="cy + CELL_H/2" text-anchor="end" fill="#94a3b8" font-size="9">
+              x=&#91;{{ fr.states[ti] ? (ti < (step()?.timeSteps ?? 0) ? (step()?.forwardResult?.states?.[ti] ? '...' : '...') : '...') : '...' }}&#93;
+            </text>
+          }
+
+          @if (step()?.forwardResult?.states?.[ti]; as state) {
+            <!-- Hidden state bars -->
+            @for (d of [].constructor(step()?.hiddenDim ?? 0); track d; let di = $index) {
+              @let val = state.hidden[di] ?? 0;
+              @let bx = cx + 12 + di * (CELL_W - 24) / (step()?.hiddenDim ?? 1);
+              <rect [attr.x]="bx" [attr.y]="cy + CELL_H/2 - (val > 0 ? barH(val) : 0)" [attr.width]="max(2, (CELL_W - 28) / (step()?.hiddenDim ?? 1))" [attr.height]="barH(val)" [attr.fill]="barColor(val)" rx="1"/>
+              <text [attr.x]="bx + (CELL_W - 28) / (step()?.hiddenDim ?? 1) / 2" [attr.y]="cy + CELL_H/2 + 6" text-anchor="middle" fill="#94a3b8" font-size="7">{{ fmt(val) }}</text>
+            }
+
+            <!-- Output probability -->
+            <text [attr.x]="cx + CELL_W/2" [attr.y]="cy + CELL_H + 14" text-anchor="middle" fill="#2563eb" font-size="9">
+              y={{ fmtProbs(state.output) }}
+            </text>
+          }
+
+          <!-- Arrow between cells -->
+          @if (ti < timeSteps() - 1) {
+            <line [attr.x1]="cx + CELL_W" [attr.y1]="cy + CELL_H/2" [attr.x2]="cellX(ti + 1)" [attr.y2]="cy + CELL_H/2" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+          }
+        }
+        <defs><marker id="arrow" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="#94a3b8"/></marker></defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Prediction -->
+  @if (step(); as st) {
+    <div class="pred-row">
+      <span>预测: <strong [class.good]="st.predictedClass === st.trueClass">{{ s.predictedLabel() }}</strong></span>
+      <span>真实: <strong>{{ s.trueLabel() }}</strong></span>
+      <span>概率: {{ fmtProbs(st.outputProbs) }}</span>
+    </div>
+  }
+</div>

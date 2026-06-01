@@ -1,0 +1,118 @@
+<div class="control-panel">
+  <!-- Section 1: Preset -->
+  <div class="ctl-section">
+    <div class="section-label">预设</div>
+    <div class="section-body">
+      <div class="preset-list">
+        @for (preset of presets(); track preset.id) {
+          <button
+            class="preset-btn"
+            [class.selected]="preset.id === presetId()"
+            (click)="selectPreset(preset.id)"
+            [title]="preset.description"
+            [disabled]="isRunning()"
+          >{{ preset.name }}</button>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Optimizer & LR -->
+  <div class="ctl-section">
+    <div class="section-label">优化器</div>
+    <div class="section-body">
+      <div class="chip-list">
+        @for (opt of optimizerOptions; track opt.value) {
+          <button
+            class="chip-btn"
+            [class.selected]="opt.value === config().optimizer"
+            (click)="setOptimizer(opt.value)"
+            [disabled]="isRunning()"
+            [appTeachingTerm]="'optimizer-' + opt.value"
+          >{{ opt.label }}</button>
+        }
+      </div>
+      <div class="param-row">
+        <span class="param-label">学习率</span>
+        <input
+          type="range"
+          min="0.001" max="1.0" step="0.001"
+          [value]="config().learningRate"
+          (input)="setLr($any($event.target).value)"
+          class="lr-slider"
+          [attr.disabled]="isRunning() ? '' : null"
+        />
+        <span class="param-val">{{ config().learningRate.toFixed(3) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Training control -->
+  <div class="ctl-section">
+    <div class="section-label">训练</div>
+    <div class="section-body">
+      <div class="param-row">
+        <span class="param-label">步数</span>
+        <input type="number" class="steps-input" min="10" max="5000" step="10"
+               [value]="config().maxIterations"
+               [attr.disabled]="isRunning() ? '' : null"
+               (change)="setSteps($any($event.target).value)" />
+        @if (iteration() > 0) {
+          <span class="steps-progress">已跑 <strong>{{ iteration() }}</strong> / 剩 <strong>{{ config().maxIterations - iteration() }}</strong></span>
+        }
+      </div>
+      <div class="param-row">
+        <span class="param-label">速度</span>
+        <div class="chip-list">
+          @for (sp of speedOptions; track sp.value) {
+            <button
+              class="chip-btn"
+              [class.selected]="sp.value === playSpeed()"
+              (click)="setSpeed(sp.value)"
+            >{{ sp.label }}</button>
+          }
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="play-btn" (click)="togglePlay()" [class.running]="isPlaying()" [disabled]="iteration() >= config().maxIterations">
+          {{ isPlaying() ? '⏸ 暂停' : '▶ 运行' }}
+        </button>
+        <button class="step-btn" (click)="stepOnce()" [disabled]="isRunning() || iteration() >= config().maxIterations">
+          单步
+        </button>
+        <button class="reset-btn" (click)="reset()">
+          重置
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Live status -->
+  @if (state.currentStep(); as step) {
+    <div class="ctl-section">
+      <div class="section-label">状态</div>
+      <div class="section-body">
+        <div class="status-row">
+          <span class="status-label">预测</span>
+          <span class="status-val" [class.correct]="step.predictedClass === step.trueClass">
+            {{ state.predictedLabel() }}
+          </span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">真实</span>
+          <span class="status-val">{{ state.trueLabel() }}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">损失</span>
+          <span class="status-val mono">{{ step.loss?.toFixed(6) ?? '—' }}</span>
+        </div>
+        @if (step.gradient; as grad) {
+          <div class="status-row">
+            <span class="status-label">梯度范数</span>
+            <span class="status-val mono">{{ grad.gradientNorm.toFixed(4) }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
