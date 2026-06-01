@@ -44,13 +44,13 @@
   <div class="chart-card">
     <h4>当前预测</h4>
     <div class="pred-info">
-      <div class="pred-line">样本 <code>[{{ fmt(curSample()?.input?.[0] ?? 0) }}, {{ fmt(curSample()?.input?.[1] ?? 0) }}]</code></div>
+      <div class="pred-line">样本 <code>[{{ fmt(curSample().input[0]) }}, {{ fmt(curSample().input[1]) }}]</code></div>
       <div class="pred-line">真实 <strong>{{ trueLabel() }}</strong></div>
       <div class="pred-line" [class.good]="predLabel() === trueLabel()" [class.bad]="predLabel() !== trueLabel()">
         预测 <strong>{{ predLabel() }}</strong>
         @if (hasStep()) {
           <span class="tag" [class.ok]="predLabel() === trueLabel()" [class.err]="predLabel() !== trueLabel()">
-            {{ predLabel() === trueLabel() ? 'check' : 'cross' }}
+            {{ predLabel() === trueLabel() ? '✓' : '✗' }}
           </span>
         }
       </div>

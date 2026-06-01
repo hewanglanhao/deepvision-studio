@@ -104,7 +104,7 @@
         </div>
         <div class="status-row">
           <span class="status-label">损失</span>
-          <span class="status-val mono">{{ step.loss?.toFixed(6) ?? '—' }}</span>
+          <span class="status-val mono">{{ step.loss.toFixed(6) }}</span>
         </div>
         @if (step.gradient; as grad) {
           <div class="status-row">

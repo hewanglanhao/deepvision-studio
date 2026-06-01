@@ -42,7 +42,7 @@
           @if (step()?.forwardResult?.states?.[ti]; as state) {
             <!-- Hidden state bars -->
             @for (d of [].constructor(step()?.hiddenDim ?? 0); track d; let di = $index) {
-              @let val = state.hidden[di] ?? 0;
+              @let val = state.hidden[di];
               @let bx = cx + 12 + di * (CELL_W - 24) / (step()?.hiddenDim ?? 1);
               <rect [attr.x]="bx" [attr.y]="cy + CELL_H/2 - (val > 0 ? barH(val) : 0)" [attr.width]="max(2, (CELL_W - 28) / (step()?.hiddenDim ?? 1))" [attr.height]="barH(val)" [attr.fill]="barColor(val)" rx="1"/>
               <text [attr.x]="bx + (CELL_W - 28) / (step()?.hiddenDim ?? 1) / 2" [attr.y]="cy + CELL_H/2 + 6" text-anchor="middle" fill="#94a3b8" font-size="7">{{ fmt(val) }}</text>

@@ -19,18 +19,18 @@
     <div class="ctl-buttons">
       @if (!s.isAnimating()) {
         <button class="ctl-btn primary" (click)="doStep()" [disabled]="s.isPlaying()" title="开始逐阶段观察">
-          | 单步
+          ▶ 单步
         </button>
         <button class="ctl-btn" [class.on]="s.isPlaying()" (click)="doTogglePlay()">
-          {{ s.isPlaying() ? 'pause 暂停' : 'fast 连续' }}
+          {{ s.isPlaying() ? '⏸ 暂停' : '⏩ 连续' }}
         </button>
       } @else {
         <button class="ctl-btn primary" (click)="doNext()" title="推进到下一阶段">
-          skip 继续
+          ⏭ 继续
           @if (s.hasMoreSubSteps()) { <span class="ctl-badge">{{ s.remainingSubSteps() }}</span> }
         </button>
       }
-      <button class="ctl-btn" (click)="doReset()" title="重置网络">loop 重置</button>
+      <button class="ctl-btn" (click)="doReset()" title="重置网络">↺ 重置</button>
     </div>
   </div>
 

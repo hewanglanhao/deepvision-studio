@@ -1,6 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import type { AuthUser } from '@core/auth/auth.models';
 import { PlatformTopbarComponent } from '@shared/components/platform-topbar.component';
 import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
@@ -18,7 +17,7 @@ const MODE_F_SYSTEM_PROMPT = `你是 DeepVision Studio 模式 F（RNN 循环神�
 
 @Component({
   selector: 'app-mode-f-explainer-shell',
-  imports: [CommonModule, RouterLink, PlatformTopbarComponent, LlmFloatingAssistantComponent, TeachingSearchFabComponent, ModeFOverviewComponent, ModeFDetailPanelComponent, ModeFControlPanelComponent],
+  imports: [CommonModule, PlatformTopbarComponent, LlmFloatingAssistantComponent, TeachingSearchFabComponent, ModeFOverviewComponent, ModeFDetailPanelComponent, ModeFControlPanelComponent],
   templateUrl: './mode-f-explainer-shell.component.html',
   styleUrl: './mode-f-explainer-shell.component.css',
 })
