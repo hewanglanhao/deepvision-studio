@@ -8,6 +8,10 @@ import com.deepvision.studio.forward.ForwardRecordDtos.SaveForwardRecordRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
@@ -21,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/a/forward-records")
+@Tag(name = "Mode A Records", description = "Saved forward-pass snapshots for authenticated users")
+@SecurityRequirement(name = "bearerAuth")
 public class ForwardRecordController {
   private final ForwardRecordRepository records;
   private final AppUserRepository users;
@@ -40,6 +46,9 @@ public class ForwardRecordController {
   }
 
   @GetMapping
+  @Operation(summary = "List Mode A saved records for the current user")
+  @ApiResponse(responseCode = "200", description = "Saved record summaries")
+  @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
   public List<ForwardRecordSummary> list(Principal principal) {
     return records.findByUserUsernameOrderByCreatedAtDesc(principal.getName()).stream()
         .map(ForwardRecordSummary::from)
@@ -47,6 +56,10 @@ public class ForwardRecordController {
   }
 
   @PostMapping
+  @Operation(summary = "Save a Mode A forward-pass snapshot")
+  @ApiResponse(responseCode = "200", description = "Saved record detail")
+  @ApiResponse(responseCode = "400", description = "Invalid snapshot or preview image")
+  @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
   public ForwardRecordDetail create(
       Principal principal,
       @Valid @RequestBody SaveForwardRecordRequest request
@@ -69,6 +82,10 @@ public class ForwardRecordController {
   }
 
   @GetMapping("/{id}")
+  @Operation(summary = "Get a saved Mode A record detail")
+  @ApiResponse(responseCode = "200", description = "Saved record detail")
+  @ApiResponse(responseCode = "400", description = "Record not found for current user")
+  @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
   public ForwardRecordDetail detail(Principal principal, @PathVariable Long id) throws JsonProcessingException {
     ForwardRecord record = records.findByIdAndUserUsername(id, principal.getName())
         .orElseThrow(() -> new IllegalArgumentException("Record not found."));
@@ -77,10 +94,13 @@ public class ForwardRecordController {
   }
 
   @DeleteMapping("/{id}")
+  @Operation(summary = "Delete a saved Mode A record")
+  @ApiResponse(responseCode = "200", description = "Record deleted")
+  @ApiResponse(responseCode = "400", description = "Record not found for current user")
+  @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
   public void delete(Principal principal, @PathVariable Long id) {
     ForwardRecord record = records.findByIdAndUserUsername(id, principal.getName())
         .orElseThrow(() -> new IllegalArgumentException("Record not found."));
     records.delete(record);
   }
 }
-

@@ -1,6 +1,7 @@
 package com.deepvision.studio.training;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,6 +12,7 @@ import java.util.List;
 public final class TrainingDtos {
   private TrainingDtos() {}
 
+  @Schema(description = "Training dataset list item")
   public record TrainingDatasetOption(
       String id,
       String name,
@@ -24,14 +26,19 @@ public final class TrainingDtos {
       List<String> labels
   ) {}
 
+  @Schema(description = "Dataset label distribution item")
   public record LabelDistributionItem(String label, int count, String color) {}
 
+  @Schema(description = "Image preview item for image datasets")
   public record ImagePreviewItem(String name, String label, String url) {}
 
+  @Schema(description = "Table preview for tabular datasets")
   public record TablePreview(List<String> headers, List<List<String>> rows) {}
 
+  @Schema(description = "2D point preview item")
   public record PointPreviewItem(double x, double y, String label, String color) {}
 
+  @Schema(description = "Detailed training dataset metadata")
   public record TrainingDatasetDetail(
       String id,
       String name,
@@ -60,17 +67,24 @@ public final class TrainingDtos {
     }
   }
 
+  @Schema(description = "Dataset import result")
   public record DatasetImportResponse(String datasetId, TrainingDatasetDetail detail) {}
 
+  @Schema(description = "Dataset error response")
   public record DatasetErrorResponse(String error, String message) {}
 
+  @Schema(description = "Train/validation/test split ratios")
   public record SplitRequest(double train, double val, double test) {}
 
+  @Schema(description = "Training hyperparameter configuration")
   public record TrainingConfigRequest(
+      @Schema(description = "Mini-batch size", example = "32")
       @Positive(message = "batchSize must be positive.")
       Integer batchSize,
+      @Schema(description = "Total training epochs", example = "10")
       @Positive(message = "totalEpochs must be positive.")
       Integer totalEpochs,
+      @Schema(description = "Learning rate", example = "0.001")
       Double learningRate,
       String optimizer,
       String scheduler,
@@ -78,7 +92,9 @@ public final class TrainingDtos {
       String lossFunction
   ) {}
 
+  @Schema(description = "Request to start a training job")
   public record StartTrainingRequest(
+      @Schema(description = "Dataset id", example = "builtin-moons")
       @NotBlank(message = "datasetId is required.")
       String datasetId,
       @NotNull(message = "split is required.")
@@ -91,6 +107,7 @@ public final class TrainingDtos {
       TrainingConfigRequest config
   ) {}
 
+  @Schema(description = "Training job start response")
   public record TrainingStartResponse(
       String jobId,
       String status,
@@ -99,6 +116,7 @@ public final class TrainingDtos {
       String streamUrl
   ) {}
 
+  @Schema(description = "Training metric stream message")
   public record TrainingMetricMessage(
       String type,
       String jobId,
@@ -120,6 +138,7 @@ public final class TrainingDtos {
       String gradientStatus
   ) {}
 
+  @Schema(description = "Training job status response")
   public record TrainingStatusResponse(
       String jobId,
       String status,
@@ -135,12 +154,16 @@ public final class TrainingDtos {
       long etaSeconds
   ) {}
 
+  @Schema(description = "Training job control response")
   public record TrainingControlResponse(String jobId, String status, String message) {}
 
+  @Schema(description = "Weight histogram bin")
   public record HistogramBin(String label, int count) {}
 
+  @Schema(description = "Weight histogram response")
   public record WeightHistogramResponse(String jobId, int epoch, List<HistogramBin> bins) {}
 
+  @Schema(description = "Checkpoint test prediction sample")
   public record TrainingPredictionSample(
       int index,
       int trueIndex,
@@ -153,6 +176,7 @@ public final class TrainingDtos {
       String imageUrl
   ) {}
 
+  @Schema(description = "Checkpoint test evaluation result")
   public record CheckpointTestResult(
       String type,
       String jobId,
@@ -162,6 +186,7 @@ public final class TrainingDtos {
       List<TrainingPredictionSample> samples
   ) {}
 
+  @Schema(description = "Training collaboration room summary")
   public record CollaborationRoomSummary(
       String jobId,
       int onlineCount,
@@ -169,6 +194,7 @@ public final class TrainingDtos {
       List<String> users
   ) {}
 
+  @Schema(description = "Saved training checkpoint summary")
   public record TrainingCheckpointSummary(
       Long id,
       String name,
@@ -194,6 +220,7 @@ public final class TrainingDtos {
       Instant createdAt
   ) {}
 
+  @Schema(description = "Request to test a checkpoint on a dataset")
   public record TestCheckpointRequest(
       @NotBlank(message = "datasetId is required.")
       String datasetId,

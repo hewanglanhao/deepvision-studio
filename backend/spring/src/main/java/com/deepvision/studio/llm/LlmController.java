@@ -2,6 +2,9 @@ package com.deepvision.studio.llm;
 
 import com.deepvision.studio.llm.LlmDtos.ChatRequest;
 import com.deepvision.studio.llm.LlmDtos.ChatResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -18,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/llm")
+@Tag(name = "LLM", description = "Assistant chat proxy APIs")
 public class LlmController {
   private final LlmChatClient llmChatClient;
   private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
@@ -27,11 +31,17 @@ public class LlmController {
   }
 
   @PostMapping(value = "/chat", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(summary = "Run a non-streaming assistant chat request")
+  @ApiResponse(responseCode = "200", description = "Assistant response")
+  @ApiResponse(responseCode = "400", description = "Invalid message payload")
   ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
     return ResponseEntity.ok(llmChatClient.chat(request));
   }
 
   @PostMapping(value = "/chat/stream", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @Operation(summary = "Run a streaming assistant chat request with SSE")
+  @ApiResponse(responseCode = "200", description = "SSE stream with delta, done, or error events")
+  @ApiResponse(responseCode = "400", description = "Invalid message payload")
   SseEmitter streamChat(@Valid @RequestBody ChatRequest request) {
     SseEmitter emitter = new SseEmitter(180_000L);
     streamExecutor.submit(() -> {

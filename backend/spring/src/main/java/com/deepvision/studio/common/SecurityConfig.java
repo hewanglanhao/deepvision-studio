@@ -47,7 +47,21 @@ public class SecurityConfig {
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-            .requestMatchers("/api/auth/**", "/api/health", "/api/forward/**", "/api/forward", "/api/llm/**", "/api/training/**", "/api/museum/**", "/h2-console/**", "/uploads/**", "/datasets/**").permitAll()
+            .requestMatchers(
+                "/api/auth/**",
+                "/api/health",
+                "/api/forward/**",
+                "/api/forward",
+                "/api/llm/**",
+                "/api/training/**",
+                "/api/museum/**",
+                "/h2-console/**",
+                "/uploads/**",
+                "/datasets/**",
+                "/v3/api-docs/**",
+                "/swagger-ui/**",
+                "/swagger-ui.html"
+            ).permitAll()
             .anyRequest().authenticated()
         )
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

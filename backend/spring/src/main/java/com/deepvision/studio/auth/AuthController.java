@@ -3,6 +3,9 @@ package com.deepvision.studio.auth;
 import com.deepvision.studio.auth.AuthDtos.AuthRequest;
 import com.deepvision.studio.auth.AuthDtos.AuthResponse;
 import com.deepvision.studio.auth.AuthDtos.UserResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Auth", description = "User registration, login, and JWT session APIs")
 public class AuthController {
   private final AppUserRepository users;
   private final PasswordEncoder passwordEncoder;
@@ -35,6 +39,9 @@ public class AuthController {
   }
 
   @PostMapping("/register")
+  @Operation(summary = "Register a new user")
+  @ApiResponse(responseCode = "200", description = "User registered and JWT issued")
+  @ApiResponse(responseCode = "400", description = "Invalid request or duplicated username")
   public AuthResponse register(@Valid @RequestBody AuthRequest request) {
     String username = request.username().trim();
     if (users.existsByUsername(username)) {
@@ -48,6 +55,9 @@ public class AuthController {
   }
 
   @PostMapping("/login")
+  @Operation(summary = "Login with username and password")
+  @ApiResponse(responseCode = "200", description = "Login succeeded and JWT issued")
+  @ApiResponse(responseCode = "400", description = "Invalid username or password")
   public AuthResponse login(@Valid @RequestBody AuthRequest request) {
     authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(request.username().trim(), request.password())
@@ -58,6 +68,8 @@ public class AuthController {
   }
 
   @GetMapping("/me")
+  @Operation(summary = "Get current authenticated user")
+  @ApiResponse(responseCode = "200", description = "Current user, or null when no principal is available")
   public UserResponse me(Principal principal) {
     if (principal == null) {
       return null;

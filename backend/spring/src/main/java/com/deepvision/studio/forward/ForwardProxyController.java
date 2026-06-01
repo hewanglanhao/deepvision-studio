@@ -1,5 +1,8 @@
 package com.deepvision.studio.forward;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -20,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Mode A Forward", description = "Proxy APIs for Python forward-pass execution")
 public class ForwardProxyController {
   private static final Logger log = LoggerFactory.getLogger(ForwardProxyController.class);
 
@@ -40,11 +44,18 @@ public class ForwardProxyController {
   }
 
   @GetMapping("/forward/health")
+  @Operation(summary = "Check Python forward service health")
+  @ApiResponse(responseCode = "200", description = "Python service responded")
+  @ApiResponse(responseCode = "503", description = "Python service is unavailable")
   ResponseEntity<String> health() {
     return proxyGet("/api/health");
   }
 
   @PostMapping(value = "/forward", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(summary = "Execute a forward pass through the Python runtime")
+  @ApiResponse(responseCode = "200", description = "Forward pass completed")
+  @ApiResponse(responseCode = "400", description = "Invalid graph or payload")
+  @ApiResponse(responseCode = "503", description = "Python service is unavailable")
   ResponseEntity<String> forward(@RequestBody String payload) {
     return proxyPost("/api/forward", payload);
   }

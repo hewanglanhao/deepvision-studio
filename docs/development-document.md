@@ -32,6 +32,7 @@ DeepVision Studio：深度学习算法可视化仿真平台。
 | LLM 浮标 | 页面上下文问答、图像上下文、流式输出 | `frontend/src/app/shared/llm`，`backend/spring/src/main/java/com/deepvision/studio/llm` |
 | 教学帮助浮标 | 术语高亮、术语检索、教学文档跳转 | `frontend/src/app/shared/teaching`，`frontend/src/app/shell/teaching` |
 | 后端网关 | Spring Boot 统一承接认证、持久化、LLM、forward 代理 | `backend/spring` |
+| Swagger/OpenAPI 文档 | Spring REST 接口分组、请求/响应模型和 JWT 说明 | `backend/spring/src/main/java/com/deepvision/studio/common/OpenApiConfig.java` |
 | Python forward 服务 | 使用 NumPy 执行真实前向传播计算 | `backend/python-forward` |
 | Docker 部署 | 前端 Nginx、Spring 后端、Python forward 三容器编排 | `docker-compose.yml`，`frontend/Dockerfile`，`backend/spring/Dockerfile`，`backend/python-forward/Dockerfile` |
 
@@ -109,6 +110,7 @@ Spring Boot 后端按业务域划分包：
 | `training` | 训练数据集、任务、检查点、WebSocket 协作 |
 | `llm` | 大模型聊天代理与 SSE 流式输出 |
 | `museum` | AI 博物馆在线状态 WebSocket |
+| `common/OpenApiConfig` | Spring REST API 的 OpenAPI 元信息和 JWT Bearer 鉴权说明 |
 
 数据库当前使用 H2 文件数据库，配置在 `backend/spring/src/main/resources/application.yml`。实体设计基于 JPA，后续可替换为 MySQL/PostgreSQL。
 
@@ -145,6 +147,7 @@ Spring Boot 后端按业务域划分包：
 | 3D 网络层显示 | Three.js 场景、层几何体、连接线、传播粒子、交互选中、层详情面板 | 人工主导方案和集成，AI 辅助部分 Three.js API 写法 |
 | AI 博物馆 | 第一人称 AI 发展史展厅、展品路线、展墙内容、多人联机在线状态 | 人工主导产品设计和 WebSocket 方案，AI 辅助展品文案与 Three.js 局部实现 |
 | Spring 后端 | 认证、JWT、安全配置、forward 代理、历史记录、上传图保存、LLM 代理 | 人工主导接口设计与落地 |
+| Swagger 接口文档 | Spring REST Controller 注解、DTO Schema、Swagger UI 放行配置 | 人工主导接口分组和描述，AI 辅助注解样板 |
 | H2 数据库 | 用户表、A 模式历史记录表、JPA 实体与索引 | 人工主导 |
 | 登录注册 | 前端登录注册页、会话恢复、后端密码加密和 JWT | 人工主导，AI 辅助表单样式 |
 | LLM 浮标 | 浮动聊天窗口、页面上下文、图像上下文、流式响应 | 人工主导功能设计，AI 辅助 Markdown 渲染与 prompt 文案 |
@@ -273,7 +276,46 @@ Python 服务自身接口在 `backend/python-forward/app.py`：
 
 前端认证逻辑位于 `frontend/src/app/core/auth`。A 模式页面也内置了保存记录时的登录弹窗，避免用户为了保存实验记录必须先离开当前页面。
 
-### 5.7 3D 网络层显示
+### 5.7 Swagger/OpenAPI 接口文档
+
+Spring 后端引入 `springdoc-openapi-starter-webmvc-ui`，只对 Spring REST 接口生成 Swagger/OpenAPI 文档，Python forward 服务不单独生成 Swagger。
+
+相关代码：
+
+- `backend/spring/pom.xml`：加入 `springdoc-openapi-starter-webmvc-ui`。
+- `common/OpenApiConfig.java`：配置 API 标题、版本、服务器地址和 JWT Bearer 鉴权方案。
+- `common/SecurityConfig.java`：放行 `/v3/api-docs/**`、`/swagger-ui/**`、`/swagger-ui.html`。
+- 各 REST Controller：使用 `@Tag`、`@Operation`、`@ApiResponse` 描述接口分组、用途和返回状态。
+- 主要 DTO：使用 `@Schema` 描述请求体和响应模型。
+
+Swagger 分组覆盖：
+
+| 分组 | 代码位置 | 内容 |
+| --- | --- | --- |
+| `Health` | `HealthController` | Spring 健康检查 |
+| `Auth` | `AuthController` | 注册、登录、当前用户 |
+| `Mode A Forward` | `ForwardProxyController` | Python forward 健康检查和前向计算代理 |
+| `Mode A Records` | `ForwardRecordController` | A 模式历史记录的列表、保存、详情、删除 |
+| `LLM` | `LlmController` | 普通聊天和 SSE 流式聊天 |
+| `Training` | `TrainingController` | 数据集、训练任务、checkpoint、实验控制和协作房间查询 |
+
+本地访问地址：
+
+```text
+http://127.0.0.1:8080/swagger-ui/index.html
+http://127.0.0.1:8080/v3/api-docs
+```
+
+Docker 或 Nginx 代理后，可通过前端同源地址访问：
+
+```text
+http://localhost:4200/swagger-ui/index.html
+http://localhost:4200/v3/api-docs
+```
+
+其中需要用户身份的接口在 OpenAPI 中使用 `bearerAuth` 标记，调用时在 Swagger UI 的 Authorize 中填入登录接口返回的 JWT。
+
+### 5.8 3D 网络层显示
 
 3D 网络显示位于 `frontend/src/app/shared/network-3d`，入口路由为 `/network-3d`。A 模式点击“3D化显示”时，会把当前网络快照写入 `sessionStorage`，再打开独立窗口展示。
 
@@ -293,7 +335,7 @@ Python 服务自身接口在 `backend/python-forward/app.py`：
 | 3D 场景与 A 模式页面状态解耦 | 使用 `NETWORK_3D_SESSION_KEY` 传递快照，独立窗口只读快照 |
 | Three.js 资源泄漏 | 组件销毁时 dispose renderer、controls、geometry、material |
 
-### 5.8 AI 博物馆与联机参观设计
+### 5.9 AI 博物馆与联机参观设计
 
 AI 博物馆入口为 `/ai-museum`，代码位于 `frontend/src/app/modes/ai-museum`。前端使用 Three.js 构建第一人称展厅：用户进入后可以用 WASD/方向键移动、鼠标控制视角、Shift 加速，靠近展墙时右侧导览面板显示当前展品说明。
 
@@ -337,7 +379,7 @@ Browser A/B/C
 - 坐标在后端做 clamp，防止异常客户端发送离谱位置。
 - 房间无人时自动移除，避免长期占用内存。
 
-### 5.9 LLM 浮标设计
+### 5.10 LLM 浮标设计
 
 LLM 浮标位于 `frontend/src/app/shared/llm`，后端位于 `backend/spring/src/main/java/com/deepvision/studio/llm`。
 
@@ -364,7 +406,7 @@ LLM 浮标位于 `frontend/src/app/shared/llm`，后端位于 `backend/spring/sr
 - `ARK_CONNECT_TIMEOUT_SECONDS`
 - `ARK_READ_TIMEOUT_SECONDS`
 
-### 5.10 帮助文档浮标设计
+### 5.11 帮助文档浮标设计
 
 帮助文档浮标位于 `frontend/src/app/shared/teaching`。其作用是降低深度学习术语门槛：
 
@@ -372,7 +414,7 @@ LLM 浮标位于 `frontend/src/app/shared/llm`，后端位于 `backend/spring/sr
 - 浮标开启后，用户可看到术语提示，并跳转 `/teaching` 教学文档。
 - 浮标不改变主页面路由和实验状态。
 
-### 5.11 页面美化与交互一致性
+### 5.12 页面美化与交互一致性
 
 成员 A 负责整体网站视觉风格和 A 模式界面美化，主要原则：
 
@@ -385,7 +427,7 @@ LLM 浮标位于 `frontend/src/app/shared/llm`，后端位于 `backend/spring/sr
 
 AI 辅助主要用于局部 CSS 草稿、按钮文案备选和空状态提示；最终布局、功能取舍和与实际数据绑定由人工完成。
 
-### 5.12 Docker 部署方案
+### 5.13 Docker 部署方案
 
 部署方案使用 `docker-compose.yml` 编排三个服务：
 
@@ -426,7 +468,9 @@ http://localhost:4200
 http://localhost:4200/api/health
 ```
 
-### 5.13 成员 A 攻克的主要难点
+前端 Nginx 同时代理 `/swagger-ui/**` 和 `/v3/api-docs/**` 到 Spring，容器环境下 Swagger UI 可通过 `http://localhost:4200/swagger-ui/index.html` 访问。
+
+### 5.14 成员 A 攻克的主要难点
 
 | 难点 | 背景 | 解决方案 | 体现的工程能力 |
 | --- | --- | --- | --- |
@@ -440,9 +484,9 @@ http://localhost:4200/api/health
 | LLM 不能直接暴露 Key 到前端 | API Key 放前端有泄漏风险 | Spring 后端代理 LLM，并支持 SSE | 安全意识、后端接口设计 |
 | Docker 中服务地址变化 | 本地 Python 是 `127.0.0.1:5000`，容器内需走服务名 | 通过 `DEEPVISION_FORWARD_BASE_URL` 区分环境 | 部署配置能力 |
 
-### 5.14 成员 A 的 AI 使用复盘
+### 5.15 成员 A 的 AI 使用复盘
 
-#### 5.14.1 总体边界
+#### 5.15.1 总体边界
 
 | 类型 | 人工负责 | AI 辅助 | 最终责任 |
 | --- | --- | --- | --- |
@@ -454,7 +498,7 @@ http://localhost:4200/api/health
 | UI 与样式 | 确定工作台三栏布局、右下角浮标、历史记录抽屉和 3D 窗口入口 | 辅助生成 CSS 草稿、空状态和按钮文案 | 人工根据真实页面密度、中文长度和交互状态反复调整 |
 | 文档整理 | 确定文档结构、接口表、工程难点、分工表达 | 辅助语言组织和表格整理 | 人工核对代码路径、删除夸大表述 |
 
-#### 5.14.2 重点业务代码分工
+#### 5.15.2 重点业务代码分工
 
 | 模块 | 人工设计与决策 | AI 参与方式 | 人工修改/落地点 |
 | --- | --- | --- | --- |
@@ -468,7 +512,7 @@ http://localhost:4200/api/health
 | LLM 浮标 | 决定 LLM 不是单独页面，而是作为全局浮标接入 A 模式上下文 | AI 辅助 prompt、Markdown 渲染和 SSE 接收草稿 | 人工控制上下文摘要、图片数量、流式异常处理和后端 API Key 代理 |
 | Docker 部署 | 决定拆为前端、Spring、Python forward 三容器，并使用卷保存 H2/上传文件 | AI 辅助命令说明和环境变量说明 | 人工调通容器内服务名、端口映射和数据卷 |
 
-#### 5.14.3 典型 AI 辅助但人工主导的迭代案例
+#### 5.15.3 典型 AI 辅助但人工主导的迭代案例
 
 以 A 模式卷积结果渲染为例，初版思路是把每个卷积输出单元都当成页面元素渲染，再通过大量小块拼接出特征图。这个方案在小样本下能直观看到“每个格子”的值，但图片稍大时会创建大量 DOM 节点，导致页面滚动、刷新和参数调整都变慢。
 
