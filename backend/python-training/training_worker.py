@@ -172,6 +172,10 @@ def main() -> int:
     request = json.loads(request_path.read_text(encoding="utf-8"))
     if request.get("action") == "test_checkpoint":
         test_checkpoint(request)
+    elif request.get("action") == "list_checkpoint_samples":
+        list_checkpoint_samples(request)
+    elif request.get("action") == "infer_checkpoint_sample":
+        infer_checkpoint_sample(request)
     else:
         train(request)
     return 0
@@ -319,6 +323,72 @@ def test_checkpoint(request: dict[str, Any]) -> None:
         "testAccuracy": round(test_accuracy, 4),
         "sampleCount": len(test_set),
         "samples": collect_prediction_samples(model, dataset, test_set, device, dataset_root, limit=8),
+    })
+
+
+def list_checkpoint_samples(request: dict[str, Any]) -> None:
+    dataset_root = Path(request["datasetRoot"]).resolve()
+    dataset_id = request["datasetId"]
+    checkpoint_file = Path(request["checkpointFile"]).resolve()
+    checkpoint = torch.load(checkpoint_file, map_location="cpu", weights_only=False)
+    layers = checkpoint.get("layers") or request.get("layers") or []
+    dataset = load_dataset(dataset_root, dataset_id, layers)
+    limit = max(1, min(120, int(request.get("limit") or 60)))
+    samples = collect_dataset_samples(dataset, dataset_root, limit)
+    emit({
+        "type": "sample_list",
+        "datasetId": dataset_id,
+        "sampleCount": len(dataset),
+        "samples": samples,
+    })
+
+
+def infer_checkpoint_sample(request: dict[str, Any]) -> None:
+    job_id = request.get("jobId", "single-sample-inference")
+    dataset_root = Path(request["datasetRoot"]).resolve()
+    dataset_id = request["datasetId"]
+    checkpoint_file = Path(request["checkpointFile"]).resolve()
+    sample_index = int(request["sampleIndex"])
+
+    checkpoint = torch.load(checkpoint_file, map_location="cpu", weights_only=False)
+    layers = checkpoint.get("layers") or request.get("layers") or []
+    dataset = load_dataset(dataset_root, dataset_id, layers)
+    if sample_index < 0 or sample_index >= len(dataset):
+        raise ValueError(f"Sample index {sample_index} is out of range for dataset {dataset_id}.")
+
+    sample_x, sample_y = dataset[sample_index]
+    class_count = len(getattr(dataset, "classes", []))
+    model = build_model(layers, sample_x, class_count)
+    state = checkpoint.get("modelStateDict") or checkpoint.get("model_state_dict")
+    if state is None:
+        raise ValueError(f"Checkpoint has no model state: {checkpoint_file}")
+    model.load_state_dict(state)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+
+    with torch.no_grad():
+        logits, activations = infer_with_activations(model, sample_x.to(device))
+        probs = torch.softmax(logits, dim=1)[0].detach().cpu()
+    classes = list(getattr(dataset, "classes", []))
+    predicted_index = int(torch.argmax(probs).item())
+    true_index = int(sample_y.detach().cpu().item())
+    top_k = top_class_predictions(probs, classes, limit=5)
+    emit({
+        "type": "single_inference",
+        "jobId": job_id,
+        "datasetId": dataset_id,
+        "sample": sample_metadata(dataset, sample_index, dataset_root),
+        "prediction": {
+            "trueIndex": true_index,
+            "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
+            "predictedIndex": predicted_index,
+            "predictedLabel": classes[predicted_index] if 0 <= predicted_index < len(classes) else str(predicted_index),
+            "confidence": round(float(probs[predicted_index].item()), 6),
+            "correct": predicted_index == true_index,
+            "topK": top_k,
+        },
+        "activations": activations,
     })
 
 
@@ -884,6 +954,151 @@ def collect_prediction_samples(
                 item["imageUrl"] = dataset_url(image_path, dataset_root)
             samples.append(item)
     return samples
+
+
+def collect_dataset_samples(dataset: Dataset, dataset_root: Path, limit: int = 60) -> list[dict[str, Any]]:
+    return [sample_metadata(dataset, index, dataset_root) for index in range(min(limit, len(dataset)))]
+
+
+def sample_metadata(dataset: Dataset, index: int, dataset_root: Path) -> dict[str, Any]:
+    x, y = dataset[index]
+    classes = list(getattr(dataset, "classes", []))
+    true_index = int(y.item())
+    item: dict[str, Any] = {
+        "index": int(index),
+        "trueIndex": true_index,
+        "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
+        "shape": list(x.shape),
+    }
+    image_path = sample_image_path(dataset, index)
+    if image_path is not None:
+        item["name"] = image_path.name
+        item["imageUrl"] = dataset_url(image_path, dataset_root)
+    else:
+        values = x.detach().cpu().flatten().tolist()
+        item["name"] = f"sample {index}"
+        item["featurePreview"] = [round(float(value), 6) for value in values[:18]]
+        item["featureCount"] = len(values)
+    return item
+
+
+def infer_with_activations(model: nn.Module, sample_x: torch.Tensor) -> tuple[torch.Tensor, list[dict[str, Any]]]:
+    modules = list(model)
+    refs = list(getattr(model, "layer_refs", []))
+    current = sample_x.unsqueeze(0)
+    activations: list[dict[str, Any]] = []
+    next_module = 0
+    for ref in refs:
+        module_indices = [idx for idx in ref.get("moduleIndices", []) if isinstance(idx, int)]
+        if module_indices:
+            target_module = max(module_indices)
+            while next_module <= target_module and next_module < len(modules):
+                current = modules[next_module](current)
+                next_module += 1
+        activations.append(activation_payload(ref, current, len(activations)))
+    while next_module < len(modules):
+        current = modules[next_module](current)
+        next_module += 1
+    return current, activations
+
+
+def activation_payload(ref: dict[str, Any], tensor: torch.Tensor, order: int) -> dict[str, Any]:
+    detached = tensor.detach().cpu()
+    without_batch = detached[0] if detached.ndim > 0 and detached.shape[0] == 1 else detached
+    flat = without_batch.float().flatten()
+    non_zero = float((flat.abs() > 1e-8).float().mean().item()) if flat.numel() else 0.0
+    return {
+        "order": order,
+        "layerId": int(ref.get("layerId") or -1),
+        "layerName": str(ref.get("name") or ref.get("type") or "layer"),
+        "layerType": str(ref.get("type") or "layer"),
+        "shape": list(without_batch.shape),
+        "stats": {
+            "min": round(float(flat.min().item()), 6) if flat.numel() else 0.0,
+            "max": round(float(flat.max().item()), 6) if flat.numel() else 0.0,
+            "mean": round(float(flat.mean().item()), 6) if flat.numel() else 0.0,
+            "nonZeroRatio": round(non_zero, 6),
+        },
+        "preview": activation_preview(without_batch),
+        "topValues": top_activation_values(flat, limit=6),
+    }
+
+
+def activation_preview(tensor: torch.Tensor) -> dict[str, Any]:
+    data = tensor.float()
+    if data.ndim == 3:
+        channels, height, width = int(data.shape[0]), int(data.shape[1]), int(data.shape[2])
+        preview_channels = []
+        for channel in range(min(6, channels)):
+            values, out_width, out_height = downsample_channel(data[channel], max_side=18)
+            preview_channels.append({
+                "channel": channel,
+                "width": out_width,
+                "height": out_height,
+                "values": normalize_values(values),
+            })
+        return {
+            "mode": "image",
+            "width": width,
+            "height": height,
+            "channels": channels,
+            "channelPreviews": preview_channels,
+        }
+    values = data.flatten().tolist()
+    limited = [round(float(value), 6) for value in values[:40]]
+    return {
+        "mode": "vector",
+        "values": limited,
+        "valueCount": len(values),
+    }
+
+
+def downsample_channel(channel: torch.Tensor, max_side: int = 18) -> tuple[list[float], int, int]:
+    height, width = int(channel.shape[0]), int(channel.shape[1])
+    out_height = min(max_side, height)
+    out_width = min(max_side, width)
+    values: list[float] = []
+    for y in range(out_height):
+        src_y = min(height - 1, int(y * height / max(1, out_height)))
+        for x in range(out_width):
+            src_x = min(width - 1, int(x * width / max(1, out_width)))
+            values.append(float(channel[src_y, src_x].item()))
+    return values, out_width, out_height
+
+
+def normalize_values(values: list[float]) -> list[float]:
+    if not values:
+        return []
+    min_value = min(values)
+    max_value = max(values)
+    span = max(max_value - min_value, 1e-8)
+    return [round((value - min_value) / span, 6) for value in values]
+
+
+def top_activation_values(flat: torch.Tensor, limit: int = 6) -> list[dict[str, Any]]:
+    if flat.numel() <= 0:
+        return []
+    values, indices = torch.topk(flat.abs(), k=min(limit, flat.numel()))
+    return [
+        {
+            "index": int(indices[i].item()),
+            "value": round(float(flat[int(indices[i].item())].item()), 6),
+            "absValue": round(float(values[i].item()), 6),
+        }
+        for i in range(values.numel())
+    ]
+
+
+def top_class_predictions(probs: torch.Tensor, classes: list[str], limit: int = 5) -> list[dict[str, Any]]:
+    values, indices = torch.topk(probs, k=min(limit, probs.numel()))
+    return [
+        {
+            "index": int(indices[i].item()),
+            "label": classes[int(indices[i].item())] if 0 <= int(indices[i].item()) < len(classes) else str(int(indices[i].item())),
+            "probability": round(float(values[i].item()), 6),
+        }
+        for i in range(values.numel())
+    ]
 
 
 def sample_image_path(dataset: Dataset, index: int) -> Path | None:

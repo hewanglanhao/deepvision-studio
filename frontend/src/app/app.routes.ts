@@ -41,6 +41,11 @@ export const routes: Routes = [
       .then(m => m.ExperimentComparePageComponent)
   },
   {
+    path: 'training/inference',
+    loadComponent: () => import('@modes/mode-b/single-inference/single-inference-page.component')
+      .then(m => m.SingleInferencePageComponent)
+  },
+  {
     path: 'training/collaboration',
     loadComponent: () => import('@modes/mode-b/training-collaboration/training-collaboration-page.component')
       .then(m => m.TrainingCollaborationPageComponent)

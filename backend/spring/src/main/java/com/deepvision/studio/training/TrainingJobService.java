@@ -4,6 +4,9 @@ import com.deepvision.studio.auth.AppUser;
 import com.deepvision.studio.auth.AppUserRepository;
 import com.deepvision.studio.training.TrainingDtos.CheckpointTestResult;
 import com.deepvision.studio.training.TrainingDtos.HistogramBin;
+import com.deepvision.studio.training.TrainingDtos.InferenceSampleListResponse;
+import com.deepvision.studio.training.TrainingDtos.SingleInferenceRequest;
+import com.deepvision.studio.training.TrainingDtos.SingleInferenceResult;
 import com.deepvision.studio.training.TrainingDtos.SplitRequest;
 import com.deepvision.studio.training.TrainingDtos.StartTrainingRequest;
 import com.deepvision.studio.training.TrainingDtos.TestCheckpointRequest;
@@ -192,9 +195,44 @@ public class TrainingJobService {
 
   public CheckpointTestResult testCheckpoint(String username, Long checkpointId, TestCheckpointRequest request) {
     requireUser(username);
-    TrainingCheckpoint checkpoint = checkpoints.findByIdAndUserUsername(checkpointId, username)
-        .orElseThrow(() -> new IllegalArgumentException("Checkpoint not found."));
+    TrainingCheckpoint checkpoint = requireCheckpoint(username, checkpointId);
     return runCheckpointTest(checkpoint);
+  }
+
+  public InferenceSampleListResponse listCheckpointSamples(String username, Long checkpointId, int limit) {
+    requireUser(username);
+    TrainingCheckpoint checkpoint = requireCheckpoint(username, checkpointId);
+    requireCompletedCheckpoint(checkpoint);
+    try {
+      JsonNode result = runCheckpointWorker(
+          checkpoint,
+          "list_checkpoint_samples",
+          Map.of("limit", Math.max(1, Math.min(120, limit))),
+          "sample_list",
+          5
+      );
+      return objectMapper.treeToValue(result, InferenceSampleListResponse.class);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("Failed to parse checkpoint samples: " + ex.getMessage());
+    }
+  }
+
+  public SingleInferenceResult inferCheckpointSample(String username, Long checkpointId, SingleInferenceRequest request) {
+    requireUser(username);
+    TrainingCheckpoint checkpoint = requireCheckpoint(username, checkpointId);
+    requireCompletedCheckpoint(checkpoint);
+    try {
+      JsonNode result = runCheckpointWorker(
+          checkpoint,
+          "infer_checkpoint_sample",
+          Map.of("sampleIndex", request.sampleIndex()),
+          "single_inference",
+          5
+      );
+      return objectMapper.treeToValue(result, SingleInferenceResult.class);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("Failed to parse inference result: " + ex.getMessage());
+    }
   }
 
   public void addSession(String jobId, WebSocketSession session) {
@@ -563,22 +601,37 @@ public class TrainingJobService {
   }
 
   private CheckpointTestResult runCheckpointTest(TrainingCheckpoint checkpoint) {
-    String testId = "checkpoint-test-" + checkpoint.getId() + "-" + UUID.randomUUID();
+    try {
+      JsonNode result = runCheckpointWorker(checkpoint, "test_checkpoint", Map.of(), "test_result", 10);
+      return objectMapper.treeToValue(result, CheckpointTestResult.class);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("Failed to parse checkpoint test result: " + ex.getMessage());
+    }
+  }
+
+  private JsonNode runCheckpointWorker(
+      TrainingCheckpoint checkpoint,
+      String action,
+      Map<String, Object> extraPayload,
+      String resultType,
+      int timeoutMinutes
+  ) {
+    String testId = action + "-" + checkpoint.getId() + "-" + UUID.randomUUID();
     Path testDir = jobRoot.resolve("checkpoint-tests").resolve(testId).normalize();
     Path requestFile = testDir.resolve("request.json");
     try {
       Files.createDirectories(testDir);
-      JsonNode splitNode = objectMapper.readTree(checkpoint.getSplitJson());
-      JsonNode layersNode = objectMapper.readTree(checkpoint.getLayersJson());
-      Map<String, Object> payload = Map.of(
-          "action", "test_checkpoint",
-          "jobId", testId,
-          "datasetRoot", datasetRoot.toString(),
-          "datasetId", checkpoint.getDatasetId(),
-          "split", splitNode,
-          "layers", layersNode,
-          "checkpointFile", checkpoint.getCheckpointPath()
-      );
+      ObjectNode payload = objectMapper.createObjectNode();
+      payload.put("action", action);
+      payload.put("jobId", testId);
+      payload.put("datasetRoot", datasetRoot.toString());
+      payload.put("datasetId", checkpoint.getDatasetId());
+      payload.set("split", readCheckpointJson(checkpoint.getSplitJson(), objectMapper.createObjectNode()));
+      payload.set("layers", readCheckpointJson(checkpoint.getLayersJson(), objectMapper.createArrayNode()));
+      payload.put("checkpointFile", checkpoint.getCheckpointPath());
+      ObjectNode extras = objectMapper.valueToTree(extraPayload);
+      extras.fields().forEachRemaining(entry -> payload.set(entry.getKey(), entry.getValue()));
+
       Files.writeString(requestFile, objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8);
       Process process = new ProcessBuilder(pythonExecutable, workerScript.toString(), "--request", requestFile.toString())
           .redirectErrorStream(true)
@@ -601,31 +654,42 @@ public class TrainingJobService {
           JsonNode node = objectMapper.readTree(line);
           String type = node.path("type").asText("");
           if ("error".equals(type)) {
-            throw new IllegalArgumentException(node.path("message").asText("Checkpoint test failed."));
+            throw new IllegalArgumentException(node.path("message").asText("Checkpoint worker failed."));
           }
-          if ("test_result".equals(type)) {
+          if (resultType.equals(type)) {
             result = node;
           }
         }
       }
-      if (!process.waitFor(10, TimeUnit.MINUTES)) {
+      if (!process.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
         process.destroyForcibly();
-        throw new IllegalArgumentException("Checkpoint test timed out.");
+        throw new IllegalArgumentException("Checkpoint worker timed out.");
       }
       if (process.exitValue() != 0) {
         String detail = diagnostics.isEmpty() ? "" : " " + diagnostics.toString().trim();
-        throw new IllegalArgumentException("Checkpoint test process failed." + detail);
+        throw new IllegalArgumentException("Checkpoint worker process failed." + detail);
       }
       if (result == null) {
         String detail = diagnostics.isEmpty() ? "" : " " + diagnostics.toString().trim();
-        throw new IllegalArgumentException("Checkpoint test returned no result." + detail);
+        throw new IllegalArgumentException("Checkpoint worker returned no result." + detail);
       }
-      return objectMapper.treeToValue(result, CheckpointTestResult.class);
+      return result;
     } catch (IOException ex) {
-      throw new IllegalArgumentException("Failed to run checkpoint test: " + ex.getMessage());
+      throw new IllegalArgumentException("Failed to run checkpoint worker: " + ex.getMessage());
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-      throw new IllegalArgumentException("Checkpoint test interrupted.");
+      throw new IllegalArgumentException("Checkpoint worker interrupted.");
+    }
+  }
+
+  private TrainingCheckpoint requireCheckpoint(String username, Long checkpointId) {
+    return checkpoints.findByIdAndUserUsername(checkpointId, username)
+        .orElseThrow(() -> new IllegalArgumentException("Checkpoint not found."));
+  }
+
+  private void requireCompletedCheckpoint(TrainingCheckpoint checkpoint) {
+    if ("stopped".equals(checkpoint.getStatus()) || checkpoint.getEpoch() < checkpoint.getTotalEpochs()) {
+      throw new IllegalArgumentException("Only completed checkpoints can be used for single-sample inference.");
     }
   }
 

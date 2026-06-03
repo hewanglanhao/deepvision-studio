@@ -4,6 +4,9 @@ import com.deepvision.studio.training.TrainingDtos.CheckpointTestResult;
 import com.deepvision.studio.training.TrainingDtos.CollaborationRoomSummary;
 import com.deepvision.studio.training.TrainingDtos.DatasetErrorResponse;
 import com.deepvision.studio.training.TrainingDtos.DatasetImportResponse;
+import com.deepvision.studio.training.TrainingDtos.InferenceSampleListResponse;
+import com.deepvision.studio.training.TrainingDtos.SingleInferenceRequest;
+import com.deepvision.studio.training.TrainingDtos.SingleInferenceResult;
 import com.deepvision.studio.training.TrainingDtos.StartTrainingRequest;
 import com.deepvision.studio.training.TrainingDtos.TestCheckpointRequest;
 import com.deepvision.studio.training.TrainingDtos.TrainingCheckpointSummary;
@@ -141,6 +144,30 @@ public class TrainingController {
       @Valid @RequestBody TestCheckpointRequest request
   ) {
     return jobService.testCheckpoint(principal == null ? null : principal.getName(), checkpointId, request);
+  }
+
+  @GetMapping("/checkpoints/{checkpointId}/samples")
+  @Operation(summary = "List samples available for single checkpoint inference")
+  @ApiResponse(responseCode = "200", description = "Sample list")
+  @ApiResponse(responseCode = "400", description = "Checkpoint is invalid")
+  public InferenceSampleListResponse checkpointSamples(
+      Principal principal,
+      @PathVariable Long checkpointId,
+      @RequestParam(value = "limit", required = false, defaultValue = "60") int limit
+  ) {
+    return jobService.listCheckpointSamples(principal == null ? null : principal.getName(), checkpointId, limit);
+  }
+
+  @PostMapping("/checkpoints/{checkpointId}/infer")
+  @Operation(summary = "Run single-sample inference with layer activations")
+  @ApiResponse(responseCode = "200", description = "Single inference result")
+  @ApiResponse(responseCode = "400", description = "Checkpoint or sample is invalid")
+  public SingleInferenceResult inferCheckpointSample(
+      Principal principal,
+      @PathVariable Long checkpointId,
+      @Valid @RequestBody SingleInferenceRequest request
+  ) {
+    return jobService.inferCheckpointSample(principal == null ? null : principal.getName(), checkpointId, request);
   }
 
   @GetMapping("/{jobId}/weights/histogram")

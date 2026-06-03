@@ -43,6 +43,67 @@ export interface TrainingTestResult {
   samples: TrainingPredictionSample[];
 }
 
+export interface InferenceSampleItem {
+  index: number;
+  trueIndex: number;
+  trueLabel: string;
+  name?: string;
+  imageUrl?: string;
+  shape: number[];
+  featurePreview?: number[];
+  featureCount?: number;
+}
+
+export interface InferenceSampleListResponse {
+  type: 'sample_list';
+  datasetId: string;
+  sampleCount: number;
+  samples: InferenceSampleItem[];
+}
+
+export interface SingleInferenceActivationPreview {
+  mode: 'image' | 'vector';
+  width?: number;
+  height?: number;
+  channels?: number;
+  channelPreviews?: Array<{ channel: number; width: number; height: number; values: number[] }>;
+  values?: number[];
+  valueCount?: number;
+}
+
+export interface SingleInferenceActivation {
+  order: number;
+  layerId: number;
+  layerName: string;
+  layerType: string;
+  shape: number[];
+  stats: {
+    min: number;
+    max: number;
+    mean: number;
+    nonZeroRatio: number;
+  };
+  preview: SingleInferenceActivationPreview;
+  topValues: Array<{ index: number; value: number; absValue: number }>;
+}
+
+export interface SingleInferenceResult {
+  type: 'single_inference';
+  jobId: string;
+  datasetId: string;
+  sample: InferenceSampleItem;
+  prediction: {
+    trueIndex: number;
+    trueLabel: string;
+    predictedIndex: number;
+    predictedLabel: string;
+    confidence: number;
+    correct: boolean;
+    topK: Array<{ index: number; label: string; probability: number }>;
+  };
+  activations: SingleInferenceActivation[];
+}
+
 export interface BackpropLayerStat {
   layerId: number;
   name: string;
@@ -310,6 +371,37 @@ export class TrainingRuntimeService implements OnDestroy {
     const accText = normalized.testAccuracy === null ? 'N/A' : `${(normalized.testAccuracy * 100).toFixed(1)}%`;
     this.log('info', `已使用 checkpoint 跑测试集：accuracy=${accText}, samples=${normalized.sampleCount}`);
     return normalized;
+  }
+
+  async listInferenceSamples(checkpointId: number, limit = 60): Promise<InferenceSampleListResponse> {
+    const result = await this.api.request<InferenceSampleListResponse>(
+      `/api/training/checkpoints/${encodeURIComponent(String(checkpointId))}/samples?limit=${encodeURIComponent(String(limit))}`
+    );
+    return {
+      ...result,
+      samples: (result.samples ?? []).map(sample => ({
+        ...sample,
+        imageUrl: sample.imageUrl ? this.normalizeResourceUrl(sample.imageUrl) : sample.imageUrl
+      }))
+    };
+  }
+
+  async inferCheckpointSample(checkpointId: number, sampleIndex: number): Promise<SingleInferenceResult> {
+    const result = await this.api.request<SingleInferenceResult>(
+      `/api/training/checkpoints/${encodeURIComponent(String(checkpointId))}/infer`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ sampleIndex })
+      }
+    );
+    return {
+      ...result,
+      sample: {
+        ...result.sample,
+        imageUrl: result.sample?.imageUrl ? this.normalizeResourceUrl(result.sample.imageUrl) : result.sample?.imageUrl
+      },
+      activations: result.activations ?? []
+    };
   }
 
   observeBackendJob(jobId: string): void {

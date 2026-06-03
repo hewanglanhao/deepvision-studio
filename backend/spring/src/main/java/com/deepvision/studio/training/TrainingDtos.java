@@ -228,4 +228,39 @@ public final class TrainingDtos {
       String datasetId,
       List<JsonNode> layers
   ) {}
+
+  @Schema(description = "Sample item available for single checkpoint inference")
+  public record InferenceSampleItem(
+      int index,
+      int trueIndex,
+      String trueLabel,
+      String name,
+      String imageUrl,
+      List<Integer> shape,
+      List<Double> featurePreview,
+      Integer featureCount
+  ) {}
+
+  @Schema(description = "Samples available for checkpoint inference")
+  public record InferenceSampleListResponse(
+      String type,
+      String datasetId,
+      int sampleCount,
+      List<InferenceSampleItem> samples
+  ) {}
+
+  @Schema(description = "Request to run single-sample checkpoint inference")
+  public record SingleInferenceRequest(
+      int sampleIndex
+  ) {}
+
+  @Schema(description = "Single-sample checkpoint inference result")
+  public record SingleInferenceResult(
+      String type,
+      String jobId,
+      String datasetId,
+      JsonNode sample,
+      JsonNode prediction,
+      JsonNode activations
+  ) {}
 }
