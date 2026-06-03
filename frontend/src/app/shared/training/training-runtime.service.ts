@@ -51,6 +51,7 @@ export interface BackpropLayerStat {
   gradNorm: number;
   gradMean: number;
   gradMax: number;
+  gradHistogram?: Array<{ from: number; to: number; count: number }>;
   weightNorm: number;
   updateNorm: number;
   status: 'stable' | 'vanishing' | 'exploding' | 'no_grad';
@@ -99,6 +100,17 @@ export interface TrainingCheckpointSummary {
   config: (TrainingConfig & { lossFunction?: string }) | null;
   split: { train?: number; val?: number; test?: number } | null;
   testResult: unknown;
+  metricHistory?: Array<{
+    step: number;
+    epoch: number;
+    loss: number;
+    valLoss?: number | null;
+    accuracy: number;
+    valAccuracy?: number | null;
+    lr: number;
+    gradientNorm: number;
+  }>;
+  status?: 'running' | 'paused' | 'stopped' | 'completed' | string;
   epoch: number;
   totalEpochs: number;
   trainLoss: number | null;

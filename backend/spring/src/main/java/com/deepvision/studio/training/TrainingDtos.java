@@ -208,6 +208,8 @@ public final class TrainingDtos {
       JsonNode config,
       JsonNode split,
       JsonNode testResult,
+      JsonNode metricHistory,
+      String status,
       int epoch,
       int totalEpochs,
       Double trainLoss,

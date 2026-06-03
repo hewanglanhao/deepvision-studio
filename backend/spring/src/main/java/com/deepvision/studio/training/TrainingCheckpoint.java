@@ -63,7 +63,13 @@ public class TrainingCheckpoint {
   private String testResultJson;
 
   @Lob
+  private String metricHistoryJson;
+
+  @Lob
   private String networkDescription;
+
+  @Column(length = 32)
+  private String status = "completed";
 
   @Column(nullable = false)
   private int epoch;
@@ -103,7 +109,9 @@ public class TrainingCheckpoint {
       String configJson,
       String splitJson,
       String testResultJson,
+      String metricHistoryJson,
       String networkDescription,
+      String status,
       int epoch,
       int totalEpochs,
       Double trainLoss,
@@ -125,7 +133,9 @@ public class TrainingCheckpoint {
     this.configJson = configJson;
     this.splitJson = splitJson;
     this.testResultJson = testResultJson;
+    this.metricHistoryJson = metricHistoryJson;
     this.networkDescription = networkDescription;
+    this.status = status;
     this.epoch = epoch;
     this.totalEpochs = totalEpochs;
     this.trainLoss = trainLoss;
@@ -149,7 +159,9 @@ public class TrainingCheckpoint {
   public String getConfigJson() { return configJson; }
   public String getSplitJson() { return splitJson; }
   public String getTestResultJson() { return testResultJson; }
+  public String getMetricHistoryJson() { return metricHistoryJson; }
   public String getNetworkDescription() { return networkDescription; }
+  public String getStatus() { return status; }
   public int getEpoch() { return epoch; }
   public int getTotalEpochs() { return totalEpochs; }
   public Double getTrainLoss() { return trainLoss; }

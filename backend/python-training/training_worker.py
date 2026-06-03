@@ -701,6 +701,7 @@ def collect_layer_backprop_stats(model: nn.Module, before: dict[str, torch.Tenso
             "gradNorm": round(tensor_norm(grad_values), 6),
             "gradMean": round(tensor_mean(grad_values), 6),
             "gradMax": round(tensor_abs_max(grad_values), 6),
+            "gradHistogram": tensor_histogram(grad_values, bins=14),
             "weightNorm": round(tensor_norm(weight_values), 6),
             "updateNorm": 0.0,
             "status": gradient_status(tensor_norm(grad_values)) if grad_values else "no_grad",
@@ -794,6 +795,30 @@ def tensor_abs_max(values: list[torch.Tensor]) -> float:
         return 0.0
     merged = torch.cat([value.detach().abs().cpu() for value in values if value.numel() > 0])
     return float(merged.max()) if merged.numel() else 0.0
+
+
+def tensor_histogram(values: list[torch.Tensor], bins: int = 14) -> list[dict[str, Any]]:
+    if not values:
+        return []
+    merged = torch.cat([value.detach().cpu().flatten() for value in values if value.numel() > 0])
+    if not merged.numel():
+        return []
+    min_value = float(merged.min())
+    max_value = float(merged.max())
+    if math.isclose(min_value, max_value):
+        pad = max(1e-6, abs(min_value) * 0.1)
+        min_value -= pad
+        max_value += pad
+    counts = torch.histc(merged, bins=bins, min=min_value, max=max_value).to(torch.int64).tolist()
+    width = (max_value - min_value) / max(1, bins)
+    return [
+        {
+            "from": round(min_value + index * width, 6),
+            "to": round(min_value + (index + 1) * width, 6),
+            "count": int(count),
+        }
+        for index, count in enumerate(counts)
+    ]
 
 
 def prediction_explanation(predicted_index: int, true_index: int, confidence: float, true_probability: float) -> str:

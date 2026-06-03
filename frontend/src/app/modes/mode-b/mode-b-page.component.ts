@@ -14,7 +14,7 @@ import { AuthService } from '@core/auth/auth.service';
 import { ForwardRecordService } from '@shared/forward/forward-record.service';
 import { ForwardBackendService } from '@shared/forward/forward-backend.service';
 import { CollaborationRoomSummary, TrainingCollaborationService } from '@shared/training/training-collaboration.service';
-import { TrainingBackpropSnapshot, TrainingCheckpointSummary, TrainingLog, TrainingRuntimeService, TrainingTestResult } from '@shared/training/training-runtime.service';
+import { BackpropLayerStat, TrainingBackpropSnapshot, TrainingCheckpointSummary, TrainingLog, TrainingRuntimeService, TrainingTestResult } from '@shared/training/training-runtime.service';
 import { TrainingDatasetApiService } from '@shared/training/training-dataset-api.service';
 import { SimEngine } from '@shared/simulation/sim-engine';
 import {
@@ -69,6 +69,42 @@ export const KERNEL_PRESETS: KernelPreset[] = [
 const DATASET_COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be123c', '#4b5563'];
 type TrainingChartMetric = 'loss' | 'valLoss' | 'accuracy' | 'valAccuracy' | 'lr' | 'gradientNorm';
 type TrainingChartFormat = 'number' | 'percent' | 'lr';
+type BackpropMagnitude = 'too-small' | 'small' | 'normal' | 'large' | 'too-large';
+type BackpropLayerHistoryPoint = {
+  step: number;
+  label: string;
+  phase: string;
+  gradNorm: number;
+  updateNorm: number;
+  gradMean: number;
+  gradMax: number;
+  weightNorm: number;
+  histogram: Array<{ from: number; to: number; count: number }>;
+};
+
+const NETWORK_LAYER_COLOR: Record<string, string> = {
+  input: '#6366f1',
+  conv2d: '#0ea5e9',
+  pool2d: '#10b981',
+  residual: '#14b8a6',
+  flatten: '#f59e0b',
+  dense: '#8b5cf6',
+  activation: '#ec4899',
+  dropout: '#94a3b8',
+  output: '#ef4444'
+};
+
+const NETWORK_LAYER_ICON: Record<string, string> = {
+  input: '⬛',
+  conv2d: '⊞',
+  pool2d: '⊟',
+  flatten: '≡',
+  residual: '+',
+  dense: '◉',
+  activation: 'ƒ',
+  dropout: '⊘',
+  output: '▶'
+};
 
 @Component({
   selector: 'app-mode-b-page',
@@ -186,6 +222,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   trainingHistory: MetricPoint[] = [];
   trainingLogs: TrainingLog[] = [];
   latestBackprop: TrainingBackpropSnapshot | null = null;
+  selectedBackpropLayerId: number | null = null;
+  showBackpropLayerModal = false;
+  backpropLayerHistory: Record<number, BackpropLayerHistoryPoint[]> = {};
+  private backpropHistoryStep = 0;
+  private backpropHistoryJobId = '';
   trainingTestResult: TrainingTestResult | null = null;
   trainingCheckpoints: TrainingCheckpointSummary[] = [];
   selectedCheckpointId: number | null = null;
@@ -341,7 +382,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
-    this.subs.add(this.trainingSvc.backprop$.subscribe(snapshot => this.latestBackprop = snapshot));
+    this.subs.add(this.trainingSvc.backprop$.subscribe(snapshot => this.handleBackpropSnapshot(snapshot)));
     this.subs.add(this.trainingSvc.testResult$.subscribe(result => {
       this.trainingTestResult = result;
       if (result && this.authUser) void this.loadTrainingCheckpoints();
@@ -366,6 +407,54 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (this.forwardDebounceTimer !== null) {
       window.clearTimeout(this.forwardDebounceTimer);
       this.forwardDebounceTimer = null;
+    }
+  }
+
+  private handleBackpropSnapshot(snapshot: TrainingBackpropSnapshot | null): void {
+    if (!snapshot) {
+      this.latestBackprop = null;
+      this.selectedBackpropLayerId = null;
+      this.showBackpropLayerModal = false;
+      this.backpropLayerHistory = {};
+      this.backpropHistoryStep = 0;
+      this.backpropHistoryJobId = '';
+      return;
+    }
+
+    if (snapshot.jobId && snapshot.jobId !== this.backpropHistoryJobId) {
+      this.backpropLayerHistory = {};
+      this.backpropHistoryStep = 0;
+      this.backpropHistoryJobId = snapshot.jobId;
+      this.selectedBackpropLayerId = null;
+      this.showBackpropLayerModal = false;
+    }
+
+    this.latestBackprop = snapshot;
+    if (!snapshot.layers.length) return;
+
+    if (
+      this.selectedBackpropLayerId === null ||
+      !snapshot.layers.some(layer => layer.layerId === this.selectedBackpropLayerId)
+    ) {
+      this.selectedBackpropLayerId = snapshot.layers.find(layer => layer.trainable)?.layerId ?? snapshot.layers[0].layerId;
+    }
+
+    this.backpropHistoryStep += 1;
+    const label = `E${snapshot.epoch}/${snapshot.totalEpochs} B${snapshot.batch} ${this.backpropPhaseText(snapshot.phase)}`;
+    for (const layer of snapshot.layers) {
+      const current = this.backpropLayerHistory[layer.layerId] ?? [];
+      current.push({
+        step: this.backpropHistoryStep,
+        label,
+        phase: snapshot.phase,
+        gradNorm: Number(layer.gradNorm || 0),
+        updateNorm: Number(layer.updateNorm || 0),
+        gradMean: Number(layer.gradMean || 0),
+        gradMax: Number(layer.gradMax || 0),
+        weightNorm: Number(layer.weightNorm || 0),
+        histogram: layer.gradHistogram ?? []
+      });
+      this.backpropLayerHistory[layer.layerId] = current.slice(-80);
     }
   }
 
@@ -698,6 +787,20 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get accuracyAxisTicks() { return this.chartAxisTicks(this.accuracyChartDomain, 'percent'); }
   get lrAxisTicks() { return this.chartAxisTicks(this.lrChartDomain, 'lr'); }
   get gradientAxisTicks() { return this.chartAxisTicks(this.gradientChartDomain, 'number'); }
+  get chartFirstStepLabel(): string {
+    const first = this.trainingHistory[0]?.step ?? 0;
+    return `step ${first}`;
+  }
+  get chartLastStepLabel(): string {
+    const latest = this.trainingHistory[this.trainingHistory.length - 1]?.step ?? this.trainingEpoch ?? 0;
+    return `step ${latest}`;
+  }
+  get weightHistogramFirstLabel(): string {
+    return this.weightHistogramBins[0]?.label ?? '0';
+  }
+  get weightHistogramLastLabel(): string {
+    return this.weightHistogramBins[this.weightHistogramBins.length - 1]?.label ?? '0';
+  }
   private get lossChartDomain(): [number, number] {
     return this.chartDomain(['loss', 'valLoss'], { min: 0, padRatio: 0.08, fallbackMax: 1 });
   }
@@ -755,6 +858,62 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
   get backpropNetworkLayers() {
     return this.backpropLayers;
+  }
+  get selectedBackpropLayer(): BackpropLayerStat | null {
+    if (!this.backpropLayers.length) return null;
+    return this.backpropLayers.find(layer => layer.layerId === this.selectedBackpropLayerId) ?? this.backpropLayers[0];
+  }
+  get selectedBackpropLayerHistory(): BackpropLayerHistoryPoint[] {
+    const id = this.selectedBackpropLayer?.layerId;
+    return id === undefined ? [] : (this.backpropLayerHistory[id] ?? []);
+  }
+  get selectedGradCurvePoints(): string {
+    return this.backpropCurvePoints('gradNorm');
+  }
+  get selectedUpdateCurvePoints(): string {
+    return this.backpropCurvePoints('updateNorm');
+  }
+  get selectedBackpropCurveMax(): number {
+    return Math.max(
+      1e-6,
+      ...this.selectedBackpropLayerHistory.map(point => point.gradNorm || 0),
+      ...this.selectedBackpropLayerHistory.map(point => point.updateNorm || 0)
+    );
+  }
+  get selectedGradientHistogram(): Array<{ from: number; to: number; count: number }> {
+    const current = this.selectedBackpropLayer?.gradHistogram;
+    if (current?.length) return current;
+    const latest = [...this.selectedBackpropLayerHistory].reverse().find(point => point.histogram.length);
+    return latest?.histogram ?? [];
+  }
+  get selectedGradientHistogramMax(): number {
+    return Math.max(1, ...this.selectedGradientHistogram.map(bin => bin.count || 0));
+  }
+  get selectedGradientHistogramMinLabel(): string {
+    const first = this.selectedGradientHistogram[0];
+    return first ? first.from.toFixed(4) : '0';
+  }
+  get selectedGradientHistogramMaxLabel(): string {
+    const latest = this.selectedGradientHistogram[this.selectedGradientHistogram.length - 1];
+    return latest ? latest.to.toFixed(4) : '0';
+  }
+  get selectedBackpropFirstStepLabel(): string {
+    const first = this.selectedBackpropLayerHistory[0];
+    return first ? `step ${first.step}` : 'step 0';
+  }
+  get selectedBackpropLastStepLabel(): string {
+    const latest = this.selectedBackpropLayerHistory[this.selectedBackpropLayerHistory.length - 1];
+    return latest ? `step ${latest.step}` : 'step 0';
+  }
+  backpropMetricMax(metric: 'gradNorm' | 'updateNorm'): number {
+    return Math.max(1e-6, ...this.selectedBackpropLayerHistory.map(point => point[metric] || 0));
+  }
+  backpropMetricCurrent(metric: 'gradNorm' | 'updateNorm'): number {
+    const latest = this.selectedBackpropLayerHistory[this.selectedBackpropLayerHistory.length - 1];
+    return latest ? Number(latest[metric] || 0) : 0;
+  }
+  backpropMetricFormat(metric: 'gradNorm' | 'updateNorm'): string {
+    return metric === 'gradNorm' ? '1.4-4' : '1.6-6';
   }
   get maxLayerGradNorm(): number {
     return Math.max(1e-6, ...this.backpropLayers.map(layer => layer.gradNorm || 0));
@@ -814,6 +973,25 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (status === 'no_grad') return 'muted';
     return 'ok';
   }
+  layerMagnitude(layer: BackpropLayerStat): BackpropMagnitude {
+    const grad = Number(layer.gradNorm || 0);
+    if (layer.status === 'no_grad' || grad < 1e-5) return 'too-small';
+    if (grad < 0.02) return 'small';
+    if (grad <= 2.5) return 'normal';
+    if (grad <= 8) return 'large';
+    return 'too-large';
+  }
+  layerMagnitudeText(layer: BackpropLayerStat): string {
+    const level = this.layerMagnitude(layer);
+    if (level === 'too-small') return '过小';
+    if (level === 'small') return '偏小';
+    if (level === 'large') return '偏大';
+    if (level === 'too-large') return '过大';
+    return '正常';
+  }
+  layerMagnitudeClass(layer: BackpropLayerStat): string {
+    return this.layerMagnitude(layer);
+  }
   layerGradPercent(layer: TrainingBackpropSnapshot['layers'][number]): number {
     return Math.max(0, Math.min(100, ((layer.gradNorm || 0) / this.maxLayerGradNorm) * 100));
   }
@@ -835,16 +1013,55 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
   layerVisualToken(layer: TrainingBackpropSnapshot['layers'][number]): string {
     const type = (layer.layerType || '').toLowerCase();
-    if (type.includes('input')) return 'IN';
-    if (type.includes('output')) return 'OUT';
-    if (type.includes('residual')) return 'RES';
-    if (type.includes('conv')) return 'CV';
-    if (type.includes('pool')) return 'PL';
-    if (type.includes('flatten')) return 'FL';
-    if (type.includes('dropout')) return 'DO';
-    if (type.includes('activation') || type === 'relu' || type === 'sigmoid' || type === 'tanh') return 'AC';
-    if (type.includes('dense') || type.includes('linear')) return 'FC';
-    return 'L';
+    return NETWORK_LAYER_ICON[this.layerVisualType(type)] ?? '□';
+  }
+  layerVisualColor(layer: TrainingBackpropSnapshot['layers'][number]): string {
+    return NETWORK_LAYER_COLOR[this.layerVisualType(layer.layerType)] ?? '#64748b';
+  }
+  selectBackpropLayer(layerId: number): void {
+    this.selectedBackpropLayerId = layerId;
+    this.showBackpropLayerModal = true;
+  }
+  closeBackpropLayerModal(): void {
+    this.showBackpropLayerModal = false;
+  }
+  backpropPhaseText(phase: string): string {
+    const names: Record<string, string> = {
+      forward: '前向',
+      loss: '损失',
+      backward: '反传',
+      gradient_check: '检查',
+      optimizer_step: '更新',
+      validation: '验证'
+    };
+    return names[phase] ?? phase;
+  }
+  private layerVisualType(rawType: string): string {
+    const type = (rawType || '').toLowerCase();
+    if (type.includes('input')) return 'input';
+    if (type.includes('output')) return 'output';
+    if (type.includes('residual')) return 'residual';
+    if (type.includes('conv')) return 'conv2d';
+    if (type.includes('pool')) return 'pool2d';
+    if (type.includes('flatten')) return 'flatten';
+    if (type.includes('dropout')) return 'dropout';
+    if (type.includes('activation') || type === 'relu' || type === 'sigmoid' || type === 'tanh' || type === 'gelu') return 'activation';
+    if (type.includes('dense') || type.includes('linear')) return 'dense';
+    return type || 'default';
+  }
+  private backpropCurvePoints(metric: 'gradNorm' | 'updateNorm'): string {
+    const history = this.selectedBackpropLayerHistory;
+    if (!history.length) return '';
+    const maxValue = Math.max(1e-6, ...history.map(point => point[metric] || 0));
+    if (history.length === 1) {
+      const y = 42 - ((history[0][metric] || 0) / maxValue) * 34;
+      return `4,${y.toFixed(2)} 96,${y.toFixed(2)}`;
+    }
+    return history.map((point, index) => {
+      const x = 4 + (index / Math.max(1, history.length - 1)) * 92;
+      const y = 42 - ((point[metric] || 0) / maxValue) * 34;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
   }
   get weightHistogramBins(): Array<{ label: string; value: number }> {
     const mean = this.trainingWeightMean;

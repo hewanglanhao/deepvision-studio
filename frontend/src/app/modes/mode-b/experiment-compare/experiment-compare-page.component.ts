@@ -20,6 +20,8 @@ interface DatasetHistoryOption {
   latestCreatedAt: string;
 }
 
+type CheckpointMetricKey = 'loss' | 'valLoss' | 'accuracy' | 'valAccuracy' | 'lr' | 'gradientNorm';
+
 @Component({
   selector: 'app-experiment-compare-page',
   standalone: true,
@@ -235,6 +237,86 @@ export class ExperimentComparePageComponent implements OnInit, OnDestroy {
     if (value >= 0.85) return 'metric-good';
     if (value >= 0.6) return 'metric-mid';
     return 'metric-low';
+  }
+
+  checkpointStatusClass(checkpoint: TrainingCheckpointSummary): string {
+    if (checkpoint.status === 'completed' && checkpoint.epoch >= checkpoint.totalEpochs) return 'status-completed';
+    if (checkpoint.status === 'stopped') return 'status-stopped';
+    if (checkpoint.epoch < checkpoint.totalEpochs) return 'status-incomplete';
+    return 'status-unknown';
+  }
+
+  checkpointStatusText(checkpoint: TrainingCheckpointSummary): string {
+    if (checkpoint.status === 'completed' && checkpoint.epoch >= checkpoint.totalEpochs) return '已完成';
+    if (checkpoint.status === 'stopped') return '异常/停止';
+    if (checkpoint.epoch < checkpoint.totalEpochs) return `未完成 ${checkpoint.epoch}/${checkpoint.totalEpochs}`;
+    return checkpoint.status || '状态未知';
+  }
+
+  checkpointStatusNote(checkpoint: TrainingCheckpointSummary): string {
+    const hasHistory = this.checkpointMetricHistory(checkpoint).length > 0;
+    if (!hasHistory) return '该历史记录没有保存曲线数据，可能是旧版本 checkpoint 或保存时训练流未写入。';
+    if (checkpoint.status === 'stopped') return '该次训练异常结束或被停止，曲线仅展示停止前已经记录的部分。';
+    if (checkpoint.epoch < checkpoint.totalEpochs) return '该次训练没有跑满预设 epoch，曲线仅展示已经完成的训练部分。';
+    return '';
+  }
+
+  checkpointMetricHistory(checkpoint: TrainingCheckpointSummary) {
+    return (checkpoint.metricHistory ?? []).filter(point => Number.isFinite(point.step));
+  }
+
+  checkpointHasMetricHistory(checkpoint: TrainingCheckpointSummary): boolean {
+    return this.checkpointMetricHistory(checkpoint).length > 0;
+  }
+
+  checkpointFirstStep(checkpoint: TrainingCheckpointSummary): string {
+    const history = this.checkpointMetricHistory(checkpoint);
+    return `step ${history[0]?.step ?? 0}`;
+  }
+
+  checkpointLastStep(checkpoint: TrainingCheckpointSummary): string {
+    const history = this.checkpointMetricHistory(checkpoint);
+    return `step ${history[history.length - 1]?.step ?? checkpoint.epoch}`;
+  }
+
+  checkpointMiniPolyline(checkpoint: TrainingCheckpointSummary, metric: CheckpointMetricKey, group: CheckpointMetricKey[]): string {
+    const history = this.checkpointMetricHistory(checkpoint);
+    if (!history.length) return '';
+    const [minValue, maxValue] = this.checkpointChartDomain(checkpoint, group);
+    const span = Math.max(0.000001, maxValue - minValue);
+    const usable = history
+      .map((point, index) => ({ point, index, value: Number(point[metric]) }))
+      .filter(item => Number.isFinite(item.value));
+    if (!usable.length) return '';
+    const maxIndex = Math.max(1, history.length - 1);
+    if (usable.length === 1) {
+      const y = 44 - ((usable[0].value - minValue) / span) * 38;
+      return `4,${this.clampChartY(y).toFixed(2)} 96,${this.clampChartY(y).toFixed(2)}`;
+    }
+    return usable.map(item => {
+      const x = 4 + (item.index / maxIndex) * 92;
+      const y = 44 - ((item.value - minValue) / span) * 38;
+      return `${x.toFixed(2)},${this.clampChartY(y).toFixed(2)}`;
+    }).join(' ');
+  }
+
+  checkpointChartMaxLabel(checkpoint: TrainingCheckpointSummary, group: CheckpointMetricKey[], digits = 3): string {
+    const [, maxValue] = this.checkpointChartDomain(checkpoint, group);
+    return maxValue.toFixed(digits);
+  }
+
+  private checkpointChartDomain(checkpoint: TrainingCheckpointSummary, metrics: CheckpointMetricKey[]): [number, number] {
+    const values = this.checkpointMetricHistory(checkpoint).flatMap(point =>
+      metrics.map(metric => Number(point[metric])).filter(Number.isFinite)
+    );
+    if (!values.length) return [0, 1];
+    const min = Math.min(0, ...values);
+    const max = Math.max(0.000001, ...values);
+    return [min, max * 1.08];
+  }
+
+  private clampChartY(value: number): number {
+    return Math.max(4, Math.min(46, value));
   }
 
   private ensureSelectedCheckpoint(): void {

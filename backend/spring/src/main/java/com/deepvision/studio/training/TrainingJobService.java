@@ -54,6 +54,7 @@ import org.springframework.web.socket.WebSocketSession;
 public class TrainingJobService {
   private static final DateTimeFormatter JOB_ID_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
   private static final int MAX_RECENT_TRAINING_EVENTS = 240;
+  private static final int MAX_CHECKPOINT_METRIC_HISTORY = 2000;
 
   private final TrainingDatasetService datasetService;
   private final AppUserRepository users;
@@ -280,6 +281,7 @@ public class TrainingJobService {
       try {
         TrainingMetricMessage metric = objectMapper.treeToValue(node, TrainingMetricMessage.class);
         job.setLatestMetric(metric);
+        job.addMetricHistory(metric);
         job.addStreamEvent(line);
         if (metric.epoch() >= metric.totalEpochs()) {
           job.setStatus("completed");
@@ -435,6 +437,7 @@ public class TrainingJobService {
       String configJson = objectMapper.writeValueAsString(job.request().config());
       String splitJson = objectMapper.writeValueAsString(job.request().split());
       String testResultJson = objectMapper.writeValueAsString(testResult);
+      String metricHistoryJson = objectMapper.writeValueAsString(job.metricHistory());
       TrainingMetricMessage metric = job.latestMetric();
       TrainingCheckpoint checkpoint = new TrainingCheckpoint(
           user,
@@ -448,7 +451,9 @@ public class TrainingJobService {
           configJson,
           splitJson,
           testResultJson,
+          metricHistoryJson,
           describeNetwork(job.request().layers()),
+          job.status(),
           job.epoch(),
           job.totalEpochs(),
           metric == null ? null : metric.loss(),
@@ -470,6 +475,7 @@ public class TrainingJobService {
     JsonNode config = readCheckpointJson(checkpoint.getConfigJson(), objectMapper.createObjectNode());
     JsonNode split = readCheckpointJson(checkpoint.getSplitJson(), objectMapper.createObjectNode());
     JsonNode testResult = readCheckpointJson(checkpoint.getTestResultJson(), objectMapper.createObjectNode());
+    JsonNode metricHistory = readCheckpointJson(checkpoint.getMetricHistoryJson(), objectMapper.createArrayNode());
     List<String> layerSummary = summarizeLayers(layers);
     String description = checkpoint.getNetworkDescription();
     if (description == null || description.isBlank()) {
@@ -488,6 +494,8 @@ public class TrainingJobService {
         config,
         split,
         testResult,
+        metricHistory,
+        checkpoint.getStatus(),
         checkpoint.getEpoch(),
         checkpoint.getTotalEpochs(),
         checkpoint.getTrainLoss(),
@@ -710,6 +718,7 @@ public class TrainingJobService {
     private volatile boolean checkpointSaved;
     private volatile Process process;
     private final ArrayDeque<String> recentStreamEvents = new ArrayDeque<>();
+    private final ArrayDeque<TrainingMetricMessage> metricHistory = new ArrayDeque<>();
 
     private TrainingJob(String jobId, StartTrainingRequest request, String username, String modelSignature, int totalEpochs, int totalBatches) {
       this.jobId = jobId;
@@ -765,6 +774,9 @@ public class TrainingJobService {
       synchronized (recentStreamEvents) {
         recentStreamEvents.clear();
       }
+      synchronized (metricHistory) {
+        metricHistory.clear();
+      }
       status = "running";
     }
 
@@ -780,6 +792,21 @@ public class TrainingJobService {
     private List<String> recentStreamEvents() {
       synchronized (recentStreamEvents) {
         return new ArrayList<>(recentStreamEvents);
+      }
+    }
+
+    private void addMetricHistory(TrainingMetricMessage metric) {
+      synchronized (metricHistory) {
+        metricHistory.addLast(metric);
+        while (metricHistory.size() > MAX_CHECKPOINT_METRIC_HISTORY) {
+          metricHistory.removeFirst();
+        }
+      }
+    }
+
+    private List<TrainingMetricMessage> metricHistory() {
+      synchronized (metricHistory) {
+        return new ArrayList<>(metricHistory);
       }
     }
 

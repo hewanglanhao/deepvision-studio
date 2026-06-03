@@ -1061,21 +1061,13 @@
             }
           </div>
 
-          <div class="bp-timeline">
-            @for (step of backpropTimeline; track step.key) {
-              <div [class]="'bp-step ' + (step.active ? 'active ' : '') + (step.done ? 'done' : '')">
-                <span></span>
-                <strong>{{ step.label }}</strong>
-              </div>
-            }
-          </div>
-
           @if (latestBackprop; as bp) {
             <section class="bp-panel bp-network-panel">
               <div class="bp-network-head">
                 <div>
                   <div class="section-title">网络结构中的梯度与参数更新</div>
                   <div class="muted">节点按前向结构排列，流光表示当前 batch 的反向梯度正在从输出端回传。</div>
+                  <div class="bp-click-hint">点击每个节点左上角图标，可查看该层梯度变化曲线和梯度直方图。</div>
                 </div>
                 <div class="bp-network-legend">
                   <span><i class="grad"></i>grad</span>
@@ -1088,32 +1080,42 @@
                 <div class="bp-network-scroll">
                   @for (layer of backpropNetworkLayers; track layer.layerId + '-' + $index) {
                     <div class="bp-network-stage">
-                      <div [class]="'bp-network-node ' + layerVisualClass(layer) + ' ' + layerGradStatusClass(layer.status)">
-                        <div class="bp-node-orbit">
+                      <div
+                        [class]="'bp-network-node ' + layerVisualClass(layer) + ' ' + layerGradStatusClass(layer.status) + (selectedBackpropLayerId === layer.layerId ? ' selected' : '')"
+                        [style.--layer-accent]="layerVisualColor(layer)">
+                        <button
+                          type="button"
+                          class="bp-node-editor-icon"
+                          [class.active]="selectedBackpropLayerId === layer.layerId"
+                          [style.--layer-accent]="layerVisualColor(layer)"
+                          title="查看该层梯度曲线"
+                          (click)="selectBackpropLayer(layer.layerId); $event.stopPropagation()">
                           <span>{{ layerVisualToken(layer) }}</span>
-                        </div>
+                        </button>
                         <div class="bp-node-copy">
                           <strong>{{ layer.name }}</strong>
                           <em>{{ layer.layerType }} · {{ layerGradStatusText(layer.status) }}</em>
                         </div>
-                        <div class="bp-node-metrics">
-                          <div>
-                            <span>grad</span>
+                        <div [class]="'bp-node-quality ' + layerMagnitudeClass(layer)">
+                          <span>梯度大小</span>
+                          <strong>{{ layerMagnitudeText(layer) }}</strong>
+                        </div>
+                        <div class="bp-node-value-grid">
+                          <div class="bp-node-value grad">
+                            <span>grad_norm</span>
                             <strong>{{ layer.gradNorm | number:'1.4-4' }}</strong>
+                            <i [style.width.%]="layerGradPercent(layer)"></i>
                           </div>
-                          <div>
-                            <span>update</span>
+                          <div class="bp-node-value update">
+                            <span>update_norm</span>
                             <strong>{{ layer.updateNorm | number:'1.6-6' }}</strong>
+                            <i [style.width.%]="layerUpdatePercent(layer)"></i>
                           </div>
                         </div>
-                        <div class="bp-node-bars">
-                          <div class="bp-node-bar grad"><i [style.width.%]="layerGradPercent(layer)"></i></div>
-                          <div class="bp-node-bar update"><i [style.width.%]="layerUpdatePercent(layer)"></i></div>
-                        </div>
-                        <div class="bp-node-foot">
-                          <span>mean {{ layer.gradMean | number:'1.6-6' }}</span>
-                          <span>max {{ layer.gradMax | number:'1.4-4' }}</span>
-                          <span>w {{ layer.weightNorm | number:'1.3-3' }}</span>
+                        <div class="bp-node-stat-strip">
+                          <div><span>mean</span><strong>{{ layer.gradMean | number:'1.6-6' }}</strong></div>
+                          <div><span>max</span><strong>{{ layer.gradMax | number:'1.4-4' }}</strong></div>
+                          <div><span>weight</span><strong>{{ layer.weightNorm | number:'1.3-3' }}</strong></div>
                         </div>
                       </div>
                       @if (!$last) {
@@ -1131,17 +1133,6 @@
             </section>
 
             <div class="bp-grid">
-              <section class="bp-panel">
-                <div class="section-title">损失对输出的影响</div>
-                <div class="bp-prediction">
-                  <div><span>真实类别</span><strong>{{ bp.prediction.trueIndex }}</strong></div>
-                  <div><span>预测类别</span><strong>{{ bp.prediction.predictedIndex }}</strong></div>
-                  <div><span>预测置信度</span><strong>{{ (bp.prediction.confidence * 100) | number:'1.1-1' }}%</strong></div>
-                  <div><span>真实类概率</span><strong>{{ (bp.prediction.trueProbability * 100) | number:'1.1-1' }}%</strong></div>
-                </div>
-                <p class="bp-explain">{{ bp.prediction.explanation }}</p>
-              </section>
-
               <section class="bp-panel">
                 <div class="section-title">优化器解释</div>
                 <p class="bp-explain">{{ optimizerExplanation }}</p>
@@ -1164,6 +1155,133 @@
             <div class="bp-empty">等待训练流中的 backprop 事件。</div>
           }
         </div>
+
+        @if (showBackpropLayerModal) {
+          @if (selectedBackpropLayer; as detailLayer) {
+            <div class="modal-mask bp-layer-modal-mask" (click)="closeBackpropLayerModal()">
+              <div class="bp-layer-modal" (click)="$event.stopPropagation()">
+                <div class="bp-layer-modal-head">
+                  <div class="bp-inspector-title">
+                    <span class="bp-inspector-icon" [style.color]="layerVisualColor(detailLayer)">{{ layerVisualToken(detailLayer) }}</span>
+                    <div>
+                      <strong>{{ detailLayer.name }}</strong>
+                      <em>{{ detailLayer.layerType }} · {{ selectedBackpropLayerHistory.length }} 个采样点 · Epoch {{ latestBackprop?.epoch }} / {{ latestBackprop?.totalEpochs }}</em>
+                    </div>
+                  </div>
+                  <div class="bp-layer-modal-actions">
+                    <div [class]="'bp-node-quality compact ' + layerMagnitudeClass(detailLayer)">
+                      <span>梯度大小</span>
+                      <strong>{{ layerMagnitudeText(detailLayer) }}</strong>
+                    </div>
+                    <button type="button" class="btn-ghost btn-sm" (click)="closeBackpropLayerModal()">关闭</button>
+                  </div>
+                </div>
+                <div class="bp-layer-modal-metrics">
+                  <div><span>grad_norm</span><strong>{{ detailLayer.gradNorm | number:'1.4-4' }}</strong></div>
+                  <div><span>update_norm</span><strong>{{ detailLayer.updateNorm | number:'1.6-6' }}</strong></div>
+                  <div><span>grad_mean</span><strong>{{ detailLayer.gradMean | number:'1.6-6' }}</strong></div>
+                  <div><span>grad_max</span><strong>{{ detailLayer.gradMax | number:'1.4-4' }}</strong></div>
+                  <div><span>weight_norm</span><strong>{{ detailLayer.weightNorm | number:'1.3-3' }}</strong></div>
+                </div>
+                <div class="bp-detail-grid bp-detail-grid-modal">
+                  <div class="bp-detail-chart">
+                    <div class="bp-detail-chart-head">
+                      <div>
+                        <span>grad_norm 随 step 变化</span>
+                        <em>X: 采样 step · Y: grad_norm</em>
+                      </div>
+                      <strong>当前 {{ backpropMetricCurrent('gradNorm') | number:'1.4-4' }}</strong>
+                    </div>
+                    <div class="bp-chart-body">
+                      <div class="bp-y-axis">
+                        <span>{{ backpropMetricMax('gradNorm') | number:'1.4-4' }}</span>
+                        <span>0</span>
+                      </div>
+                      <div class="bp-chart-plot">
+                        <svg viewBox="0 0 100 48" preserveAspectRatio="none">
+                          <line x1="4" y1="8" x2="4" y2="42"></line>
+                          <line x1="4" y1="42" x2="96" y2="42"></line>
+                          <polyline [attr.points]="selectedGradCurvePoints" class="grad"></polyline>
+                        </svg>
+                        <div class="bp-chart-value-pill grad">最新 {{ backpropMetricCurrent('gradNorm') | number:'1.4-4' }}</div>
+                      </div>
+                      <div class="bp-axis-label y">grad_norm</div>
+                      <div class="bp-axis-label x">采样 step</div>
+                      <div class="bp-x-axis">
+                        <span>{{ selectedBackpropFirstStepLabel }}</span>
+                        <span>{{ selectedBackpropLastStepLabel }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="bp-detail-chart">
+                    <div class="bp-detail-chart-head">
+                      <div>
+                        <span>update_norm 随 step 变化</span>
+                        <em>X: 采样 step · Y: update_norm</em>
+                      </div>
+                      <strong>当前 {{ backpropMetricCurrent('updateNorm') | number:'1.6-6' }}</strong>
+                    </div>
+                    <div class="bp-chart-body">
+                      <div class="bp-y-axis">
+                        <span>{{ backpropMetricMax('updateNorm') | number:'1.6-6' }}</span>
+                        <span>0</span>
+                      </div>
+                      <div class="bp-chart-plot">
+                        <svg viewBox="0 0 100 48" preserveAspectRatio="none">
+                          <line x1="4" y1="8" x2="4" y2="42"></line>
+                          <line x1="4" y1="42" x2="96" y2="42"></line>
+                          <polyline [attr.points]="selectedUpdateCurvePoints" class="update"></polyline>
+                        </svg>
+                        <div class="bp-chart-value-pill update">最新 {{ backpropMetricCurrent('updateNorm') | number:'1.6-6' }}</div>
+                      </div>
+                      <div class="bp-axis-label y">update_norm</div>
+                      <div class="bp-axis-label x">采样 step</div>
+                      <div class="bp-x-axis">
+                        <span>{{ selectedBackpropFirstStepLabel }}</span>
+                        <span>{{ selectedBackpropLastStepLabel }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="bp-detail-histogram">
+                    <div class="bp-detail-chart-head">
+                      <div>
+                        <span>梯度直方图</span>
+                        <em>X: 梯度值区间 · Y: 参数数量</em>
+                      </div>
+                      <strong>最大频数 {{ selectedGradientHistogramMax }}</strong>
+                    </div>
+                    <div class="bp-chart-body bp-histogram-body">
+                      <div class="bp-y-axis">
+                        <span>{{ selectedGradientHistogramMax }}</span>
+                        <span>0</span>
+                      </div>
+                      <div class="bp-histogram-plot">
+                        <div class="bp-histogram-bars">
+                          @for (bin of selectedGradientHistogram; track $index) {
+                            <div
+                              class="bp-histogram-bin"
+                              [style.height.%]="(bin.count / selectedGradientHistogramMax) * 100"
+                              [title]="(bin.from | number:'1.4-4') + ' ~ ' + (bin.to | number:'1.4-4') + ': ' + bin.count">
+                            </div>
+                          }
+                          @if (!selectedGradientHistogram.length) {
+                            <div class="bp-histogram-empty">当前阶段暂无梯度直方图</div>
+                          }
+                        </div>
+                      </div>
+                      <div class="bp-axis-label y">参数数量</div>
+                      <div class="bp-axis-label x">梯度值区间</div>
+                      <div class="bp-x-axis">
+                        <span>{{ selectedGradientHistogramMinLabel }}</span>
+                        <span>{{ selectedGradientHistogramMaxLabel }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+        }
 
         @if (trainingTestResult; as test) {
           <div class="test-result-panel">
@@ -1246,65 +1364,108 @@
         </div>
 
         <div class="charts-area">
-          <div class="chart-wrap metric-card">
-            <div class="chart-label" style="color:var(--red)">损失曲线</div>
-            <div class="metric-chart">
-              <div class="metric-y-axis">@for (tick of lossAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
-              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
-                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
-                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
-                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
-                <polyline [attr.points]="lossPolyline" fill="none" stroke="#dc2626" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
-                <polyline [attr.points]="valLossPolyline" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
-              </svg>
+          <div class="chart-wrap metric-card metric-card-loss">
+            <div class="metric-card-head">
+              <div><div class="chart-label">损失曲线</div><div class="chart-subtitle">X: 训练 step · Y: loss</div></div>
+              <div class="chart-value"><span>当前</span><strong>{{ trainingLoss | number:'1.4-4' }}</strong></div>
             </div>
+            <div class="metric-chart metric-chart-large">
+              <div class="metric-y-axis">@for (tick of lossAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
+              <div class="metric-plot">
+                <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                  <line class="metric-grid" x1="0" y1="25" x2="100" y2="25" />
+                  <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                  <line class="metric-grid" x1="0" y1="75" x2="100" y2="75" />
+                  <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                  <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                  <polyline [attr.points]="lossPolyline" fill="none" stroke="#dc2626" stroke-width="2.9" vector-effect="non-scaling-stroke"/>
+                  <polyline [attr.points]="valLossPolyline" fill="none" stroke="#d97706" stroke-width="2.4" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
+                </svg>
+              </div>
+            </div>
+            <div class="metric-x-axis"><span>{{ chartFirstStepLabel }}</span><strong>训练 step</strong><span>{{ chartLastStepLabel }}</span></div>
             <div class="chart-legend"><span style="color:#dc2626">— 训练损失</span><span style="color:#d97706">- - 验证损失</span></div>
           </div>
-          <div class="chart-wrap metric-card">
-            <div class="chart-label" style="color:var(--accent)">准确率曲线</div>
-            <div class="metric-chart">
-              <div class="metric-y-axis">@for (tick of accuracyAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
-              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
-                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
-                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
-                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
-                <polyline [attr.points]="accPolyline" fill="none" stroke="#2563eb" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
-                <polyline [attr.points]="valPolyline" fill="none" stroke="#059669" stroke-width="1.8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
-              </svg>
+          <div class="chart-wrap metric-card metric-card-accuracy">
+            <div class="metric-card-head">
+              <div><div class="chart-label">准确率曲线</div><div class="chart-subtitle">X: 训练 step · Y: accuracy</div></div>
+              <div class="chart-value"><span>当前</span><strong>{{ (trainingAcc*100) | number:'1.1-1' }}%</strong></div>
             </div>
+            <div class="metric-chart metric-chart-large">
+              <div class="metric-y-axis">@for (tick of accuracyAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
+              <div class="metric-plot">
+                <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                  <line class="metric-grid" x1="0" y1="25" x2="100" y2="25" />
+                  <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                  <line class="metric-grid" x1="0" y1="75" x2="100" y2="75" />
+                  <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                  <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                  <polyline [attr.points]="accPolyline" fill="none" stroke="#2563eb" stroke-width="2.9" vector-effect="non-scaling-stroke"/>
+                  <polyline [attr.points]="valPolyline" fill="none" stroke="#059669" stroke-width="2.4" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
+                </svg>
+              </div>
+            </div>
+            <div class="metric-x-axis"><span>{{ chartFirstStepLabel }}</span><strong>训练 step</strong><span>{{ chartLastStepLabel }}</span></div>
             <div class="chart-legend"><span style="color:#2563eb">— 训练集</span><span style="color:#059669">- - 验证集</span></div>
           </div>
-          <div class="chart-wrap metric-card">
-            <div class="chart-label" style="color:var(--accent2)">学习率变化</div>
-            <div class="metric-chart">
+          <div class="chart-wrap metric-card metric-card-lr">
+            <div class="metric-card-head">
+              <div><div class="chart-label">学习率变化</div><div class="chart-subtitle">X: 训练 step · Y: learning rate</div></div>
+              <div class="chart-value"><span>当前</span><strong>{{ trainingLr | number:'1.5-5' }}</strong></div>
+            </div>
+            <div class="metric-chart metric-chart-large">
               <div class="metric-y-axis">@for (tick of lrAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
-              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
-                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
-                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
-                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
-                <polyline [attr.points]="lrPolyline" fill="none" stroke="#0ea5e9" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
-              </svg>
+              <div class="metric-plot">
+                <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                  <line class="metric-grid" x1="0" y1="25" x2="100" y2="25" />
+                  <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                  <line class="metric-grid" x1="0" y1="75" x2="100" y2="75" />
+                  <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                  <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                  <polyline [attr.points]="lrPolyline" fill="none" stroke="#0ea5e9" stroke-width="2.9" vector-effect="non-scaling-stroke"/>
+                </svg>
+              </div>
             </div>
-            <div class="chart-legend"><span>当前 LR: {{ trainingLr | number:'1.5-5' }}</span></div>
+            <div class="metric-x-axis"><span>{{ chartFirstStepLabel }}</span><strong>训练 step</strong><span>{{ chartLastStepLabel }}</span></div>
+            <div class="chart-legend"><span>Scheduler: {{ trainingConfig.scheduler }}</span><span>Base LR: {{ trainingConfig.learningRate }}</span></div>
           </div>
-          <div class="chart-wrap metric-card">
-            <div class="chart-label" [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">梯度大小变化</div>
-            <div class="metric-chart">
+          <div class="chart-wrap metric-card metric-card-gradient">
+            <div class="metric-card-head">
+              <div><div class="chart-label">梯度大小变化</div><div class="chart-subtitle">X: 训练 step · Y: gradient norm</div></div>
+              <div class="chart-value"><span>当前</span><strong>{{ trainingGradientNorm | number:'1.4-4' }}</strong></div>
+            </div>
+            <div class="metric-chart metric-chart-large">
               <div class="metric-y-axis">@for (tick of gradientAxisTicks; track $index) { <span>{{ tick }}</span> }</div>
-              <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
-                <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
-                <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
-                <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
-                <polyline [attr.points]="gradientPolyline" fill="none" stroke="#059669" stroke-width="2.2" vector-effect="non-scaling-stroke"/>
-              </svg>
+              <div class="metric-plot">
+                <svg class="metric-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line class="metric-grid" x1="0" y1="0" x2="100" y2="0" />
+                  <line class="metric-grid" x1="0" y1="25" x2="100" y2="25" />
+                  <line class="metric-grid" x1="0" y1="50" x2="100" y2="50" />
+                  <line class="metric-grid" x1="0" y1="75" x2="100" y2="75" />
+                  <line class="metric-grid" x1="0" y1="100" x2="100" y2="100" />
+                  <line class="metric-axis" x1="0" y1="0" x2="0" y2="100" />
+                  <polyline [attr.points]="gradientPolyline" fill="none" stroke="#059669" stroke-width="2.9" vector-effect="non-scaling-stroke"/>
+                </svg>
+              </div>
             </div>
-            <div class="chart-legend"><span>Norm: {{ trainingGradientNorm | number:'1.4-4' }}</span><span [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">{{ gradientAlert }}</span></div>
+            <div class="metric-x-axis"><span>{{ chartFirstStepLabel }}</span><strong>训练 step</strong><span>{{ chartLastStepLabel }}</span></div>
+            <div class="chart-legend"><span [style.color]="trainingGradientNorm > 2.5 || trainingGradientNorm < 0.02 ? 'var(--red)' : 'var(--green)'">{{ gradientAlert }}</span><span>稳定区间 0.02 - 2.5</span></div>
           </div>
-          <div class="chart-wrap parameter-panel"><div class="chart-label">权重分布直方图</div><div class="weight-histogram">@for (bin of weightHistogramBins; track bin.label) { <div class="weight-bin" [style.height.%]="(bin.value / maxWeightBin) * 100" [title]="bin.label"></div> }</div><div class="chart-legend"><span>Mean {{ trainingWeightMean | number:'1.3-3' }}</span><span>Std {{ trainingWeightStd | number:'1.3-3' }}</span></div></div>
+          <div class="chart-wrap parameter-panel weight-chart-card">
+            <div class="metric-card-head">
+              <div><div class="chart-label">权重分布直方图</div><div class="chart-subtitle">X: 权重值 · Y: 相对频率</div></div>
+              <div class="chart-value"><span>Std</span><strong>{{ trainingWeightStd | number:'1.3-3' }}</strong></div>
+            </div>
+            <div class="weight-chart">
+              <div class="metric-y-axis"><span>{{ maxWeightBin | number:'1.2-2' }}</span><span>0</span></div>
+              <div class="weight-histogram">@for (bin of weightHistogramBins; track bin.label) { <div class="weight-bin" [style.height.%]="(bin.value / maxWeightBin) * 100" [title]="bin.label"></div> }</div>
+            </div>
+            <div class="metric-x-axis"><span>{{ weightHistogramFirstLabel }}</span><strong>权重值</strong><span>{{ weightHistogramLastLabel }}</span></div>
+            <div class="chart-legend"><span>Mean {{ trainingWeightMean | number:'1.3-3' }}</span><span>Std {{ trainingWeightStd | number:'1.3-3' }}</span></div>
+          </div>
           <div class="experiment-history" style="grid-column:1/-1">
             <div class="experiment-head">
               <div class="section-title">实验对比 <span class="muted">（当前数据集历史训练）</span></div>

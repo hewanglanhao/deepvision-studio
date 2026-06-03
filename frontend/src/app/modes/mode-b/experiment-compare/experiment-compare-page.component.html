@@ -77,6 +77,7 @@
                   <div class="record-sub">{{ checkpoint.createdAt | date:'yyyy-MM-dd HH:mm' }} · Epoch {{ checkpoint.epoch }} / {{ checkpoint.totalEpochs }}</div>
                 </div>
                 <div class="record-actions">
+                  <span [class]="'run-status ' + checkpointStatusClass(checkpoint)">{{ checkpointStatusText(checkpoint) }}</span>
                   <span class="signature">#{{ checkpoint.modelSignature.slice(0, 10) }}</span>
                 </div>
               </header>
@@ -107,6 +108,78 @@
                 <div><span>超参数</span><strong>{{ checkpointConfigText(checkpoint) }}</strong></div>
                 <div><span>数据划分</span><strong>{{ checkpointSplitText(checkpoint) }}</strong></div>
               </div>
+
+              <section class="history-chart-panel">
+                <div class="history-chart-head">
+                  <div>
+                    <span class="network-title">训练过程曲线</span>
+                    <span class="network-meta">{{ checkpointHasMetricHistory(checkpoint) ? checkpointFirstStep(checkpoint) + ' - ' + checkpointLastStep(checkpoint) : '无曲线数据' }}</span>
+                  </div>
+                  @if (checkpointStatusNote(checkpoint)) {
+                    <span [class]="'history-note ' + checkpointStatusClass(checkpoint)">{{ checkpointStatusNote(checkpoint) }}</span>
+                  }
+                </div>
+                @if (checkpointHasMetricHistory(checkpoint)) {
+                  <div class="history-chart-grid">
+                    <div class="history-chart-card loss">
+                      <div class="history-chart-title"><span>损失曲线</span><strong>loss</strong></div>
+                      <div class="history-mini-chart">
+                        <div class="history-y-axis"><span>{{ checkpointChartMaxLabel(checkpoint, ['loss', 'valLoss'], 3) }}</span><span>0</span></div>
+                        <svg viewBox="0 0 100 50" preserveAspectRatio="none">
+                          <line x1="4" y1="6" x2="96" y2="6"></line>
+                          <line x1="4" y1="25" x2="96" y2="25"></line>
+                          <line x1="4" y1="44" x2="96" y2="44"></line>
+                          <polyline [attr.points]="checkpointMiniPolyline(checkpoint, 'loss', ['loss', 'valLoss'])" class="loss-line"></polyline>
+                          <polyline [attr.points]="checkpointMiniPolyline(checkpoint, 'valLoss', ['loss', 'valLoss'])" class="val-loss-line"></polyline>
+                        </svg>
+                      </div>
+                      <div class="history-x-axis"><span>{{ checkpointFirstStep(checkpoint) }}</span><span>{{ checkpointLastStep(checkpoint) }}</span></div>
+                    </div>
+                    <div class="history-chart-card accuracy">
+                      <div class="history-chart-title"><span>准确率曲线</span><strong>accuracy</strong></div>
+                      <div class="history-mini-chart">
+                        <div class="history-y-axis"><span>1.00</span><span>0</span></div>
+                        <svg viewBox="0 0 100 50" preserveAspectRatio="none">
+                          <line x1="4" y1="6" x2="96" y2="6"></line>
+                          <line x1="4" y1="25" x2="96" y2="25"></line>
+                          <line x1="4" y1="44" x2="96" y2="44"></line>
+                          <polyline [attr.points]="checkpointMiniPolyline(checkpoint, 'accuracy', ['accuracy', 'valAccuracy'])" class="acc-line"></polyline>
+                          <polyline [attr.points]="checkpointMiniPolyline(checkpoint, 'valAccuracy', ['accuracy', 'valAccuracy'])" class="val-acc-line"></polyline>
+                        </svg>
+                      </div>
+                      <div class="history-x-axis"><span>{{ checkpointFirstStep(checkpoint) }}</span><span>{{ checkpointLastStep(checkpoint) }}</span></div>
+                    </div>
+                    <div class="history-chart-card lr">
+                      <div class="history-chart-title"><span>学习率变化</span><strong>lr</strong></div>
+                      <div class="history-mini-chart">
+                        <div class="history-y-axis"><span>{{ checkpointChartMaxLabel(checkpoint, ['lr'], 5) }}</span><span>0</span></div>
+                        <svg viewBox="0 0 100 50" preserveAspectRatio="none">
+                          <line x1="4" y1="6" x2="96" y2="6"></line>
+                          <line x1="4" y1="25" x2="96" y2="25"></line>
+                          <line x1="4" y1="44" x2="96" y2="44"></line>
+                          <polyline [attr.points]="checkpointMiniPolyline(checkpoint, 'lr', ['lr'])" class="lr-line"></polyline>
+                        </svg>
+                      </div>
+                      <div class="history-x-axis"><span>{{ checkpointFirstStep(checkpoint) }}</span><span>{{ checkpointLastStep(checkpoint) }}</span></div>
+                    </div>
+                    <div class="history-chart-card gradient">
+                      <div class="history-chart-title"><span>梯度大小变化</span><strong>gradient norm</strong></div>
+                      <div class="history-mini-chart">
+                        <div class="history-y-axis"><span>{{ checkpointChartMaxLabel(checkpoint, ['gradientNorm'], 3) }}</span><span>0</span></div>
+                        <svg viewBox="0 0 100 50" preserveAspectRatio="none">
+                          <line x1="4" y1="6" x2="96" y2="6"></line>
+                          <line x1="4" y1="25" x2="96" y2="25"></line>
+                          <line x1="4" y1="44" x2="96" y2="44"></line>
+                          <polyline [attr.points]="checkpointMiniPolyline(checkpoint, 'gradientNorm', ['gradientNorm'])" class="grad-line"></polyline>
+                        </svg>
+                      </div>
+                      <div class="history-x-axis"><span>{{ checkpointFirstStep(checkpoint) }}</span><span>{{ checkpointLastStep(checkpoint) }}</span></div>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="history-empty">这次实验没有保存训练过程曲线，只能查看最终指标和网络结构。</div>
+                }
+              </section>
 
               <section class="network-editor-shell">
                 <div class="network-editor-head">
