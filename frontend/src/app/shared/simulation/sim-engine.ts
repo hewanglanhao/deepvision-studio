@@ -33,6 +33,7 @@ export class SimEngine {
     [1 / 16, 2 / 16, 1 / 16]
   ];
 
+  /** 定义 A 模式可选网络模板，把 MLP、CNN、Residual CNN 等结构表示成可编辑的层序列。 */
   static templates(): ModelTemplate[] {
     const inputDraft = (name = 'Input'): LayerDraft => ({
       type: 'input',
@@ -252,8 +253,11 @@ export class SimEngine {
     ];
   }
 
+  /** 生成演示数据集：MNIST 用单通道灰度张量，CIFAR 用三通道 RGB 张量，用来模拟不同输入形态。 */
   static generateDataset(count: number, mode: 'mnist' | 'cifar'): DataSample[];
+  /** 兼容旧调用签名，仍然返回可送入输入层的演示样本。 */
   static generateDataset(count: number, _pixelCount: number, mode: 'mnist' | 'cifar'): DataSample[];
+  /** 构造带像素值、shape 和预览灰度图的样本，供前端在无真实数据集时演示 forward 流程。 */
   static generateDataset(count: number, arg2: number | 'mnist' | 'cifar', arg3?: 'mnist' | 'cifar'): DataSample[] {
     const mode: 'mnist' | 'cifar' = typeof arg2 === 'number' ? (arg3 ?? 'mnist') : arg2;
     const width = mode === 'mnist' ? 28 : 32;
@@ -289,6 +293,7 @@ export class SimEngine {
     });
   }
 
+  /** 把内置样本包装成 forward 输入资产：保留原始张量，同时生成真正送入网络的预处理张量。 */
   static createForwardInputAssetFromSample(sample: DataSample, preprocess: InputPreprocessConfig): ForwardInputAsset {
     const originalTensor: ForwardTensor = {
       kind: 'tensor3d',
@@ -312,6 +317,7 @@ export class SimEngine {
     };
   }
 
+  /** 把上传/本地图像转成 [H, W, C] 张量，并按输入层配置完成 resize、颜色通道和归一化。 */
   static createForwardInputAssetFromImageData(params: {
     id: string;
     name: string;
@@ -342,6 +348,7 @@ export class SimEngine {
     };
   }
 
+  /** 重建顺序网络连接，让前一层输出自然成为后一层输入，符合 A 模式线性 forward 路径。 */
   static rebuildLinearConnections(layers: NetworkLayer[]): Connection[] {
     if (layers.length < 2) {
       return [];
@@ -349,6 +356,7 @@ export class SimEngine {
     return layers.slice(0, -1).map((layer, idx) => ({ from: layer.id, to: layers[idx + 1].id }));
   }
 
+  /** 把张量 shape 格式化成 [H, W, C] 或 [N] 文本，便于观察每层尺寸变化。 */
   static formatShapeLabel(shape: TensorShape): string {
     if (shape.length === 0) {
       return '[]';
@@ -356,6 +364,7 @@ export class SimEngine {
     return `[${shape.join(', ')}]`;
   }
 
+  /** 前端快速推导输出 shape：卷积改变空间尺寸和通道数，池化降采样，Flatten 拉平成向量。 */
   static inferLayerOutputShape(layer: NetworkLayer, inputShapes: TensorShape[]): TensorShape {
     const inputShape = inputShapes[0] ?? [];
     if (layer.type === 'input') {
@@ -418,6 +427,7 @@ export class SimEngine {
     return [Math.max(1, layer.params.units)];
   }
 
+  /** 估算卷积核、残差投影、Dense 权重和 bias 数量，用来说明模型容量和计算规模。 */
   static parameterCount(layers: NetworkLayer[], connections: Connection[] = SimEngine.rebuildLinearConnections(layers)): number {
     const shapeById = new Map<number, TensorShape>();
     const orderedLayers = connections.length > 0
@@ -461,6 +471,7 @@ export class SimEngine {
     return total;
   }
 
+  /** 将层类型转成界面标签，帮助区分输入、卷积、池化、Flatten、Dense 和输出层。 */
   static layerTypeLabel(type: LayerType): string {
     const map: Record<LayerType, string> = {
       input: 'Input',
@@ -476,6 +487,7 @@ export class SimEngine {
     return map[type];
   }
 
+  /** 根据学习率调度策略生成下一轮学习率，用于训练模式的曲线演示。 */
   static nextLr(baseLr: number, scheduler: SchedulerType, decay: number, epoch: number, totalEpochs: number): number {
     if (scheduler === 'none') {
       return baseLr;
@@ -488,6 +500,7 @@ export class SimEngine {
     return Math.max(baseLr * 0.1, baseLr * cosine);
   }
 
+  /** 生成一轮训练指标点，模拟 loss、accuracy、gradient norm 随 epoch 变化的趋势。 */
   static pushMetricPoint(params: {
     currentEpoch: number;
     totalEpochs: number;
@@ -548,6 +561,7 @@ export class SimEngine {
     };
   }
 
+  /** 把训练历史指标转换成 SVG 折线点，用于展示 loss/accuracy/lr 曲线。 */
   static buildPolyline(history: MetricPoint[], metric: 'loss' | 'valLoss' | 'accuracy' | 'valAccuracy' | 'lr' | 'gradientNorm'): string {
     if (history.length === 0) {
       return '';
@@ -571,6 +585,7 @@ export class SimEngine {
       .join(' ');
   }
 
+  /** 用模型深度、优化器和训练轮数估算任务表现，支撑训练对比面板的教学演示。 */
   static evaluateTask(task: PresetTask, layers: NetworkLayer[], optimizer: OptimizerType, totalEpochs: number): number {
     const depthFactor = layers.length / 7;
     const optFactor = optimizer === 'AdamW' ? 1.08 : optimizer === 'Adam' ? 1.05 : optimizer === 'SGD' ? 0.9 : 0.98;
@@ -578,6 +593,7 @@ export class SimEngine {
     return Math.min(0.985, Math.max(0.45, base + depthFactor * 0.12 * optFactor + totalEpochs * 0.0012));
   }
 
+  /** 模拟“加深网络/换激活函数/换优化器”的实验结果，说明结构和训练策略会影响精度与速度。 */
   static runExperiment(mode: 'deeper' | 'activation' | 'optimizer', baseline: number, totalEpochs: number): ExperimentResult {
     let candidateAcc = baseline;
     let speed = 1;
@@ -604,6 +620,7 @@ export class SimEngine {
     };
   }
 
+  /** 生成教学用特征图、Grad-CAM 和层激活预览，帮助观察训练过程中网络关注区域的变化。 */
   static refreshVisuals(params: {
     sample: DataSample | undefined;
     selectedDataset: string;
@@ -647,6 +664,7 @@ export class SimEngine {
     return { featureMaps, gradCamMap, inferenceActivations };
   }
 
+  /** 生成混淆矩阵示例，用来解释分类模型哪些类别容易被互相误判。 */
   static buildConfusionMatrix(seed: number, classes = 10): number[][] {
     return Array.from({ length: classes }, (_, i) => {
       return Array.from({ length: classes }, (_, j) => {
@@ -658,6 +676,7 @@ export class SimEngine {
     });
   }
 
+  /** 生成 loss landscape 示例，直观说明优化器和模型深度会影响损失曲面的形态。 */
   static buildLossLandscape(
     latestLoss: number,
     valAcc: number,
@@ -693,6 +712,7 @@ export class SimEngine {
     });
   }
 
+  /** 初始化训练状态，给 loss、accuracy、梯度范数等曲线提供起点。 */
   static createInitialTrainingState(learningRate: number): TrainingState {
     return {
       status: 'idle',
@@ -710,6 +730,7 @@ export class SimEngine {
     };
   }
 
+  /** 检查监督训练是否具备样本和标签；没有标签就无法计算分类损失和准确率。 */
   static canRunSupervisedTraining(info: TrainingDataInfo): { ok: boolean; message: string } {
     if (info.sampleCount <= 0) {
       return { ok: false, message: 'No training samples available.' };
@@ -720,6 +741,7 @@ export class SimEngine {
     return { ok: true, message: '' };
   }
 
+  /** 推进一轮训练模拟，把新的学习率、loss、accuracy 和梯度范数写回训练状态。 */
   static nextTrainingState(params: {
     state: TrainingState;
     totalEpochs: number;
@@ -759,6 +781,7 @@ export class SimEngine {
     };
   }
 
+  /** 把 0-1 响应值映射成灰度或热力颜色，用于特征图、Grad-CAM 和矩阵可视化。 */
   static cellColor(value: number, colorMode: 'mono' | 'heat' = 'mono'): string {
     const clipped = Math.max(0, Math.min(1, value));
     if (colorMode === 'heat') {
@@ -771,6 +794,7 @@ export class SimEngine {
     return `rgb(${c}, ${c}, ${c})`;
   }
 
+  /** 执行输入预处理，保证送入 Python forward 的张量尺寸、颜色通道和数值范围与输入层一致。 */
   private static prepareInputTensor(original: ForwardTensor, preprocess: InputPreprocessConfig): ForwardInputAsset['prepared'] {
     if (original.shape.length !== 3) {
       return {
@@ -828,6 +852,7 @@ export class SimEngine {
     };
   }
 
+  /** 把浏览器 ImageData 展开成 CNN 常用的 [height, width, channels] 张量，并识别是否为灰度图。 */
   private static imageDataToRgbTensor(imageData: ImageData): ForwardTensor {
     const values = new Array(imageData.width * imageData.height * 3);
     let isGray = true;
@@ -868,6 +893,7 @@ export class SimEngine {
     };
   }
 
+  /** 转换 RGB/灰度通道数；通道数会直接决定第一层卷积核需要覆盖的输入深度。 */
   private static convertColorMode(tensor: ForwardTensor, colorMode: ColorMode): ForwardTensor {
     if (tensor.shape.length !== 3) {
       return tensor;
@@ -923,6 +949,7 @@ export class SimEngine {
     };
   }
 
+  /** 用最近邻采样调整输入张量尺寸，让任意上传图片都能适配固定大小的网络输入层。 */
   private static resizeTensorNearest(tensor: ForwardTensor, width: number, height: number): ForwardTensor {
     if (tensor.shape.length !== 3) {
       return tensor;
@@ -949,6 +976,7 @@ export class SimEngine {
     };
   }
 
+  /** 将张量数值缩放到 0-1，避免原始像素尺度影响卷积和 Dense 的响应大小。 */
   private static normalizeValues(values: number[]): number[] {
     if (values.length === 0) {
       return [];
@@ -963,6 +991,7 @@ export class SimEngine {
     return values.map((value) => (value - min) / span);
   }
 
+  /** 按亮度权重把 RGB 投影到灰度单通道，便于演示单通道图像如何进入 CNN。 */
   private static projectRgbToGray(values: number[], width: number, height: number, channels = 3): number[] {
     const out = new Array(width * height);
     for (let y = 0; y < height; y += 1) {
@@ -977,6 +1006,7 @@ export class SimEngine {
     return out;
   }
 
+  /** 复制张量的 shape、values 和 labels，避免预处理或可视化步骤修改原始输入。 */
   private static cloneTensor(tensor: ForwardTensor): ForwardTensor {
     return {
       ...tensor,
@@ -986,6 +1016,7 @@ export class SimEngine {
     };
   }
 
+  /** 计算 shape 包含的元素总数；Flatten 输出长度和 Dense 输入维度都依赖它。 */
   private static shapeElementCount(shape: TensorShape): number {
     if (shape.length === 0) {
       return 0;
@@ -993,6 +1024,7 @@ export class SimEngine {
     return shape.reduce((acc, value) => acc * value, 1);
   }
 
+  /** 估算某层可展示的单元数量：卷积看通道数，Dense/Output 看神经元或类别数。 */
   private static layerUnits(layer: NetworkLayer): number {
     if (layer.type === 'input') {
       if (layer.params.inputKind === 'table') {

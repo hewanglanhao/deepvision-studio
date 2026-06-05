@@ -379,11 +379,13 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
   private presenceSelfId = '';
   private lastPoseSentAt = 0;
 
+  /** 注入认证和 API 客户端，3D 博物馆用 JWT 识别多人参观身份并同步在线头像。 */
   constructor(
     private readonly auth: AuthService,
     private readonly api: ApiClientService
   ) {}
 
+  /** 在视图元素创建后初始化依赖 DOM 的渲染流程。 */
   ngAfterViewInit(): void {
     const host = this.stageRef?.nativeElement;
     if (!host) return;
@@ -391,6 +393,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animate();
   }
 
+  /** 释放组件订阅、定时器和渲染资源，避免页面离开后继续占用内存。 */
   ngOnDestroy(): void {
     if (this.animationId) cancelAnimationFrame(this.animationId);
     this.resizeObserver.disconnect();
@@ -401,10 +404,12 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     window.removeEventListener('keyup', this.onKeyUp);
   }
 
+  /** 锁定鼠标进入第一人称漫游，让用户像走进真实展馆一样浏览 AI 时间线。 */
   enterMuseum(): void {
     this.controls?.lock();
   }
 
+  /** 初始化 Three.js 场景、相机、控制器和展品，是 AI 历史数据变成可漫游空间的入口。 */
   private initScene(host: HTMLDivElement): void {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#101827');
@@ -441,6 +446,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     void this.connectPresence();
   }
 
+  /** 布置环境光、主光和展品补光，让展牌文字与 3D 模型结构在长廊中可读。 */
   private addLights(): void {
     if (!this.scene) return;
     this.scene.add(new THREE.HemisphereLight('#dbeafe', '#172033', 1.65));
@@ -460,6 +466,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 搭建博物馆主体建筑，包括地面、墙面、柱廊和天花，为 AI 时间线展品提供空间秩序。 */
   private addArchitecture(): void {
     if (!this.scene) return;
     const floor = new THREE.Mesh(
@@ -500,6 +507,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 绘制地面网格纹理，帮助用户在长廊中判断行走方向和展区距离。 */
   private addFloorPattern(): void {
     if (!this.scene) return;
     const lineMaterial = new THREE.LineBasicMaterial({ color: '#7f6e55', transparent: true, opacity: 0.18 });
@@ -519,6 +527,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 添加装饰细节和氛围元素，提升展馆沉浸感但不遮挡主要教学展品。 */
   private addLuxuryDetails(): void {
     this.addCentralRunner();
     this.addCeilingRibs();
@@ -528,6 +537,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.addAtmosphericParticles();
   }
 
+  /** 放置中央参观动线，引导用户沿时间线从早期 AI 走向现代深度学习与大模型展区。 */
   private addCentralRunner(): void {
     if (!this.scene) return;
     const runner = new THREE.Mesh(
@@ -554,6 +564,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** 生成天花梁架，给长廊提供重复节奏，降低用户在宽阔 3D 场景中的迷失感。 */
   private addCeilingRibs(): void {
     if (!this.scene) return;
     const mat = new THREE.MeshStandardMaterial({ color: '#d6c6a8', roughness: 0.34, metalness: 0.2 });
@@ -572,6 +583,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 添加天窗光带，模拟自然采光并突出中央时间线区域。 */
   private addSkylightBands(): void {
     if (!this.scene) return;
     const glass = new THREE.MeshBasicMaterial({
@@ -593,6 +605,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 在墙面创建展龛，让不同 AI 阶段的展品像真实博物馆一样分区陈列。 */
   private addWallAlcoves(): void {
     if (!this.scene) return;
     for (const exhibit of this.exhibits) {
@@ -624,6 +637,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 创建入口雕塑，用神经元节点和连接线暗示信息在网络中传播的主题。 */
   private addEntranceSculpture(): void {
     if (!this.scene) return;
     const group = new THREE.Group();
@@ -652,6 +666,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.scene.add(pedestal);
   }
 
+  /** 添加轻量粒子效果，表现数据点在空间中流动，同时避免干扰展牌阅读。 */
   private addAtmosphericParticles(): void {
     if (!this.scene) return;
     const count = 520;
@@ -676,6 +691,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.scene.add(particles);
   }
 
+  /** 创建单面墙体并应用统一材质，左右墙和前后背景墙都复用这个基础构件。 */
   private addWall(x: number, y: number, z: number, width: number, height: number, rotationY: number, color: string): void {
     if (!this.scene) return;
     const wall = new THREE.Mesh(
@@ -688,6 +704,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.scene.add(wall);
   }
 
+  /** 创建柱体和底座，作为展馆结构重复单元，也帮助用户感知空间尺度。 */
   private addColumn(x: number, z: number): void {
     if (!this.scene) return;
     const baseMat = new THREE.MeshStandardMaterial({ color: '#c7b99e', roughness: 0.55 });
@@ -702,6 +719,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.scene.add(top);
   }
 
+  /** 计算长廊两侧柱子的位置序列，保证结构节奏与展品时间线长度匹配。 */
   private columnPositions(): number[] {
     const exhibitZ = this.exhibits.map(exhibit => exhibit.position.z);
     const result: number[] = [];
@@ -714,6 +732,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     return result;
   }
 
+  /** 添加休息长凳作为环境参照物，增强博物馆场景的真实尺度感。 */
   private addBench(z: number): void {
     if (!this.scene) return;
     const wood = new THREE.MeshStandardMaterial({ color: '#8b5e34', roughness: 0.5 });
@@ -732,6 +751,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** 添加吊灯和局部光源，补足展区照明并让模型表面产生可辨认的高光。 */
   private addCeilingLamp(z: number): void {
     if (!this.scene) return;
     const ring = new THREE.Mesh(
@@ -743,6 +763,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.scene.add(ring);
   }
 
+  /** 按时间线放置所有 AI 展品，从图灵机、感知机到 CNN、Transformer 和 RLHF。 */
   private addExhibits(): void {
     for (const exhibit of this.exhibits) {
       const group = new THREE.Group();
@@ -758,6 +779,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 为展品生成说明牌，把年份、标题、摘要和公式图示贴到 3D 展墙上。 */
   private addPlaque(group: THREE.Group, exhibit: MuseumExhibit): void {
     const panel = new THREE.Mesh(
       new THREE.BoxGeometry(4.2, 3.05, 0.14),
@@ -786,6 +808,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     frame.renderOrder = -1;
   }
 
+  /** 在 Canvas 上绘制展牌纹理，文本和公式会被转成 Three.js 可贴图的图片。 */
   private createPlaqueCanvas(exhibit: MuseumExhibit): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
     canvas.width = 1200;
@@ -827,6 +850,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     return canvas;
   }
 
+  /** 绘制展品关键公式带，例如 softmax、注意力或强化学习更新式，连接展品和数学背景。 */
   private paintFormulaRibbon(ctx: CanvasRenderingContext2D, exhibit: MuseumExhibit): void {
     const formulas: Partial<Record<ExhibitKind, string>> = {
       logic: exhibit.year === '1950' ? 'Imitation Game: text-only behavior as evidence' : 'y = 1[Σwᵢxᵢ ≥ θ]',
@@ -859,6 +883,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.restore();
   }
 
+  /** 根据展品类型绘制小插图，让用户快速区分分类器、序列模型、强化学习等主题。 */
   private paintMiniIllustration(ctx: CanvasRenderingContext2D, exhibit: MuseumExhibit): void {
     const x = 860;
     const y = 74;
@@ -933,6 +958,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.restore();
   }
 
+  /** 绘制图灵早期计算思想的示意头像，用“可计算性”作为 AI 历史的起点。 */
   private paintTuringPortrait(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.fillStyle = '#dbeafe';
     ctx.fillRect(34, 24, 182, 132);
@@ -949,6 +975,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('Can machines think?', 24, 176);
   }
 
+  /** 绘制感知机结构：输入加权求和后通过阈值输出，是现代神经元模型的早期形式。 */
   private paintPerceptronMachine(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 4;
@@ -969,6 +996,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('Mark I style', 55, 166);
   }
 
+  /** 绘制 SVM 最大间隔分类示意，突出传统机器学习中的决策边界和支持向量。 */
   private paintSvmDiagram(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 3;
@@ -990,6 +1018,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('max margin', 63, 158);
   }
 
+  /** 绘制 ELIZA 终端，展示早期聊天程序主要依赖模式匹配而非真正语义理解。 */
   private paintElizaTerminal(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(26, 32, 198, 118);
@@ -1003,6 +1032,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('> keyword: feel', 42, 132);
   }
 
+  /** 绘制专家系统规则链，说明早期 AI 通过人工规则库进行推理。 */
   private paintExpertRules(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.fillStyle = '#fef3c7';
     ctx.fillRect(28, 30, 190, 126);
@@ -1016,6 +1046,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** 绘制 Hopfield 网络能量面，表现联想记忆会向能量较低的稳定状态收敛。 */
   private paintHopfieldEnergy(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = accent;
     ctx.lineWidth = 4;
@@ -1032,6 +1063,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('E ↓', 104, 96);
   }
 
+  /** 绘制 Q-learning 表格，说明智能体通过状态-动作价值估计选择更优策略。 */
   private paintQTable(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 3;
@@ -1047,6 +1079,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('Q(s,a)', 84, 170);
   }
 
+  /** 绘制 CNN 层级图，表现卷积提取局部特征、池化降采样、全连接完成分类的流程。 */
   private paintCnnDiagram(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = accent;
     ctx.lineWidth = 4;
@@ -1063,6 +1096,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.beginPath(); ctx.moveTo(95, 72); ctx.lineTo(122, 72); ctx.stroke();
   }
 
+  /** 绘制 RNN 时间展开图，展示隐藏状态如何把前序 token 信息传递到后续时间步。 */
   private paintRnnDiagram(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 4;
@@ -1080,6 +1114,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('hₜ₋₁ → hₜ → hₜ₊₁', 38, 135);
   }
 
+  /** 绘制 YOLO 网格检测示意，说明单阶段检测把位置回归和类别预测合在一次前向传播中。 */
   private paintYoloDiagram(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 2;
@@ -1097,6 +1132,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('boxes + class', 62, 172);
   }
 
+  /** 绘制强化学习闭环：智能体观察状态、采取动作、接收奖励并更新策略。 */
   private paintRlDiagram(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = accent;
     ctx.lineWidth = 5;
@@ -1112,6 +1148,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('reward ←', 96, 132);
   }
 
+  /** 绘制 RLHF 流程，说明人类偏好模型如何把更有帮助的回答反馈给语言模型优化。 */
   private paintRlhfDiagram(ctx: CanvasRenderingContext2D, accent: string): void {
     const boxes = ['SFT', 'RM', 'PPO'];
     ctx.font = '900 24px Segoe UI';
@@ -1132,6 +1169,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('human preference', 52, 146);
   }
 
+  /** 绘制 GRPO 分组比较示意，表现模型用同一问题的多条候选回答估计相对优势。 */
   private paintGrpoDiagram(ctx: CanvasRenderingContext2D, accent: string): void {
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 3;
@@ -1146,6 +1184,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     ctx.fillText('Aᵢ = (rᵢ - μ)/σ', 48, 24);
   }
 
+  /** 按展品类型创建 3D 实物模型，补充展牌文本无法表达的结构或算法直觉。 */
   private addArtifact(group: THREE.Group, exhibit: MuseumExhibit): void {
     const artifact = new THREE.Group();
     artifact.position.set(0, -2.0, 1.1);
@@ -1224,6 +1263,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.addNeuronArtifact(artifact, exhibit.accent);
   }
 
+  /** 创建展柜、底座和玻璃罩，让算法模型以博物馆展品的形式稳定陈列。 */
   private addArtifactCase(group: THREE.Group, accent: string): void {
     const base = new THREE.Mesh(
       new THREE.CylinderGeometry(1.36, 1.52, 0.18, 40),
@@ -1266,6 +1306,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     group.add(glass);
   }
 
+  /** 创建神经元展品，展示多个输入连接到一个加权求和节点再产生输出的基本计算单元。 */
   private addNeuronArtifact(group: THREE.Group, accent: string): void {
     const material = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.3, metalness: 0.18, emissive: accent, emissiveIntensity: 0.12 });
     const nodePositions = [
@@ -1288,6 +1329,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.45 });
   }
 
+  /** 创建多层网络展品，用多排节点和连接线表现深度学习通过层级组合学习复杂特征。 */
   private addDeepLearningArtifact(group: THREE.Group, accent: string): void {
     const mat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.38, metalness: 0.22 });
     for (let layer = 0; layer < 5; layer += 1) {
@@ -1302,6 +1344,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: -0.28 });
   }
 
+  /** 创建反向传播展品，用反向箭头表示损失梯度从输出层传回各层以更新参数。 */
   private addBackpropArtifact(group: THREE.Group, accent: string): void {
     this.addDeepLearningArtifact(group, accent);
     const material = new THREE.LineBasicMaterial({ color: '#fef3c7', transparent: true, opacity: 0.9 });
@@ -1314,6 +1357,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     group.add(label);
   }
 
+  /** 创建 SVM 展品，用分隔平面和样本点表现最大间隔分类器如何划分类别。 */
   private addSvmArtifact(group: THREE.Group, accent: string): void {
     const planeMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.42, metalness: 0.16, transparent: true, opacity: 0.55 });
     const marginMat = new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.22, side: THREE.DoubleSide });
@@ -1337,6 +1381,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.2 });
   }
 
+  /** 创建 ELIZA 展品，用终端界面表现早期对话系统基于规则模板回复用户输入。 */
   private addElizaArtifact(group: THREE.Group, accent: string): void {
     const screen = new THREE.Mesh(
       new THREE.BoxGeometry(1.55, 0.9, 0.08),
@@ -1353,6 +1398,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.12 });
   }
 
+  /** 创建专家系统展品，用规则卡片和连线表现人工知识库驱动的推理路径。 */
   private addExpertArtifact(group: THREE.Group, accent: string): void {
     ['IF', 'AND', 'THEN'].forEach((text, index) => {
       const card = new THREE.Mesh(
@@ -1372,6 +1418,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: -0.16 });
   }
 
+  /** 创建 Hopfield 网络展品，用环形连接节点表现全连接反馈网络的联想记忆机制。 */
   private addHopfieldArtifact(group: THREE.Group, accent: string): void {
     const mat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.32, metalness: 0.2, emissive: accent, emissiveIntensity: 0.1 });
     const lineMat = new THREE.LineBasicMaterial({ color: '#cbd5e1', transparent: true, opacity: 0.46 });
@@ -1394,6 +1441,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.18 });
   }
 
+  /** 创建 Q-learning 展品，用网格和价值柱展示状态-动作价值如何指导策略选择。 */
   private addQlearningArtifact(group: THREE.Group, accent: string): void {
     const grid = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.42 });
@@ -1413,6 +1461,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.2 });
   }
 
+  /** 创建 CNN 展品，用多层特征板表现卷积网络从边缘纹理逐层抽象到分类特征。 */
   private addCnnArtifact(group: THREE.Group, accent: string): void {
     const mat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.38, metalness: 0.16, transparent: true, opacity: 0.72 });
     for (let stack = 0; stack < 4; stack += 1) {
@@ -1431,6 +1480,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: -0.22 });
   }
 
+  /** 创建 RNN 展品，用时间步节点串展示序列模型如何沿时间传递隐藏状态。 */
   private addRnnArtifact(group: THREE.Group, accent: string): void {
     const mat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.34, metalness: 0.18 });
     const line = new THREE.LineBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.72 });
@@ -1445,6 +1495,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.18 });
   }
 
+  /** 创建 YOLO 展品，用检测框和网格表现目标检测一次前向传播同时预测位置与类别。 */
   private addYoloArtifact(group: THREE.Group, accent: string): void {
     const gridMat = new THREE.LineBasicMaterial({ color: '#cbd5e1', transparent: true, opacity: 0.62 });
     const boxMat = new THREE.LineBasicMaterial({ color: accent, linewidth: 2 });
@@ -1463,6 +1514,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.12 });
   }
 
+  /** 创建强化学习展品，用智能体、环境和奖励路径展示试错学习闭环。 */
   private addRlArtifact(group: THREE.Group, accent: string): void {
     const mat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.3, metalness: 0.18 });
     const agent = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 16), mat);
@@ -1476,6 +1528,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.36 });
   }
 
+  /** 创建 RLHF 展品，用偏好打分和奖励箭头表现人类反馈如何塑造语言模型行为。 */
   private addRlhfArtifact(group: THREE.Group, accent: string): void {
     ['SFT', 'RM', 'PPO'].forEach((label, index) => {
       const sprite = this.createSmallLabel(label, index === 1 ? '#f59e0b' : accent);
@@ -1489,6 +1542,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: -0.2 });
   }
 
+  /** 创建 GRPO 展品，用候选回答组和比较箭头表现无价值模型的相对优势估计思路。 */
   private addGrpoArtifact(group: THREE.Group, accent: string): void {
     const mat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.32, metalness: 0.2 });
     for (let i = 0; i < 6; i += 1) {
@@ -1506,6 +1560,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.28 });
   }
 
+  /** 创建多模态展品，用文本、图像和音频通道汇入同一表示空间，表现跨模态理解。 */
   private addMultimodalArtifact(group: THREE.Group, accent: string): void {
     const colors = ['#60a5fa', '#34d399', '#f59e0b', '#f472b6'];
     const labels = ['图', '文', '声', '工具'];
@@ -1529,6 +1584,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.42 });
   }
 
+  /** 创建注意力展品，用 token 之间的加权连线说明模型会按相关性聚合上下文信息。 */
   private addAttentionArtifact(group: THREE.Group, accent: string): void {
     const material = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.26, metalness: 0.34, emissive: accent, emissiveIntensity: 0.18 });
     for (let i = 0; i < 4; i += 1) {
@@ -1545,6 +1601,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.7 });
   }
 
+  /** 创建 token 展品，把文本切成小块，说明大语言模型实际处理的是离散 token 序列。 */
   private addTokenArtifact(group: THREE.Group, accent: string): void {
     const material = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.32, metalness: 0.18, emissive: accent, emissiveIntensity: 0.16 });
     for (let i = 0; i < 18; i += 1) {
@@ -1557,6 +1614,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.55 });
   }
 
+  /** 创建 AI 冬天展品，用降温视觉隐喻表现资金、算力和预期落差导致的发展低谷。 */
   private addWinterArtifact(group: THREE.Group): void {
     const material = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.78, metalness: 0.06 });
     const shard = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 0), material);
@@ -1566,11 +1624,13 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.animatedObjects.push({ mesh: group, speed: 0.18 });
   }
 
+  /** 在 3D 空间画连接线，用于表示神经连接、时间流、反馈路径或注意力权重。 */
   private addLine(group: THREE.Group, from: THREE.Vector3, to: THREE.Vector3, material: THREE.LineBasicMaterial): void {
     const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
     group.add(new THREE.Line(geometry, material));
   }
 
+  /** 创建小型文字标签，给模型部件标注输入、隐藏层、奖励等关键概念。 */
   private createSmallLabel(text: string, color: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
@@ -1594,6 +1654,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     return sprite;
   }
 
+  /** 将短文本绘制成精灵贴图，让 Three.js 场景中能显示清晰的中文说明。 */
   private createTextSprite(text: string, color: string, width: number, height: number, fontSize: number): THREE.Sprite {
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -1612,6 +1673,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     return new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
   }
 
+  /** 给单个展品添加聚光灯，突出当前算法模型并提高展柜内细节可见度。 */
   private addSpotlight(exhibit: MuseumExhibit): void {
     if (!this.scene) return;
     const light = new THREE.SpotLight(exhibit.accent, 3.2, 9, Math.PI / 5, 0.42, 1.2);
@@ -1621,6 +1683,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.scene.add(light.target);
   }
 
+  /** 在地面中央绘制 AI 发展时间线，帮助用户把各展品按历史顺序串起来。 */
   private addCentralTimeline(): void {
     if (!this.scene) return;
     const material = new THREE.MeshStandardMaterial({ color: '#fbbf24', roughness: 0.28, metalness: 0.24, emissive: '#7c2d12', emissiveIntensity: 0.08 });
@@ -1642,6 +1705,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 创建地面年份标签，让用户在移动时能看到当前展区对应的 AI 发展阶段。 */
   private createFloorYearLabel(text: string, color: string): THREE.Mesh {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
@@ -1667,6 +1731,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     );
   }
 
+  /** 添加入口和方向引导牌，降低第一人称场景中的导航成本。 */
   private addWayfinding(): void {
     if (!this.scene) return;
     const title = this.createBannerTexture('AI HISTORY MUSEUM', '从早期机器学习到 Transformer 与大模型');
@@ -1678,6 +1743,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.scene.add(banner);
   }
 
+  /** 把导览文字绘制成横幅贴图，用于场馆入口和方向提示。 */
   private createBannerTexture(title: string, subtitle: string): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 1400;
@@ -1701,6 +1767,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     return texture;
   }
 
+  /** 按最大宽度拆分展牌文字，避免中文和英文摘要溢出 Canvas 贴图。 */
   private wrapText(
     ctx: CanvasRenderingContext2D,
     text: string,
@@ -1777,6 +1844,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   };
 
+  /** 驱动每帧渲染、展品轻微动画、玩家移动和 presence 上报，是 3D 博物馆的主循环。 */
   private animate(): void {
     this.animationId = requestAnimationFrame(() => this.animate());
     const now = performance.now();
@@ -1797,6 +1865,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 根据键盘输入更新第一人称相机位置，并限制玩家留在博物馆可参观区域内。 */
   private updateMovement(delta: number): void {
     if (!this.controls?.isLocked || !this.camera) return;
     this.velocity.x -= this.velocity.x * 9.5 * delta;
@@ -1819,6 +1888,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     object.position.y = CAMERA_HEIGHT;
   }
 
+  /** 根据相机距离选择当前最近展品，用于侧边信息面板同步显示正在观看的 AI 主题。 */
   private updateActiveExhibit(): void {
     if (!this.controls) return;
     const position = this.controls.object.position;
@@ -1834,6 +1904,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.activeExhibit = bestDistance < 8 ? best : null;
   }
 
+  /** 容器尺寸变化时同步更新相机宽高比和渲染器尺寸，避免 3D 画面拉伸。 */
   private resizeRenderer(): void {
     if (!this.stageRef || !this.renderer || !this.camera) return;
     const host = this.stageRef.nativeElement;
@@ -1844,6 +1915,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     this.renderer.setSize(width, height, false);
   }
 
+  /** 连接博物馆 presence WebSocket，把当前用户加入在线房间并接收其他访客位置。 */
   private async connectPresence(): Promise<void> {
     if (this.api.token) {
       await this.auth.restoreSession();
@@ -1869,11 +1941,13 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     };
   }
 
+  /** 从当前 API 基础地址推导 WebSocket 地址，兼容本地开发和部署环境。 */
   private wsBaseUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}`;
   }
 
+  /** 处理 welcome、join、pose、leave 消息，让远端访客头像随服务端状态创建、移动或移除。 */
   private handlePresenceMessage(raw: string): void {
     let message: MuseumPresenceMessage;
     try {
@@ -1906,6 +1980,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** 定时上报本地相机位置和朝向，其他在线用户据此看到当前访客在展馆中的移动。 */
   private sendPresencePose(now: number): void {
     if (!this.presenceSocket || this.presenceSocket.readyState !== WebSocket.OPEN || !this.controls) return;
     if (now - this.lastPoseSentAt < 90) return;
@@ -1921,6 +1996,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     }));
   }
 
+  /** 创建或更新远端访客头像，并把服务端广播的位置应用到 3D 场景。 */
   private upsertAvatar(peer: MuseumPeer): void {
     if (!this.scene) return;
     let avatar = this.remoteAvatars.get(peer.id);
@@ -1933,6 +2009,7 @@ export class AiMuseumPageComponent implements AfterViewInit, OnDestroy {
     avatar.rotation.y = peer.ry;
   }
 
+  /** 创建远端访客的简化头像模型，颜色和昵称帮助多人参观时区分不同用户。 */
   private createAvatar(peer: MuseumPeer): THREE.Group {
     const group = new THREE.Group();
     group.userData['peerId'] = peer.id;

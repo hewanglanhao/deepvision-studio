@@ -100,8 +100,10 @@ import { TeachingSearchService } from './teaching-search.service';
   `]
 })
 export class TeachingSearchFabComponent {
+  /** 注入术语检索状态，悬浮按钮用它控制整页深度学习术语是否高亮。 */
   constructor(public readonly teachingSearch: TeachingSearchService) {}
 
+  /** 直接打开完整教学文档，适合用户不从某个具体术语进入时查阅背景知识。 */
   openTeachingDoc(): void {
     const target = window.open('/teaching', 'deepvision-teaching-docs');
     target?.focus();

@@ -12,11 +12,13 @@ CORS(app)
 
 
 @app.get('/api/health')
+# 返回服务健康状态，供前端或部署环境探活。
 def health():
     return jsonify({'ok': True, 'service': 'forward-backend'})
 
 
 @app.post('/api/forward')
+# 接收前向传播请求并转交给计算服务处理。
 def forward():
     payload = request.get_json(silent=True) or {}
     layers = payload.get('layers')

@@ -23,11 +23,13 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 public class SecurityConfig {
   @Bean
+  /** 提供 BCrypt 密码加密器，注册时只存哈希，登录时用同一算法校验明文密码。 */
   PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();
   }
 
   @Bean
+  /** 配置基于数据库用户的认证管理器，让登录接口复用 Spring Security 的密码校验流程。 */
   AuthenticationManager authenticationManager(
       UserDetailsService userDetailsService,
       PasswordEncoder passwordEncoder
@@ -39,6 +41,7 @@ public class SecurityConfig {
   }
 
   @Bean
+  /** 定义平台接口权限：公开教学、推理、LLM 和博物馆接口，同时用 JWT 保护需要用户身份的请求。 */
   SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthFilter jwtAuthFilter) throws Exception {
     return http
         .csrf(csrf -> csrf.disable())
@@ -69,6 +72,7 @@ public class SecurityConfig {
   }
 
   @Bean
+  /** 允许本地 Angular 开发端口跨域访问 Spring API，便于前后端分离调试 A 模式实验流程。 */
   CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOrigins(List.of(

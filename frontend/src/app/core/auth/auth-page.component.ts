@@ -24,12 +24,14 @@ export class AuthPageComponent implements OnInit, OnDestroy {
 
   private readonly subs = new Subscription();
 
+  /** 注入路由和认证服务，页面根据路由切换登录/注册模式，并在成功后回到 A 模式。 */
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private authSvc: AuthService,
   ) {}
 
+  /** 初始化页面状态、订阅数据源并触发首次数据加载。 */
   ngOnInit(): void {
     this.subs.add(this.route.data.subscribe(data => {
       this.mode = (data['mode'] as AuthPageMode | undefined) ?? 'login';
@@ -38,18 +40,22 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     this.subs.add(this.authSvc.user$.subscribe(user => { this.user = user; }));
   }
 
+  /** 释放组件订阅、定时器和渲染资源，避免页面离开后继续占用内存。 */
   ngOnDestroy(): void {
     this.subs.unsubscribe();
   }
 
+  /** 根据当前路由模式给认证表单显示“登录”或“注册”的页面标题。 */
   get title(): string {
     return this.mode === 'login' ? '登录账号' : '注册账号';
   }
 
+  /** 根据当前模式决定提交按钮文案，避免登录和注册共用表单时误导用户。 */
   get submitText(): string {
     return this.mode === 'login' ? '登录' : '注册';
   }
 
+  /** 提交登录或注册表单，认证成功后进入 A 模式继续进行神经网络搭建和推理记录保存。 */
   async submit(): Promise<void> {
     if (this.busy) {
       return;
@@ -71,6 +77,7 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** 从认证页也允许退出当前账号，便于切换到其他用户重新保存实验记录。 */
   logout(): void {
     this.authSvc.logout();
   }

@@ -37,6 +37,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
   private final Map<String, RoomState> rooms = new ConcurrentHashMap<>();
   private final Map<String, Participant> participants = new ConcurrentHashMap<>();
 
+  /** 注入 JWT、用户仓库和 JSON 工具，WebSocket 连接可识别登录用户并同步博物馆中的在线位置。 */
   public MuseumPresenceHandler(JwtService jwtService, AppUserRepository users, ObjectMapper objectMapper) {
     this.jwtService = jwtService;
     this.users = users;
@@ -44,6 +45,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
   }
 
   @Override
+  /** 建立博物馆 WebSocket 连接并加入在线房间。 */
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
     Map<String, String> query = queryParams(session.getUri());
     String token = query.getOrDefault("token", "");
@@ -101,6 +103,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
   }
 
   @Override
+  /** 处理博物馆 WebSocket 位姿消息并广播给同房间用户。 */
   protected void handleTextMessage(WebSocketSession session, TextMessage message) {
     Participant current = participants.get(session.getId());
     if (current == null) return;
@@ -132,6 +135,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
   }
 
   @Override
+  /** 清理断开的博物馆连接并通知其他在线用户。 */
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
     Participant participant = participants.remove(session.getId());
     if (participant == null) return;
@@ -145,10 +149,13 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
   }
 
   @Override
+  /** 传输异常时复用断开清理逻辑，及时把离线游客从同房间其他客户端中移除。 */
   public void handleTransportError(WebSocketSession session, Throwable exception) {
+    /** 清理断开的博物馆连接并通知其他在线用户。 */
     afterConnectionClosed(session, CloseStatus.SERVER_ERROR);
   }
 
+  /** 选择尚未满员的最早房间；都满员时创建新房间，控制每个博物馆实例的在线人数。 */
   private RoomState availableRoom() {
     return rooms.values().stream()
         .filter(room -> room.sessions.size() < ROOM_LIMIT)
@@ -161,6 +168,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
         });
   }
 
+  /** 收集房间当前参与者快照，新连接进入时用它一次性生成已有游客头像。 */
   private List<Map<String, Object>> roomParticipants(RoomState room) {
     List<Map<String, Object>> result = new ArrayList<>();
     for (WebSocketSession session : room.sessions) {
@@ -172,6 +180,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
     return result;
   }
 
+  /** 将服务端参与者对象转成前端 presence 协议字段，包含位置、朝向和展示颜色。 */
   private Map<String, Object> toPayload(Participant participant) {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("id", participant.id());
@@ -187,6 +196,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
     return payload;
   }
 
+  /** 向同一房间广播 join、pose、leave 消息，排除消息来源以减少重复回显。 */
   private void broadcast(RoomState room, Object payload, String exceptSessionId) {
     String json;
     try {
@@ -208,6 +218,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
     }
   }
 
+  /** 向单个 WebSocket 会话发送 JSON，例如首次连接时的 welcome 房间快照。 */
   private void send(WebSocketSession session, Object payload) {
     if (!session.isOpen()) return;
     try {
@@ -217,11 +228,13 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
     }
   }
 
+  /** 根据用户名稳定分配头像颜色，让同一用户刷新页面后仍容易被其他访客识别。 */
   private String colorFor(String username) {
     String[] colors = {"#38bdf8", "#34d399", "#f59e0b", "#f472b6", "#a78bfa", "#fb7185", "#84cc16", "#60a5fa"};
     return colors[Math.floorMod(username.hashCode(), colors.length)];
   }
 
+  /** 给未登录访客分配递增展示名，避免多人同时参观时全都显示匿名用户。 */
   private String nextGuestDisplayName() {
     Set<Integer> used = new HashSet<>();
     for (Participant participant : participants.values()) {
@@ -241,10 +254,12 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
     return "游客" + next;
   }
 
+  /** 限制客户端上报的坐标范围，防止头像被同步到博物馆墙体外或天空/地下。 */
   private double clamp(double value, double min, double max) {
     return Math.max(min, Math.min(max, value));
   }
 
+  /** 解析 WebSocket URL 查询参数，主要用于读取可选的 JWT token。 */
   private Map<String, String> queryParams(URI uri) {
     Map<String, String> params = new LinkedHashMap<>();
     if (uri == null || uri.getQuery() == null) return params;
@@ -260,6 +275,7 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
     return params;
   }
 
+  /** 记录一个在线访客的 presence 状态，前端用这些字段渲染远端头像。 */
   private record Participant(
       String id,
       String roomId,
@@ -278,11 +294,13 @@ public class MuseumPresenceHandler extends TextWebSocketHandler {
     private final String createdAt;
     private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
 
+    /** 创建一个博物馆在线房间，sessions 保存当前房间的 WebSocket 连接集合。 */
     private RoomState(String id, String createdAt) {
       this.id = id;
       this.createdAt = createdAt;
     }
 
+    /** 返回房间创建时间，用于优先复用最早且未满员的房间。 */
     private String createdAt() {
       return createdAt;
     }

@@ -14,6 +14,7 @@ EDGE_KERNEL_3X3 = [
 ]
 
 
+# 执行完整前向传播图，返回每层张量、shape、统计信息和校验结果。
 def execute_forward_graph(layers: List[Dict[str, Any]], connections: List[Dict[str, int]], input_tensor: Dict[str, Any] | None) -> Dict[str, Any]:
     errors: List[str] = []
     warnings: List[str] = []
@@ -136,6 +137,7 @@ def execute_forward_graph(layers: List[Dict[str, Any]], connections: List[Dict[s
     }
 
 
+# 根据前端传来的 layers/connections 建立有向计算图；每条边表示上一层特征张量会输入到下一层继续前向传播。
 def build_execution_graph(layers: List[Dict[str, Any]], connections: List[Dict[str, int]]) -> Dict[str, Any]:
     nodes_by_id: Dict[int, Dict[str, Any]] = {}
     inbound: Dict[int, List[int]] = {}
@@ -154,6 +156,7 @@ def build_execution_graph(layers: List[Dict[str, Any]], connections: List[Dict[s
 
     edge_set = set()
 
+    # 登记一条层间依赖，后续拓扑排序会用它决定张量计算顺序。
     def add_edge(src: int, dst: int, source: str) -> None:
         if src not in nodes_by_id or dst not in nodes_by_id:
             errors.append(f"Invalid edge {src} -> {dst} from {source}.")
@@ -189,6 +192,7 @@ def build_execution_graph(layers: List[Dict[str, Any]], connections: List[Dict[s
     }
 
 
+# 对计算图做拓扑排序，保证 input、conv、pool、dense 等层按依赖顺序执行，避免后层先于上游张量计算。
 def topological_sort(graph: Dict[str, Any]) -> Dict[str, Any]:
     errors: List[str] = []
     indegree = {node_id: len(arr) for node_id, arr in graph["inbound"].items()}
@@ -210,10 +214,12 @@ def topological_sort(graph: Dict[str, Any]) -> Dict[str, Any]:
     return {"order": order, "errors": errors}
 
 
+# 校验层参数是否符合深度学习计算约束，例如卷积/池化必须接收 [H, W, C] 特征图。
 def validate_layer_params(layer: Dict[str, Any], input_shapes: List[List[int]]) -> List[Dict[str, Any]]:
     issues: List[Dict[str, Any]] = []
     input_shape = input_shapes[0] if input_shapes else []
 
+    # 把具体参数问题绑定到 layerId/field，前端才能高亮对应层和输入框。
     def issue(severity: str, message: str, field: str | None = None) -> None:
         payload = {
             "layerId": layer["id"],
@@ -293,6 +299,7 @@ def validate_layer_params(layer: Dict[str, Any], input_shapes: List[List[int]]) 
     return issues
 
 
+# 按层类型推导输出 shape：卷积改变 H/W/C，池化缩小空间尺寸，Flatten 把特征图拉平成向量。
 def infer_layer_output_shape(layer: Dict[str, Any], input_shapes: List[List[int]]) -> List[int]:
     input_shape = input_shapes[0] if input_shapes else []
     ltype = layer["type"]
@@ -345,6 +352,7 @@ def infer_layer_output_shape(layer: Dict[str, Any], input_shapes: List[List[int]
     return [max(1, int(layer["params"].get("units", 1)))]
 
 
+# 根据 layer.type 分发到具体算子，相当于一个简化版深度学习框架的 operator dispatcher。
 def execute_operator(layer: Dict[str, Any], inputs: List[Dict[str, Any]], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     ltype = layer["type"]
     if ltype == "input":
@@ -368,6 +376,7 @@ def execute_operator(layer: Dict[str, Any], inputs: List[Dict[str, Any]], input_
     raise ValueError("Unsupported layer type.")
 
 
+# 输入层不做学习计算，只把前端预处理后的图片/表格张量作为整张网络的起点。
 def run_input_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     p = layer["params"]
     pre = p["preprocessing"]
@@ -385,6 +394,7 @@ def run_input_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> D
     }
 
 
+# 执行 Conv2D：卷积核在局部感受野上滑动，提取边缘、纹理等空间特征，并把输出通道数变成 outChannels。
 def run_conv2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     shape = input_tensor["shape"]
     if len(shape) != 3:
@@ -438,6 +448,7 @@ def run_conv2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> 
     }
 
 
+# 执行池化层：在局部窗口内取最大值或平均值，降低特征图分辨率，同时尽量保留主要响应。
 def run_pool2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     shape = input_tensor["shape"]
     if len(shape) != 3:
@@ -485,6 +496,7 @@ def run_pool2d_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> 
     }
 
 
+# 执行残差块：主分支做两次卷积，shortcut 保留原始信息，二者相加后再激活以缓解深层网络退化。
 def run_residual_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     shape = input_tensor["shape"]
     if len(shape) != 3:
@@ -572,6 +584,7 @@ def run_residual_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -
     }
 
 
+# 执行 Flatten：把 [H, W, C] 特征图展开成一维向量，连接 CNN 特征提取部分和后面的全连接分类器。
 def run_flatten_operator(input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "tensor": {
@@ -584,6 +597,7 @@ def run_flatten_operator(input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# 执行全连接层：用权重矩阵 W 和 bias 综合所有输入特征，形成更抽象的隐藏表示或类别分数。
 def run_dense_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     input_vector = np.asarray(input_tensor["values"], dtype=np.float64)
     in_dim = int(input_vector.size)
@@ -618,6 +632,7 @@ def run_dense_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> D
     }
 
 
+# 执行激活层：ReLU/Tanh/GELU 提供非线性表达能力，Softmax 把分类分数转成概率分布。
 def run_activation_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     activation = layer["params"]["activationType"]
     if activation == "softmax" and len(input_tensor["shape"]) == 1:
@@ -634,6 +649,7 @@ def run_activation_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any])
     }
 
 
+# 执行 Dropout：训练时随机屏蔽一部分神经元以降低过拟合；推理模式下保持张量不变。
 def run_dropout_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     rate = max(0.0, min(0.95, float(layer["params"]["rate"])))
     training = bool(layer["params"].get("training", False))
@@ -658,6 +674,7 @@ def run_dropout_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) ->
     }
 
 
+# 执行输出层：本质是最后一个 Dense 层，通常配合 Softmax 输出每个类别的预测概率。
 def run_output_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> Dict[str, Any]:
     dense_layer = {
         **layer,
@@ -684,6 +701,7 @@ def run_output_operator(layer: Dict[str, Any], input_tensor: Dict[str, Any]) -> 
     }
 
 
+# 把层输出张量转换成前端可画的摘要；三维张量显示特征图通道，向量显示神经元响应条形图。
 def build_layer_visualization(tensor: Dict[str, Any]) -> Dict[str, Any]:
     shape = tensor["shape"]
     if len(shape) == 3:
@@ -726,6 +744,7 @@ def build_layer_visualization(tensor: Dict[str, Any]) -> Dict[str, Any]:
     return {"mode": "none", "values": []}
 
 
+# 统计张量最小值、最大值、均值和 Top-K；输出层的 Top-K 可理解为模型最偏向的类别。
 def compute_tensor_stats(tensor: Dict[str, Any] | None) -> Dict[str, Any]:
     values = tensor["values"] if tensor else []
     if len(values) == 0:
@@ -769,12 +788,14 @@ def compute_tensor_stats(tensor: Dict[str, Any] | None) -> Dict[str, Any]:
     }
 
 
+# 把 shape 转成可读文本，便于对照每层特征图尺寸或向量长度。
 def format_shape_label(shape: List[int]) -> str:
     if len(shape) == 0:
         return "[]"
     return "[" + ", ".join([str(v) for v in shape]) + "]"
 
 
+# 推导残差 shortcut 用 1x1 projection 后的 shape，确保它能和主分支卷积输出相加。
 def residual_projection_shape(input_shape: List[int], params: Dict[str, Any]) -> List[int]:
     if len(input_shape) != 3:
         return []
@@ -786,6 +807,7 @@ def residual_projection_shape(input_shape: List[int], params: Dict[str, Any]) ->
     return [out_h, out_w, out_channels] if out_h > 0 and out_w > 0 else []
 
 
+# 计算张量元素总数，Flatten 输出长度和 Dense 输入维度都依赖这个值。
 def shape_element_count(shape: List[int]) -> int:
     if len(shape) == 0:
         return 0
@@ -795,6 +817,7 @@ def shape_element_count(shape: List[int]) -> int:
     return out
 
 
+# 根据 shape 维度标记张量类型，区分向量、矩阵和 CNN 常见的三维特征图。
 def kind_from_shape(shape: List[int]) -> str:
     if len(shape) == 0:
         return "scalar"
@@ -805,16 +828,19 @@ def kind_from_shape(shape: List[int]) -> str:
     return "tensor3d"
 
 
+# 按 [H, W, C] 展平布局读取某个像素位置和通道的特征值。
 def tensor3d_get(values: List[float], w: int, c: int, y: int, x: int, ch: int) -> float:
     idx = ((y * w) + x) * c + ch
     return float(values[idx])
 
 
+# 按 [H, W, C] 展平布局写入某个像素位置和通道的特征值。
 def tensor3d_set(values: List[float], w: int, c: int, y: int, x: int, ch: int, value: float) -> None:
     idx = ((y * w) + x) * c + ch
     values[idx] = value
 
 
+# 解析卷积核权重；多输入通道时，每个输出通道都需要一组跨通道滤波器。
 def resolve_kernel_3d(layer: Dict[str, Any], out_channel: int, in_channels: int, kernel_size: int) -> List[List[List[float]]]:
     kernels = layer["params"].get("kernels")
     kernel = None
@@ -838,11 +864,13 @@ def resolve_kernel_3d(layer: Dict[str, Any], out_channel: int, in_channels: int,
     return [[row[:] for row in single] for _ in range(in_channels)]
 
 
+# 将预设卷积核适配到当前 kernelSize，支持边缘检测、模糊、锐化等滤波器对比实验。
 def fit_kernel_matrix(matrix: List[List[float]], kernel_size: int) -> List[List[float]]:
     source = matrix if isinstance(matrix, list) and len(matrix) > 0 else EDGE_KERNEL_3X3
     return [[float(source[y][x]) if y < len(source) and x < len(source[y]) else 0.0 for x in range(kernel_size)] for y in range(kernel_size)]
 
 
+# 准备 Dense 层权重矩阵；没有训练权重时生成稳定的演示权重，保证前向结果可重复。
 def dense_weight_matrix(layer_seed: int, units: int, in_dim: int, weights: Any) -> np.ndarray:
     out_idx = np.arange(units, dtype=np.float64)[:, None]
     in_idx = np.arange(in_dim, dtype=np.float64)[None, :]
@@ -859,10 +887,12 @@ def dense_weight_matrix(layer_seed: int, units: int, in_dim: int, weights: Any) 
     return matrix
 
 
+# 生成单个演示权重，早期逐元素实现保留的辅助函数。
 def synthetic_weight(layer_seed: int, out_index: int, in_index: int) -> float:
     return math.sin((layer_seed + 1) * 0.173 + (out_index + 1) * 0.119 + (in_index + 1) * 0.071) * 0.5
 
 
+# 对整块 NumPy 张量应用激活函数，ReLU 会抑制负响应，Sigmoid/Tanh 会压缩数值范围。
 def apply_activation_array(values: np.ndarray, activation: str) -> np.ndarray:
     if activation in ("none", "softmax"):
         return values
@@ -876,6 +906,7 @@ def apply_activation_array(values: np.ndarray, activation: str) -> np.ndarray:
     return 1 / (1 + np.exp(-values))
 
 
+# 对单个神经元响应应用激活函数，供非向量化路径复用。
 def activate_value(value: float, activation: str) -> float:
     if activation in ("none", "softmax"):
         return value
@@ -889,6 +920,7 @@ def activate_value(value: float, activation: str) -> float:
     return 1 / (1 + math.exp(-value))
 
 
+# 将一组 logits 转成概率分布，常用于分类输出层解释“哪个类别最可能”。
 def softmax(values: List[float]) -> List[float]:
     if len(values) == 0:
         return []
@@ -900,6 +932,7 @@ def softmax(values: List[float]) -> List[float]:
     return [v / total for v in exps]
 
 
+# NumPy 版 Softmax；先减最大值提升数值稳定性，避免指数计算溢出。
 def softmax_array(values: np.ndarray) -> np.ndarray:
     if values.size == 0:
         return values
@@ -910,6 +943,7 @@ def softmax_array(values: np.ndarray) -> np.ndarray:
     return exps / total
 
 
+# 将任意响应值缩放到 0-1，便于把特征图或热力图映射成可视化颜色。
 def normalize_values(values: List[float]) -> List[float]:
     if len(values) == 0:
         return []
@@ -924,6 +958,7 @@ def normalize_values(values: List[float]) -> List[float]:
     return [(v - min_v) / span for v in values]
 
 
+# 对过大的三维特征图做下采样，降低前端展示成本，但不改变真实 forward 计算结果。
 def downsample_tensor3d(tensor: Dict[str, Any], max_side: int) -> Dict[str, Any]:
     shape = tensor["shape"]
     if len(shape) != 3:
@@ -952,6 +987,7 @@ def downsample_tensor3d(tensor: Dict[str, Any], max_side: int) -> Dict[str, Any]
     return sampled
 
 
+# 从 [H, W, C] 特征图中抽出单个通道，用来观察某个卷积核的响应模式。
 def extract_channel(values: List[float], h: int, w: int, c: int, channel: int) -> List[float]:
     out = [0.0] * (h * w)
     for y in range(h):

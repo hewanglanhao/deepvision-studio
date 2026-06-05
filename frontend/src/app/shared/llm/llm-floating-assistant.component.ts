@@ -447,8 +447,10 @@ export class LlmFloatingAssistantComponent {
   contextSummary = '';
   messages: UiChatMessage[] = [];
 
+  /** 注入 LLM 请求服务，悬浮助手通过它把当前实验问题发送给后端大模型代理。 */
   constructor(private readonly llm: LlmChatService) {}
 
+  /** 打开或收起助手面板；如果启用了上下文，会在打开时同步当前网络结构和推理结果。 */
   toggle(): void {
     this.open = !this.open;
     if (this.open && this.includeContext) {
@@ -456,6 +458,7 @@ export class LlmFloatingAssistantComponent {
     }
   }
 
+  /** 切换是否把当前页面上下文带给模型，避免无关问题误携带网络截图和层参数。 */
   onContextToggle(): void {
     if (this.includeContext) {
       this.refreshContext();
@@ -464,6 +467,7 @@ export class LlmFloatingAssistantComponent {
     }
   }
 
+  /** 重新读取页面上下文摘要，让用户知道将随问题发送多少文字和图片证据。 */
   refreshContext(): void {
     const context = this.contextProvider?.();
     this.contextSummary = context
@@ -471,11 +475,13 @@ export class LlmFloatingAssistantComponent {
       : '当前页面没有可传入的上下文。';
   }
 
+  /** 把预设问题写入输入框并立即提问，用于快速解释卷积、池化、softmax 等常见概念。 */
   askPreset(question: string): void {
     this.draft = question;
     void this.send();
   }
 
+  /** 发送用户问题并流式接收模型回答，可附带当前神经网络结构、层输出和可视化图片作为上下文。 */
   async send(): Promise<void> {
     const question = this.draft.trim();
     if (!question || this.busy) return;
@@ -523,6 +529,7 @@ export class LlmFloatingAssistantComponent {
     }
   }
 
+  /** 将模型返回的 Markdown 转成受控 HTML，保留代码块以便展示公式、张量形状或示例代码。 */
   renderMarkdown(markdown: string): string {
     const escaped = this.escapeHtml(markdown);
     const blocks = escaped.split(/```/);
@@ -536,11 +543,13 @@ export class LlmFloatingAssistantComponent {
       .join('');
   }
 
+  /** 渲染非代码块 Markdown，支持标题和列表，方便模型分点解释深度学习层的作用。 */
   private renderInlineMarkdownBlock(block: string): string {
     const lines = block.split(/\r?\n/);
     const html: string[] = [];
     let listType: 'ul' | 'ol' | '' = '';
 
+    /** 在段落或标题前补齐列表闭合标签，避免模型回答中的列表 HTML 结构错乱。 */
     const closeList = () => {
       if (listType) {
         html.push(`</${listType}>`);
@@ -593,12 +602,14 @@ export class LlmFloatingAssistantComponent {
     return html.join('');
   }
 
+  /** 处理行内代码和加粗标记，让模型解释中的公式名、层名和关键参数更容易辨认。 */
   private renderInline(value: string): string {
     return value
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   }
 
+  /** 转义模型输出中的 HTML 特殊字符，防止回答内容被浏览器当成真实 DOM 执行。 */
   private escapeHtml(value: string): string {
     return value
       .replace(/&/g, '&amp;')
@@ -608,6 +619,7 @@ export class LlmFloatingAssistantComponent {
       .replace(/'/g, '&#39;');
   }
 
+  /** 组装发给后端的多模态消息，把最近对话、当前实验文本和最多四张截图合成模型输入。 */
   private toApiMessages(question: string, context?: LlmChatContext): LlmChatMessage[] {
     const history = this.messages.slice(-6, -1).map<LlmChatMessage>(message => ({
       role: message.role,

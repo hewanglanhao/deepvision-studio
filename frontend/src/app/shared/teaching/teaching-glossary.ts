@@ -594,6 +594,7 @@ export const TEACHING_TERMS = [
   ...MODE_F_TEACHING_TERMS
 ];
 
+/** 按术语 id 查找教学条目，供界面把“卷积”“softmax”等概念链接到对应解释。 */
 export function findTeachingTerm(id: string): TeachingTerm | undefined {
   return TEACHING_TERMS.find(term => term.id === id);
 }

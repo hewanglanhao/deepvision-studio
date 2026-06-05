@@ -13,6 +13,7 @@ const LAYER_COLORS: Record<string, string> = {
   output: '#ef4444'
 };
 
+/** 把 A 模式网络层转换成 3D 布局节点；卷积/池化层按特征图尺寸绘制，Dense/Output 按神经元数量绘制。 */
 export function buildNetwork3dLayerViews(
   layers: NetworkLayer[],
   layerShapes: Record<number, TensorShape>,
@@ -33,6 +34,7 @@ export function buildNetwork3dLayerViews(
   });
 }
 
+/** 格式化张量 shape，方便在 3D 面板中查看每层特征图或向量长度。 */
 export function formatShape(shape: TensorShape): string {
   return shape.length ? `[${shape.join(', ')}]` : '[]';
 }
