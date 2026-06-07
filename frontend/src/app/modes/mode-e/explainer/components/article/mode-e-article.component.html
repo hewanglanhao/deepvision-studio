@@ -1,0 +1,18 @@
+<div class="article-grid">
+  @for (section of assets.articleSections; track section.id) {
+    <div class="article-card">
+      <span class="article-eyebrow">{{ section.eyebrow }}</span>
+      <h4>{{ section.title }}</h4>
+      @for (p of section.body; track $index) {
+        <p>{{ p }}</p>
+      }
+      @if (section.bullets?.length) {
+        <ul>
+          @for (b of section.bullets; track $index) {
+            <li>{{ b }}</li>
+          }
+        </ul>
+      }
+    </div>
+  }
+</div>

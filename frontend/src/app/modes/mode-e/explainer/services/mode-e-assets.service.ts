@@ -26,12 +26,6 @@ export class ModeEAssetsService {
         inputDim: 2, outputDim: 2, classLabels: ['蓝色类 (0)', '橙色类 (1)'],
       },
       {
-        id: 'spiral', name: '螺旋数据集',
-        description: '三条阿基米德螺旋线，验证神经网络拟合能力的经典非线性数据集。',
-        samples: ModeEBackpropEngine.generateSpiralData(450, 3, 0.18),
-        inputDim: 2, outputDim: 3, classLabels: ['蓝色类 (0)', '橙色类 (1)', '绿色类 (2)'],
-      },
-      {
         id: 'circle', name: '同心圆数据集',
         description: '内外两个同心圆，需要网络学习环形决策边界。',
         samples: ModeEBackpropEngine.generateCircleData(350, 0.12),
@@ -46,24 +40,17 @@ export class ModeEAssetsService {
     ];
 
     this.networkPresets = [
-      this.buildPreset('xor-mlp', 'XOR 双层 MLP', '2 输入 -> 4 隐藏 -> 2 输出', 'xor', [
+      this.buildPreset('xor-mlp', 'XOR 双层 MLP', '2 输入 → 12 隐藏 → 2 输出', 'xor', [
         makeLayer('input', '输入层', { width: 2, height: 1, channels: 1 }),
-        makeLayer('dense', '隐藏层 1', { units: 4, activation: 'relu' }),
+        makeLayer('dense', '隐藏层 1', { units: 12, activation: 'relu' }),
         makeLayer('output', '输出层', { units: 2, activation: 'softmax', labels: ['类 0', '类 1'] }),
       ]),
-      this.buildPreset('spiral-mlp', '螺旋三层 MLP', '2 输入 -> 8 隐藏 -> 8 隐藏 -> 3 输出', 'spiral', [
+      this.buildPreset('circle-mlp', '同心圆 Sigmoid MLP', '2 输入 → 16 隐藏(Sigmoid) → 2 输出', 'circle', [
         makeLayer('input', '输入层', { width: 2, height: 1, channels: 1 }),
-        makeLayer('dense', '隐藏层 1', { units: 8, activation: 'relu' }),
-        makeLayer('dense', '隐藏层 2', { units: 8, activation: 'tanh' }),
-        makeLayer('output', '输出层', { units: 3, activation: 'softmax', labels: ['类 0', '类 1', '类 2'] }),
-      ]),
-      this.buildPreset('circle-mlp', '同心圆 Tanh MLP', '2 输入 -> 6 隐藏(Tanh) -> 6 隐藏(Tanh) -> 2 输出', 'circle', [
-        makeLayer('input', '输入层', { width: 2, height: 1, channels: 1 }),
-        makeLayer('dense', '隐藏层 1', { units: 6, activation: 'tanh' }),
-        makeLayer('dense', '隐藏层 2', { units: 6, activation: 'tanh' }),
+        makeLayer('dense', '隐藏层 1', { units: 16, activation: 'sigmoid' }),
         makeLayer('output', '输出层', { units: 2, activation: 'softmax', labels: ['内圆', '外环'] }),
       ]),
-      this.buildPreset('blobs-mlp', '高斯团 MLP', '2 输入 -> 4 隐藏(Sigmoid) -> 3 输出', 'blobs', [
+      this.buildPreset('blobs-mlp', '高斯团 MLP', '2 输入 → 4 隐藏(Sigmoid) → 3 输出', 'blobs', [
         makeLayer('input', '输入层', { width: 2, height: 1, channels: 1 }),
         makeLayer('dense', '隐藏层 1', { units: 4, activation: 'sigmoid' }),
         makeLayer('output', '输出层', { units: 3, activation: 'softmax', labels: ['团 A', '团 B', '团 C'] }),
@@ -83,7 +70,7 @@ export class ModeEAssetsService {
       id: 'what-is-backprop', eyebrow: '核心概念', title: '什么是反向传播？',
       body: [
         '反向传播是训练神经网络的核心算法，利用链式法则从输出层开始，逐层向后计算损失函数对每个参数的梯度。',
-        '过程分为四个阶段：前向传播 -> 损失计算 -> 反向传播 -> 参数更新。',
+        '过程分为四个阶段：前向传播 → 损失计算 → 反向传播 → 参数更新。',
       ],
       bullets: [
         '前向传播：输入数据经过线性变换和激活函数，得到预测输出',
@@ -96,8 +83,8 @@ export class ModeEAssetsService {
       id: 'chain-rule', eyebrow: '数学原理', title: '链式法则',
       body: [
         '链式法则是反向传播的数学基础。在神经网络中，每一层的输出是下一层的输入。',
-        'Dense 层: dW = a_prev^T·dZ, db = Sigma dZ, dA_prev = dZ·W^T',
-        'ReLU: dZ = dA·(Z > 0), Sigmoid: dZ = dA·sigma(1-sigma), Tanh: dZ = dA·(1-tanh^2)',
+        'Dense 层: dW = a_prevᵀ·dZ, db = Σ dZ, dA_prev = dZ·Wᵀ',
+        'ReLU: dZ = dA·(Z > 0), Sigmoid: dZ = dA·σ(1-σ), Tanh: dZ = dA·(1-tanh²)',
       ],
     },
     {
@@ -107,7 +94,7 @@ export class ModeEAssetsService {
       ],
       bullets: [
         'SGD: w = w - lr·dw — 简单但可能收敛慢',
-        'Momentum: v = beta·v + lr·dw; w = w - v — 平滑加速',
+        'Momentum: v = β·v + lr·dw; w = w - v — 平滑加速',
         'Adam: 自适应学习率+动量 — 最常用，收敛最快',
       ],
     },
