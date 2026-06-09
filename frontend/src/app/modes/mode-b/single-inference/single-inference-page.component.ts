@@ -15,11 +15,20 @@ import {
 import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
 import { LlmChatContext } from '@shared/llm/llm.models';
 import { MODE_B_LLM_SYSTEM_PROMPT } from '@shared/llm/llm-prompts';
+import { TeachingSearchFabComponent } from '@shared/teaching/teaching-search-fab.component';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 
 @Component({
   selector: 'app-single-inference-page',
   standalone: true,
-  imports: [CommonModule, RouterLink, PlatformTopbarComponent, LlmFloatingAssistantComponent],
+  imports: [
+    CommonModule,
+    RouterLink,
+    PlatformTopbarComponent,
+    LlmFloatingAssistantComponent,
+    TeachingSearchFabComponent,
+    TeachingTermDirective
+  ],
   templateUrl: './single-inference-page.component.html',
   styleUrl: './single-inference-page.component.css'
 })

@@ -5,7 +5,7 @@ export interface TeachingTerm {
   category: string;
   summary: string;
   details: string[];
-  mode: 'A' | 'C' | 'D' | 'E' | 'F';
+  mode: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 }
 
 export const MODE_A_TEACHING_TERMS: TeachingTerm[] = [
@@ -369,6 +369,230 @@ export const MODE_C_TEACHING_TERMS: TeachingTerm[] = [
   }
 ];
 
+export const MODE_B_TEACHING_TERMS: TeachingTerm[] = [
+  {
+    id: 'training-dataset',
+    title: '训练数据集',
+    aliases: ['dataset', '训练数据', '带标签数据'],
+    category: 'B 模式 · 数据与训练',
+    summary: '训练数据集是模型学习规律所使用的样本集合，通常包含输入特征以及对应标签或目标值。',
+    details: [
+      '图像分类数据通常按类别组织图片，CSV 数据则需要明确特征列和标签列。',
+      '输入形状、标签类型和类别数量必须与网络输入层、输出层及损失函数保持一致。',
+      '数据质量、类别平衡和样本数量会直接影响训练曲线与最终泛化能力。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'dataset-split',
+    title: '训练集、验证集与测试集',
+    aliases: ['数据划分', 'train/val/test split', '训练验证测试划分'],
+    category: 'B 模式 · 数据与训练',
+    summary: '数据划分把样本分成训练、验证和测试三部分，分别用于学习参数、调整方案和最终评估。',
+    details: [
+      '训练集参与反向传播和参数更新；验证集不更新参数，用于观察泛化趋势和选择超参数。',
+      '测试集应在训练方案确定后使用，避免模型或调参过程间接记住测试数据。',
+      '常见比例是 70/15/15 或 80/10/10，样本较少时需要特别关注每个类别是否都被合理分配。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'hyperparameter',
+    title: '训练超参数',
+    aliases: ['hyperparameter', '训练配置', '调参'],
+    category: 'B 模式 · 数据与训练',
+    summary: '超参数是在训练开始前设定的配置，例如批大小、训练轮数、学习率、优化器和损失函数。',
+    details: [
+      '超参数不会像网络权重一样由反向传播直接学得，而是由实验者根据任务与训练表现调整。',
+      '比较实验时应同时记录超参数、网络结构、数据划分和随机条件，否则指标差异很难解释。',
+      '调参应一次改变少量关键变量，并保留 checkpoint 和曲线作为依据。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'epoch',
+    title: 'Epoch',
+    aliases: ['训练轮次', '训练轮数', '轮次'],
+    category: 'B 模式 · 数据与训练',
+    summary: '一个 Epoch 表示模型完整遍历一次训练集。',
+    details: [
+      '每个 Epoch 通常由多个 Batch 组成，训练集越大或批大小越小，每轮包含的 Batch 越多。',
+      'Epoch 太少可能欠拟合，太多则可能让训练集继续变好但验证集开始变差。',
+      '观察每轮结束后的训练与验证指标，可以判断是否需要继续训练或提前停止。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'batch',
+    title: 'Batch',
+    aliases: ['批次', '批大小', 'batch size'],
+    category: 'B 模式 · 数据与训练',
+    summary: 'Batch 是一次前向传播、反向传播和参数更新所处理的一小组样本。',
+    details: [
+      '批大小决定每次更新使用多少样本：较大批次更稳定但更占显存，较小批次噪声更大但更新更频繁。',
+      '一个训练 step 通常对应一个 Batch 的处理和一次优化器更新。',
+      '改变批大小时，合适的学习率也可能随之变化。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'optimizer',
+    title: '优化器',
+    aliases: ['optimizer', '参数优化算法'],
+    category: 'B 模式 · 数据与训练',
+    summary: '优化器根据梯度决定网络参数如何更新，常见选择包括 SGD、Momentum、Adam 和 AdamW。',
+    details: [
+      'SGD 更新规则直接、可控；Momentum 利用历史方向减小震荡；Adam 会为不同参数自适应调整更新尺度。',
+      '优化器必须与学习率一起理解，相同学习率在不同优化器下可能产生完全不同的更新幅度。',
+      '实验对比时应记录优化器及其附加参数，避免只比较最终准确率。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'learning-rate-scheduler',
+    title: '学习率调度器',
+    aliases: ['scheduler', '学习率调度', '学习率衰减'],
+    category: 'B 模式 · 数据与训练',
+    summary: '学习率调度器会在训练过程中按规则改变学习率，使模型前期快速学习、后期细致收敛。',
+    details: [
+      '阶梯衰减会在指定阶段降低学习率，余弦退火则让学习率沿平滑曲线逐渐变化。',
+      '查看学习率曲线时，应把变化时刻与损失、准确率和梯度变化放在一起分析。',
+      '衰减过早可能让模型停止有效学习，衰减太晚则可能在最优点附近持续震荡。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'loss-function',
+    title: '损失函数与损失曲线',
+    aliases: ['loss', '训练损失', '验证损失', 'loss curve'],
+    category: 'B 模式 · 指标诊断',
+    summary: '损失函数衡量预测与真实目标的差异，损失曲线展示这种误差随训练 step 或 Epoch 的变化。',
+    details: [
+      '分类常用交叉熵或二元交叉熵，回归常用均方误差；任务类型与输出层必须和损失函数匹配。',
+      '训练损失下降说明模型正在拟合训练数据，验证损失则更能反映对未参与更新数据的泛化表现。',
+      '若训练损失持续下降而验证损失上升，通常需要警惕过拟合。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'accuracy',
+    title: '准确率',
+    aliases: ['accuracy', '训练准确率', '验证准确率', '测试准确率'],
+    category: 'B 模式 · 指标诊断',
+    summary: '准确率表示预测正确的样本占全部样本的比例，是分类任务最直观的指标之一。',
+    details: [
+      '训练准确率用于观察拟合程度，验证准确率用于选择方案，测试准确率用于报告最终效果。',
+      '类别极不平衡时，准确率可能掩盖少数类别表现，需要结合类别分布和其他指标分析。',
+      '回归任务通常不使用分类准确率，而应关注 MSE、MAE 等误差指标。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'gradient-norm',
+    title: '梯度范数',
+    aliases: ['gradient norm', 'grad_norm', '梯度大小'],
+    category: 'B 模式 · 指标诊断',
+    summary: '梯度范数把一层或整个网络的梯度汇总成一个大小指标，用于观察反向信号是否稳定。',
+    details: [
+      '梯度长期接近零可能意味着梯度消失或层没有得到有效学习信号。',
+      '梯度突然非常大可能导致参数剧烈变化、损失震荡或数值发散。',
+      '判断是否异常要结合网络结构、激活函数、学习率和参数更新范数，而不能只看单个阈值。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'parameter-update',
+    title: '参数更新',
+    aliases: ['update norm', '权重更新', 'optimizer step'],
+    category: 'B 模式 · 指标诊断',
+    summary: '参数更新是优化器利用梯度实际改变权重和偏置的步骤。',
+    details: [
+      '梯度描述损失对参数的敏感程度，更新量则是学习率、优化器状态与梯度共同作用后的真实改变量。',
+      '有梯度但更新量很小，可能与学习率过低或自适应优化器缩放有关。',
+      '逐层比较梯度范数和 update norm，可以发现哪些层几乎没有学习或更新过猛。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'weight-distribution',
+    title: '权重分布',
+    aliases: ['weight histogram', '权重直方图', '参数分布'],
+    category: 'B 模式 · 指标诊断',
+    summary: '权重分布直方图展示模型参数落在不同数值区间的相对数量。',
+    details: [
+      '分布的中心、宽度和长尾会随着训练变化，可辅助判断参数是否集中、发散或出现异常极值。',
+      '权重均值和标准差只能概括整体，直方图能显示多峰、偏斜等更细的结构。',
+      '权重分布需要结合梯度、更新量和损失曲线共同解释。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'overfitting',
+    title: '过拟合与欠拟合',
+    aliases: ['overfitting', 'underfitting', '泛化差距'],
+    category: 'B 模式 · 指标诊断',
+    summary: '过拟合表示模型记住训练数据但泛化较差，欠拟合则表示模型连训练数据中的规律也未充分学会。',
+    details: [
+      '训练指标很好而验证指标明显较差，通常是过拟合信号；训练和验证指标都较差，则更像欠拟合。',
+      '过拟合可尝试数据增强、正则化、Dropout、减小模型或提前停止；欠拟合可增加容量、训练轮数或调整优化配置。',
+      '判断时应观察完整曲线和多次实验，避免根据单个 Epoch 的波动下结论。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'checkpoint',
+    title: '模型 Checkpoint',
+    aliases: ['checkpoint', '模型检查点', '.pt 权重'],
+    category: 'B 模式 · 实验与推理',
+    summary: 'Checkpoint 是训练过程中保存的模型状态，用于恢复训练、运行测试或复现实验结果。',
+    details: [
+      '平台中的 checkpoint 除权重文件外，还应关联网络结构、超参数、数据集、训练进度和指标。',
+      '只有结构与权重匹配，模型才能正确加载；输入预处理和类别映射也应与训练时一致。',
+      '实验对比应区分已完成、手动停止和异常结束的 checkpoint，避免把不完整结果直接横向比较。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'single-sample-inference',
+    title: '单样本推理',
+    aliases: ['single sample inference', '单条预测', '样本推理'],
+    category: 'B 模式 · 实验与推理',
+    summary: '单样本推理使用训练完成的 checkpoint 对一条数据执行前向传播，并展示预测与中间结果。',
+    details: [
+      '推理阶段不执行反向传播，也不会更新模型参数。',
+      '样本预处理、特征顺序和类别映射必须与训练时一致，否则预测结果没有可比性。',
+      '逐层查看激活可以帮助定位信息在哪一层被放大、压缩或丢失。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'layer-activation',
+    title: '逐层激活',
+    aliases: ['activation value', '中间激活', '层输出'],
+    category: 'B 模式 · 实验与推理',
+    summary: '逐层激活是单个样本经过网络各层后产生的中间张量或向量。',
+    details: [
+      '卷积层激活常以通道热力图展示，全连接层或表格模型激活常以向量柱状图展示。',
+      '均值、最大值、最小值和非零比例可以概括当前层输出是否稀疏、饱和或异常。',
+      '激活很强不等于该层一定对正确类别有正向贡献，需要结合最终预测和更多解释方法判断。'
+    ],
+    mode: 'B'
+  },
+  {
+    id: 'prediction-confidence',
+    title: '预测置信度',
+    aliases: ['confidence', '预测概率', '类别概率'],
+    category: 'B 模式 · 实验与推理',
+    summary: '预测置信度通常是模型分配给预测类别的概率值，表示输出分布对该类别的集中程度。',
+    details: [
+      '置信度高只表示模型输出更集中，不保证预测一定正确，也不代表概率已经良好校准。',
+      '当多个类别概率接近时，模型对当前样本更不确定，Top-K 分布比单个最大值更有信息。',
+      '分析错误样本时，应同时查看真实标签、Top-K、输入数据和逐层激活。'
+    ],
+    mode: 'B'
+  }
+];
+
 export const MODE_E_TEACHING_TERMS: TeachingTerm[] = [
   {
     id: 'optimizer-sgd',
@@ -589,6 +813,7 @@ export const MODE_F_TEACHING_TERMS: TeachingTerm[] = [
 
 export const TEACHING_TERMS = [
   ...MODE_A_TEACHING_TERMS,
+  ...MODE_B_TEACHING_TERMS,
   ...MODE_C_TEACHING_TERMS,
   ...MODE_E_TEACHING_TERMS,
   ...MODE_F_TEACHING_TERMS

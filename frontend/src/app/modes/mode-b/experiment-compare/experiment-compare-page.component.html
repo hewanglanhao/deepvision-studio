@@ -12,7 +12,7 @@
       <a class="back-link" routerLink="/mode-b">返回 B 端训练</a>
 
       <section class="panel">
-        <div class="panel-title">历史数据集</div>
+        <div class="panel-title" appTeachingTerm="training-dataset">历史数据集</div>
         @if (!authUser) {
           <div class="empty-box">
             <strong>需要登录</strong>
@@ -24,7 +24,7 @@
             {{ loading ? '加载中...' : '刷新实验记录' }}
           </button>
           @if (datasetOptions.length) {
-            <label class="dataset-select">选择数据集
+            <label class="dataset-select"><span appTeachingTerm="training-dataset">选择数据集</span>
               <select [(ngModel)]="selectedDatasetId" (ngModelChange)="selectDataset($event)">
                 @for (dataset of datasetOptions; track dataset.id) {
                   <option [value]="dataset.id">{{ dataset.name }}</option>
@@ -55,11 +55,11 @@
         <div>
           <div class="eyebrow">Dataset Experiment History</div>
           <h1>{{ selectedDatasetName }}</h1>
-          <p>查看该数据集每次训练保存的网络结构、超参数、数据划分和准确率。</p>
+          <p>查看该数据集每次训练保存的 <span appTeachingTerm="checkpoint">checkpoint</span>、网络结构、<span appTeachingTerm="hyperparameter">超参数</span>、<span appTeachingTerm="dataset-split">数据划分</span>和<span appTeachingTerm="accuracy">准确率</span>。</p>
         </div>
         <div class="summary-stats">
           <div><span>训练次数</span><strong>{{ selectedDatasetCheckpoints.length }}</strong></div>
-          <div><span>最佳测试准确率</span><strong>{{ checkpointPercent(selectedDatasetOption?.bestAccuracy) }}</strong></div>
+          <div><span appTeachingTerm="accuracy">最佳测试准确率</span><strong>{{ checkpointPercent(selectedDatasetOption?.bestAccuracy) }}</strong></div>
         </div>
       </section>
 
@@ -74,7 +74,7 @@
               <header class="record-head">
                 <div>
                   <div class="record-title">{{ checkpoint.name }}</div>
-                  <div class="record-sub">{{ checkpoint.createdAt | date:'yyyy-MM-dd HH:mm' }} · Epoch {{ checkpoint.epoch }} / {{ checkpoint.totalEpochs }}</div>
+                  <div class="record-sub">{{ checkpoint.createdAt | date:'yyyy-MM-dd HH:mm' }} · <span appTeachingTerm="epoch">Epoch {{ checkpoint.epoch }} / {{ checkpoint.totalEpochs }}</span></div>
                 </div>
                 <div class="record-actions">
                   <span [class]="'run-status ' + checkpointStatusClass(checkpoint)">{{ checkpointStatusText(checkpoint) }}</span>
@@ -84,17 +84,17 @@
 
               <div class="metric-grid">
                 <div [class]="'metric-card ' + metricTone(checkpoint.trainAccuracy)">
-                  <span>训练准确率</span>
+                  <span appTeachingTerm="accuracy">训练准确率</span>
                   <strong>{{ checkpointPercent(checkpoint.trainAccuracy) }}</strong>
-                  <small>loss {{ checkpoint.trainLoss === null ? 'N/A' : (checkpoint.trainLoss | number:'1.4-4') }}</small>
+                  <small appTeachingTerm="loss-function">loss {{ checkpoint.trainLoss === null ? 'N/A' : (checkpoint.trainLoss | number:'1.4-4') }}</small>
                 </div>
                 <div [class]="'metric-card ' + metricTone(checkpoint.valAccuracy)">
-                  <span>验证准确率</span>
+                  <span appTeachingTerm="accuracy">验证准确率</span>
                   <strong>{{ checkpointPercent(checkpoint.valAccuracy) }}</strong>
-                  <small>loss {{ checkpoint.valLoss === null ? 'N/A' : (checkpoint.valLoss | number:'1.4-4') }}</small>
+                  <small appTeachingTerm="loss-function">loss {{ checkpoint.valLoss === null ? 'N/A' : (checkpoint.valLoss | number:'1.4-4') }}</small>
                 </div>
                 <div [class]="'metric-card ' + metricTone(checkpoint.testAccuracy)">
-                  <span>测试准确率</span>
+                  <span appTeachingTerm="accuracy">测试准确率</span>
                   <strong>{{ checkpointPercent(checkpoint.testAccuracy) }}</strong>
                   <small>{{ checkpoint.testSampleCount }} samples</small>
                 </div>
@@ -105,8 +105,8 @@
               </div>
 
               <div class="config-grid">
-                <div><span>超参数</span><strong>{{ checkpointConfigText(checkpoint) }}</strong></div>
-                <div><span>数据划分</span><strong>{{ checkpointSplitText(checkpoint) }}</strong></div>
+                <div><span appTeachingTerm="hyperparameter">超参数</span><strong>{{ checkpointConfigText(checkpoint) }}</strong></div>
+                <div><span appTeachingTerm="dataset-split">数据划分</span><strong>{{ checkpointSplitText(checkpoint) }}</strong></div>
               </div>
 
               <section class="history-chart-panel">
@@ -122,7 +122,7 @@
                 @if (checkpointHasMetricHistory(checkpoint)) {
                   <div class="history-chart-grid">
                     <div class="history-chart-card loss">
-                      <div class="history-chart-title"><span>损失曲线</span><strong>loss</strong></div>
+                      <div class="history-chart-title"><span appTeachingTerm="loss-function">损失曲线</span><strong>loss</strong></div>
                       <div class="history-mini-chart">
                         <div class="history-y-axis"><span>{{ checkpointChartMaxLabel(checkpoint, ['loss', 'valLoss'], 3) }}</span><span>0</span></div>
                         <svg viewBox="0 0 100 50" preserveAspectRatio="none">
@@ -136,7 +136,7 @@
                       <div class="history-x-axis"><span>{{ checkpointFirstStep(checkpoint) }}</span><span>{{ checkpointLastStep(checkpoint) }}</span></div>
                     </div>
                     <div class="history-chart-card accuracy">
-                      <div class="history-chart-title"><span>准确率曲线</span><strong>accuracy</strong></div>
+                      <div class="history-chart-title"><span appTeachingTerm="accuracy">准确率曲线</span><strong>accuracy</strong></div>
                       <div class="history-mini-chart">
                         <div class="history-y-axis"><span>1.00</span><span>0</span></div>
                         <svg viewBox="0 0 100 50" preserveAspectRatio="none">
@@ -150,7 +150,7 @@
                       <div class="history-x-axis"><span>{{ checkpointFirstStep(checkpoint) }}</span><span>{{ checkpointLastStep(checkpoint) }}</span></div>
                     </div>
                     <div class="history-chart-card lr">
-                      <div class="history-chart-title"><span>学习率变化</span><strong>lr</strong></div>
+                      <div class="history-chart-title"><span appTeachingTerm="learning-rate-scheduler">学习率变化</span><strong>lr</strong></div>
                       <div class="history-mini-chart">
                         <div class="history-y-axis"><span>{{ checkpointChartMaxLabel(checkpoint, ['lr'], 5) }}</span><span>0</span></div>
                         <svg viewBox="0 0 100 50" preserveAspectRatio="none">
@@ -163,7 +163,7 @@
                       <div class="history-x-axis"><span>{{ checkpointFirstStep(checkpoint) }}</span><span>{{ checkpointLastStep(checkpoint) }}</span></div>
                     </div>
                     <div class="history-chart-card gradient">
-                      <div class="history-chart-title"><span>梯度大小变化</span><strong>gradient norm</strong></div>
+                      <div class="history-chart-title"><span appTeachingTerm="gradient-norm">梯度大小变化</span><strong>gradient norm</strong></div>
                       <div class="history-mini-chart">
                         <div class="history-y-axis"><span>{{ checkpointChartMaxLabel(checkpoint, ['gradientNorm'], 3) }}</span><span>0</span></div>
                         <svg viewBox="0 0 100 50" preserveAspectRatio="none">
@@ -184,7 +184,7 @@
               <section class="network-editor-shell">
                 <div class="network-editor-head">
                   <div>
-                    <span class="network-title">网络结构</span>
+                    <span class="network-title" appTeachingTerm="network-template">网络结构</span>
                     <span class="network-meta">{{ checkpointLayers(checkpoint).length }} 层</span>
                   </div>
                   <div class="network-actions">
@@ -229,6 +229,8 @@
       }
     </main>
   </div>
+
+  <app-teaching-search-fab />
 
   <app-llm-floating-assistant
     title="AI 实验对比助手"

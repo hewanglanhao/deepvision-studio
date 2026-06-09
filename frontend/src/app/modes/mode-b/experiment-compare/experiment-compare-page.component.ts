@@ -14,6 +14,8 @@ import { NetworkLayer, TensorShape } from '@shared/simulation/sim-models';
 import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
 import { LlmChatContext } from '@shared/llm/llm.models';
 import { MODE_B_LLM_SYSTEM_PROMPT } from '@shared/llm/llm-prompts';
+import { TeachingSearchFabComponent } from '@shared/teaching/teaching-search-fab.component';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 
 interface DatasetHistoryOption {
   id: string;
@@ -34,7 +36,9 @@ type CheckpointMetricKey = 'loss' | 'valLoss' | 'accuracy' | 'valAccuracy' | 'lr
     RouterLink,
     NetworkOverviewComponent,
     PlatformTopbarComponent,
-    LlmFloatingAssistantComponent
+    LlmFloatingAssistantComponent,
+    TeachingSearchFabComponent,
+    TeachingTermDirective
   ],
   templateUrl: './experiment-compare-page.component.html',
   styleUrl: './experiment-compare-page.component.css'

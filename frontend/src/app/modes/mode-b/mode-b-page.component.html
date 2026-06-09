@@ -588,11 +588,11 @@
     <div class="workspace mode-workspace training-mode-workspace">
       <aside class="side-panel">
         <div class="pane training-data-pane">
-          <div class="pane-title mode-b-panel-title">训练数据</div>
+          <div class="pane-title mode-b-panel-title" appTeachingTerm="training-dataset">训练数据</div>
           <div [class]="trainingDatasetError && trainingBackendNotice.includes('暂不可用') ? 'warn-box' : 'success-box'" style="margin-bottom:8px">
             {{ trainingBackendNotice }}
           </div>
-          <label>训练数据集
+          <label><span appTeachingTerm="training-dataset">训练数据集</span>
             <select [ngModel]="selectedTrainingDatasetId" (ngModelChange)="selectTrainingDataset($event)" [disabled]="trainingDatasetLoading">
               @for (ds of builtinTrainingDatasets; track ds.id) {
                 <option [value]="ds.id">{{ ds.name }} · {{ ds.source }}</option>
@@ -713,8 +713,8 @@
       <main class="training-center">
         <div class="train-control-bar">
           <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : trainingStatus === 'completed' ? '已完成' : '已停止' }}</div>
-          <span class="muted">轮次 {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</span>
-          <span class="muted">LR: {{ trainingLr | number:'1.5-5' }}</span>
+          <span class="muted" appTeachingTerm="epoch">轮次 {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</span>
+          <span class="muted" appTeachingTerm="learning-rate">LR: {{ trainingLr | number:'1.5-5' }}</span>
           @if (!trainingDatasetReady) { <span class="warn-inline">需要带标签的数据集</span> }
           @else if (datasetSplitError) { <span class="warn-inline">划分比例无效</span> }
           <div style="flex:1"></div>
@@ -743,24 +743,24 @@
                 <div class="dataset-stat"><span>标签取值数</span><strong>{{ ds.labels.length }}</strong></div>
               }
               <div class="dataset-stat"><span>输入维度</span><strong>{{ ds.inputShape }}</strong></div>
-              <div class="dataset-stat"><span>划分比例</span><strong>{{ (ds.trainRatio*100) | number:'1.0-0' }} / {{ (ds.valRatio*100) | number:'1.0-0' }} / {{ (ds.testRatio*100) | number:'1.0-0' }}</strong></div>
+              <div class="dataset-stat"><span appTeachingTerm="dataset-split">划分比例</span><strong>{{ (ds.trainRatio*100) | number:'1.0-0' }} / {{ (ds.valRatio*100) | number:'1.0-0' }} / {{ (ds.testRatio*100) | number:'1.0-0' }}</strong></div>
             </div>
             <div class="split-track"><div class="split-train" [style.width.%]="ds.trainRatio*100"></div><div class="split-val" [style.width.%]="ds.valRatio*100"></div><div class="split-test" [style.width.%]="ds.testRatio*100"></div></div>
             <div class="split-editor">
-              <div class="split-editor-head"><span class="section-title">数据划分</span><span [class]="datasetSplitError ? 'split-total error' : 'split-total'">合计 {{ datasetSplitSumPercent }}%</span></div>
+              <div class="split-editor-head"><span class="section-title" appTeachingTerm="dataset-split">数据划分</span><span [class]="datasetSplitError ? 'split-total error' : 'split-total'">合计 {{ datasetSplitSumPercent }}%</span></div>
               <div class="split-presets"><button class="btn-sm" (click)="applyDatasetSplitPreset(70,15,15)">70 / 15 / 15</button><button class="btn-sm" (click)="applyDatasetSplitPreset(80,10,10)">80 / 10 / 10</button><button class="btn-sm" (click)="applyDatasetSplitPreset(80,20,0)">80 / 20 / 0</button></div>
               <div class="split-input-grid">
-                <label>训练集 %<input type="number" min="1" max="100" step="1" [ngModel]="datasetSplitPercent('train')" (ngModelChange)="onDatasetSplitInput('train', $event)" /></label>
-                <label>验证集 %<input type="number" min="0" max="100" step="1" [ngModel]="datasetSplitPercent('val')" (ngModelChange)="onDatasetSplitInput('val', $event)" /></label>
-                <label>测试集 %<input type="number" min="0" max="100" step="1" [ngModel]="datasetSplitPercent('test')" (ngModelChange)="onDatasetSplitInput('test', $event)" /></label>
+                <label><span appTeachingTerm="dataset-split">训练集 %</span><input type="number" min="1" max="100" step="1" [ngModel]="datasetSplitPercent('train')" (ngModelChange)="onDatasetSplitInput('train', $event)" /></label>
+                <label><span appTeachingTerm="dataset-split">验证集 %</span><input type="number" min="0" max="100" step="1" [ngModel]="datasetSplitPercent('val')" (ngModelChange)="onDatasetSplitInput('val', $event)" /></label>
+                <label><span appTeachingTerm="dataset-split">测试集 %</span><input type="number" min="0" max="100" step="1" [ngModel]="datasetSplitPercent('test')" (ngModelChange)="onDatasetSplitInput('test', $event)" /></label>
               </div>
               @if (datasetSplitError; as splitError) { <div class="field-error-msg">{{ splitError }}</div> }
             </div>
 
             <div class="training-network-editor">
               <div class="training-network-head">
-                <div><div class="section-title mode-b-panel-title">网络结构编辑器</div><div class="muted">{{ layerCount }} 层 · {{ parameterCount | number }} 参数</div></div>
-                <label class="network-template-select">模型模板
+                <div><div class="section-title mode-b-panel-title" appTeachingTerm="network-template">网络结构编辑器</div><div class="muted">{{ layerCount }} 层 · {{ parameterCount | number }} 参数</div></div>
+                <label class="network-template-select"><span appTeachingTerm="network-template">模型模板</span>
                   <select [(ngModel)]="selectedTemplateId" (change)="applyTemplate()">
                     @for (t of modelTemplates; track t.id) { <option [value]="t.id">{{ t.name }}</option> }
                   </select>
@@ -960,22 +960,22 @@
             </div>
 
             <div class="training-hyperparams-panel">
-              <div class="section-title mode-b-panel-title">训练超参数</div>
+              <div class="section-title mode-b-panel-title" appTeachingTerm="hyperparameter">训练超参数</div>
               <div class="training-hyperparams-grid">
-                <label>批大小 <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>
-                <label>训练轮数 <input type="number" min="1" [(ngModel)]="trainingConfig.totalEpochs" /></label>
-                <label>学习率 <input type="number" step="0.0001" [(ngModel)]="trainingConfig.learningRate" /></label>
-                <label>优化器
+                <label><span appTeachingTerm="batch">批大小</span> <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>
+                <label><span appTeachingTerm="epoch">训练轮数</span> <input type="number" min="1" [(ngModel)]="trainingConfig.totalEpochs" /></label>
+                <label><span appTeachingTerm="learning-rate">学习率</span> <input type="number" step="0.0001" [(ngModel)]="trainingConfig.learningRate" /></label>
+                <label><span appTeachingTerm="optimizer">优化器</span>
                   <select [(ngModel)]="trainingConfig.optimizer">
                     <option value="Adam">Adam</option><option value="AdamW">AdamW</option><option value="SGD">SGD</option><option value="RMSProp">RMSProp</option>
                   </select>
                 </label>
-                <label>学习率调度
+                <label><span appTeachingTerm="learning-rate-scheduler">学习率调度</span>
                   <select [(ngModel)]="trainingConfig.scheduler">
                     <option value="none">不调度</option><option value="step">阶梯衰减</option><option value="cosine">余弦退火</option>
                   </select>
                 </label>
-                <label>损失函数
+                <label><span appTeachingTerm="loss-function">损失函数</span>
                   <select [(ngModel)]="trainingConfig.lossFunction">
                     <option value="cross_entropy">交叉熵</option><option value="mse">MSE</option><option value="bce">二元交叉熵</option>
                   </select>
@@ -1023,7 +1023,7 @@
           <div class="training-status-head">
             <div>
               <div class="section-title mode-b-panel-title">当前训练状态</div>
-              <div class="training-status-summary">Epoch {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }} · Batch {{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div>
+              <div class="training-status-summary"><span appTeachingTerm="epoch">Epoch {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</span> · <span appTeachingTerm="batch">Batch {{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</span></div>
             </div>
             <div class="training-status-right">
               <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : trainingStatus === 'completed' ? '已完成' : '已停止' }}</div>
@@ -1032,12 +1032,12 @@
           </div>
           <div class="training-status-progress"><div [style.width.%]="trainingProgressPercent"></div></div>
           <div class="status-grid train-visual-status">
-            <div class="status-card status-card-epoch"><div class="status-card-label">当前 Epoch</div><div class="status-card-value">{{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</div></div>
-            <div class="status-card status-card-loss"><div class="status-card-label">训练损失</div><div class="status-card-value">{{ trainingLoss | number:'1.4-4' }}</div></div>
-            <div class="status-card status-card-val-loss"><div class="status-card-label">验证损失</div><div class="status-card-value">{{ trainingValLoss | number:'1.4-4' }}</div></div>
-            <div class="status-card status-card-acc"><div class="status-card-label">训练准确率</div><div class="status-card-value">{{ (trainingAcc*100) | number:'1.1-1' }}%</div></div>
-            <div class="status-card status-card-val-acc"><div class="status-card-label">验证准确率</div><div class="status-card-value">{{ (trainingValAcc*100) | number:'1.1-1' }}%</div></div>
-            <div class="status-card"><div class="status-card-label">当前 Batch</div><div class="status-card-value">{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div></div>
+            <div class="status-card status-card-epoch"><div class="status-card-label" appTeachingTerm="epoch">当前 Epoch</div><div class="status-card-value">{{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</div></div>
+            <div class="status-card status-card-loss"><div class="status-card-label" appTeachingTerm="loss-function">训练损失</div><div class="status-card-value">{{ trainingLoss | number:'1.4-4' }}</div></div>
+            <div class="status-card status-card-val-loss"><div class="status-card-label" appTeachingTerm="loss-function">验证损失</div><div class="status-card-value">{{ trainingValLoss | number:'1.4-4' }}</div></div>
+            <div class="status-card status-card-acc"><div class="status-card-label" appTeachingTerm="accuracy">训练准确率</div><div class="status-card-value">{{ (trainingAcc*100) | number:'1.1-1' }}%</div></div>
+            <div class="status-card status-card-val-acc"><div class="status-card-label" appTeachingTerm="accuracy">验证准确率</div><div class="status-card-value">{{ (trainingValAcc*100) | number:'1.1-1' }}%</div></div>
+            <div class="status-card"><div class="status-card-label" appTeachingTerm="batch">当前 Batch</div><div class="status-card-value">{{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div></div>
             <div class="status-card"><div class="status-card-label">训练耗时</div><div class="status-card-value">{{ formatDuration(trainingElapsedSeconds) }}</div></div>
             <div class="status-card"><div class="status-card-label">预计剩余</div><div class="status-card-value">{{ formatDuration(trainingEtaSeconds) }}</div></div>
             <div class="status-card status-card-progress"><div class="status-card-label">进度</div><div class="status-card-value">{{ trainingProgressPercent | number:'1.0-0' }}%</div></div>
@@ -1060,7 +1060,7 @@
         <div class="backprop-board">
           <div class="backprop-head">
             <div>
-              <div class="section-title mode-b-panel-title">反向传播教学面板</div>
+              <div class="section-title mode-b-panel-title" appTeachingTerm="backpropagation">反向传播教学面板</div>
             </div>
             @if (latestBackprop; as bp) {
               <div class="backprop-epoch">Epoch {{ bp.epoch }} / {{ bp.totalEpochs }} · Batch {{ bp.batch }} / {{ bp.totalBatches }}</div>
@@ -1071,7 +1071,7 @@
             <section class="bp-panel bp-network-panel">
               <div class="bp-network-head">
                 <div>
-                  <div class="section-title">网络结构中的梯度与参数更新</div>
+                  <div class="section-title"><span appTeachingTerm="gradient-norm">梯度</span>与<span appTeachingTerm="parameter-update">参数更新</span></div>
                   <div class="muted">节点按前向结构排列，流光表示当前 batch 的反向梯度正在从输出端回传。</div>
                   <div class="bp-click-hint">点击每个节点左上角图标，可查看该层梯度变化曲线和梯度直方图。</div>
                 </div>
@@ -1303,7 +1303,7 @@
         <div class="charts-area">
           <div class="chart-wrap metric-card metric-card-loss">
             <div class="metric-card-head">
-              <div><div class="chart-label">损失曲线</div><div class="chart-subtitle">X: 训练 step · Y: loss</div></div>
+              <div><div class="chart-label" appTeachingTerm="loss-function">损失曲线</div><div class="chart-subtitle">X: 训练 step · Y: loss</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ trainingLoss | number:'1.4-4' }}</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1326,7 +1326,7 @@
           </div>
           <div class="chart-wrap metric-card metric-card-accuracy">
             <div class="metric-card-head">
-              <div><div class="chart-label">准确率曲线</div><div class="chart-subtitle">X: 训练 step · Y: accuracy</div></div>
+              <div><div class="chart-label" appTeachingTerm="accuracy">准确率曲线</div><div class="chart-subtitle">X: 训练 step · Y: accuracy</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ (trainingAcc*100) | number:'1.1-1' }}%</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1349,7 +1349,7 @@
           </div>
           <div class="chart-wrap metric-card metric-card-lr">
             <div class="metric-card-head">
-              <div><div class="chart-label">学习率变化</div><div class="chart-subtitle">X: 训练 step · Y: learning rate</div></div>
+              <div><div class="chart-label" appTeachingTerm="learning-rate-scheduler">学习率变化</div><div class="chart-subtitle">X: 训练 step · Y: learning rate</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ trainingLr | number:'1.5-5' }}</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1371,7 +1371,7 @@
           </div>
           <div class="chart-wrap metric-card metric-card-gradient">
             <div class="metric-card-head">
-              <div><div class="chart-label">梯度大小变化</div><div class="chart-subtitle">X: 训练 step · Y: gradient norm</div></div>
+              <div><div class="chart-label" appTeachingTerm="gradient-norm">梯度大小变化</div><div class="chart-subtitle">X: 训练 step · Y: gradient norm</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ trainingGradientNorm | number:'1.4-4' }}</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1393,7 +1393,7 @@
           </div>
           <div class="chart-wrap parameter-panel weight-chart-card">
             <div class="metric-card-head">
-              <div><div class="chart-label">权重分布直方图</div><div class="chart-subtitle">X: 权重值 · Y: 相对频率</div></div>
+              <div><div class="chart-label" appTeachingTerm="weight-distribution">权重分布直方图</div><div class="chart-subtitle">X: 权重值 · Y: 相对频率</div></div>
               <div class="chart-value"><span>Std</span><strong>{{ trainingWeightStd | number:'1.3-3' }}</strong></div>
             </div>
             <div class="weight-chart">
@@ -1408,7 +1408,7 @@
             <div class="test-result-panel">
               <div class="test-result-head">
                 <div>
-                  <div class="section-title">测试集效果</div>
+                  <div class="section-title" appTeachingTerm="dataset-split">测试集效果</div>
                   <div class="muted">训练完成后由后端在测试集上推理得到。</div>
                 </div>
                 <div class="test-metrics">
@@ -1429,7 +1429,7 @@
                       <div class="prediction-meta">
                         <div><span>预测</span><strong>{{ sample.predictedLabel }}</strong></div>
                         <div><span>真实</span><strong>{{ sample.trueLabel }}</strong></div>
-                        <div><span>置信度</span><strong>{{ (sample.confidence * 100) | number:'1.1-1' }}%</strong></div>
+                        <div><span appTeachingTerm="prediction-confidence">置信度</span><strong>{{ (sample.confidence * 100) | number:'1.1-1' }}%</strong></div>
                       </div>
                       <div [class]="sample.correct ? 'prediction-tag ok' : 'prediction-tag bad'">{{ sample.correct ? '正确' : '错误' }}</div>
                     </div>
@@ -1446,7 +1446,7 @@
               <div class="checkpoint-title-wrap">
                 <div class="checkpoint-icon">CK</div>
                 <div>
-                  <div class="section-title mode-b-panel-title">模型 Checkpoint</div>
+                  <div class="section-title mode-b-panel-title" appTeachingTerm="checkpoint">模型 Checkpoint</div>
                   <div class="muted">登录后训练完成会自动保存 checkpoint，可手动选择并重新跑测试集。</div>
                 </div>
               </div>
@@ -1457,7 +1457,7 @@
             } @else if (trainingCheckpoints.length) {
               <div class="checkpoint-workbench">
                 <div class="checkpoint-picker-panel">
-                  <label>选择 Checkpoint
+                  <label><span appTeachingTerm="checkpoint">选择 Checkpoint</span>
                     <select [(ngModel)]="selectedCheckpointId">
                       @for (ckpt of trainingCheckpoints; track ckpt.id) {
                         <option [ngValue]="ckpt.id">{{ ckpt.name }} · {{ ckpt.createdAt | date:'MM-dd HH:mm' }}</option>
@@ -1663,6 +1663,8 @@
       </div>
     </div>
   }
+
+  <app-teaching-search-fab />
 
   <app-llm-floating-assistant
     title="B模式 AI 训练助手"

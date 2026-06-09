@@ -8,6 +8,8 @@ import { PlatformTopbarComponent } from '@shared/components/platform-topbar.comp
 import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
 import { LlmChatContext } from '@shared/llm/llm.models';
 import { MODE_B_LLM_SYSTEM_PROMPT } from '@shared/llm/llm-prompts';
+import { TeachingSearchFabComponent } from '@shared/teaching/teaching-search-fab.component';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import { AuthUser } from '@core/auth/auth.models';
 import { ForwardRecordDetail, ForwardRecordSummary, ForwardRecordSnapshot } from '@shared/forward/forward-record.models';
 import { AuthService } from '@core/auth/auth.service';
@@ -109,7 +111,17 @@ const NETWORK_LAYER_ICON: Record<string, string> = {
 
 @Component({
   selector: 'app-mode-b-page',
-  imports: [CommonModule, FormsModule, DecimalPipe, RouterModule, NetworkOverviewComponent, PlatformTopbarComponent, LlmFloatingAssistantComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    DecimalPipe,
+    RouterModule,
+    NetworkOverviewComponent,
+    PlatformTopbarComponent,
+    LlmFloatingAssistantComponent,
+    TeachingSearchFabComponent,
+    TeachingTermDirective
+  ],
   templateUrl: './mode-b-page.component.html',
   styleUrl: './mode-b-page.component.css'
 })
