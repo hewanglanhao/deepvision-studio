@@ -208,6 +208,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   };
   trainingStatus = 'idle';
   trainingEpoch = 0;
+  trainingTotalEpochsValue = 20;
   trainingLr = 0.001;
   trainingLoss = 1.7;
   trainingValLoss = 1.78;
@@ -382,6 +383,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       const previousStatus = this.trainingStatus;
       this.trainingStatus  = s.status;
       this.trainingEpoch   = s.currentEpoch;
+      this.trainingTotalEpochsValue = s.totalEpochs && s.totalEpochs > 0 ? s.totalEpochs : this.trainingConfig.totalEpochs;
       this.trainingLr      = s.currentLr;
       this.trainingLoss    = s.latestLoss;
       this.trainingValLoss = s.latestValLoss;
@@ -857,8 +859,15 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (this.trainingStatus === 'idle' || this.trainingEpoch === 0) return 0;
     return this.trainingTotalBatches;
   }
+  get trainingDisplayTotalEpochs(): number {
+    return Math.max(1, this.trainingTotalEpochsValue || this.trainingConfig.totalEpochs || 1);
+  }
+  get trainingDisplayEpoch(): number {
+    if (this.trainingStatus === 'idle') return 0;
+    return Math.max(0, Math.min(this.trainingEpoch, this.trainingDisplayTotalEpochs));
+  }
   get trainingProgressPercent(): number {
-    return this.trainingConfig.totalEpochs > 0 ? (this.trainingEpoch / this.trainingConfig.totalEpochs) * 100 : 0;
+    return Math.max(0, Math.min(100, (this.trainingDisplayEpoch / this.trainingDisplayTotalEpochs) * 100));
   }
   get gradientAlert(): string {
     if (this.trainingGradientNorm < 0.02) return '梯度可能消失';
@@ -1394,6 +1403,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.rebuildTopology();
     this.rebuildInputAsset();
     this.runForward();
+    if (this.trainingStatus !== 'running' && this.trainingStatus !== 'paused') {
+      this.trainingSvc.prepare(this.trainingConfig, this.layers);
+    }
   }
 
   // ── Layer editing ─────────────────────────────────────

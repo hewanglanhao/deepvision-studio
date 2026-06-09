@@ -726,7 +726,7 @@
       <main class="training-center">
         <div class="train-control-bar">
           <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : trainingStatus === 'completed' ? '已完成' : '已停止' }}</div>
-          <span class="muted">轮次 {{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</span>
+          <span class="muted">轮次 {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</span>
           <span class="muted">LR: {{ trainingLr | number:'1.5-5' }}</span>
           @if (!trainingDatasetReady) { <span class="warn-inline">需要带标签的数据集</span> }
           @else if (datasetSplitError) { <span class="warn-inline">划分比例无效</span> }
@@ -1038,7 +1038,7 @@
           <div class="training-status-head">
             <div>
               <div class="section-title">当前训练状态</div>
-              <div class="training-status-summary">Epoch {{ trainingEpoch }} / {{ trainingConfig.totalEpochs }} · Batch {{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div>
+              <div class="training-status-summary">Epoch {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }} · Batch {{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div>
             </div>
             <div class="training-status-right">
               <div [class]="'status-badge ' + trainingStatus"><div class="status-dot"></div>{{ trainingStatus === 'idle' ? '空闲' : trainingStatus === 'running' ? '训练中' : trainingStatus === 'paused' ? '已暂停' : trainingStatus === 'completed' ? '已完成' : '已停止' }}</div>
@@ -1047,7 +1047,7 @@
           </div>
           <div class="training-status-progress"><div [style.width.%]="trainingProgressPercent"></div></div>
           <div class="status-grid train-visual-status">
-            <div class="status-card status-card-epoch"><div class="status-card-label">当前 Epoch</div><div class="status-card-value">{{ trainingEpoch }} / {{ trainingConfig.totalEpochs }}</div></div>
+            <div class="status-card status-card-epoch"><div class="status-card-label">当前 Epoch</div><div class="status-card-value">{{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</div></div>
             <div class="status-card status-card-loss"><div class="status-card-label">训练损失</div><div class="status-card-value">{{ trainingLoss | number:'1.4-4' }}</div></div>
             <div class="status-card status-card-val-loss"><div class="status-card-label">验证损失</div><div class="status-card-value">{{ trainingValLoss | number:'1.4-4' }}</div></div>
             <div class="status-card status-card-acc"><div class="status-card-label">训练准确率</div><div class="status-card-value">{{ (trainingAcc*100) | number:'1.1-1' }}%</div></div>

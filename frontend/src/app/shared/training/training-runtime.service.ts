@@ -288,6 +288,38 @@ export class TrainingRuntimeService implements OnDestroy {
     this.layers = layers;
   }
 
+  prepare(config: TrainingConfig, layers: NetworkLayer[]): void {
+    this.clearTimer();
+    this.closeSocket();
+    this.backendJobId = '';
+    this.backendTotalEpochs = 0;
+    this.backendTotalBatches = 0;
+    this.config = { ...config };
+    this.layers = [...layers];
+    this.history$.next([]);
+    this.logs$.next([]);
+    this.testResult$.next(null);
+    this.backprop$.next(null);
+    this.patchState({
+      status: 'idle',
+      currentEpoch: 0,
+      currentLr: config.learningRate,
+      latestLoss: 1.7,
+      latestValLoss: 1.78,
+      latestAccuracy: 0.2,
+      latestValAccuracy: 0.18,
+      latestGradientNorm: 1.2,
+      latestWeightMean: 0,
+      latestWeightStd: 0.16,
+      elapsedSeconds: 0,
+      etaSeconds: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+      totalEpochs: config.totalEpochs,
+      message: 'Ready.'
+    });
+  }
+
   start(): void {
     this.closeSocket();
     this.backendJobId = '';
