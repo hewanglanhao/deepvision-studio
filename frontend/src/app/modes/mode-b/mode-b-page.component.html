@@ -650,7 +650,11 @@
               <div class="task-item" [class.active]="selectedTaskId===task.id" (click)="selectTask(task.id)">
                 <div class="task-name">{{ task.name }}</div>
                 <div class="task-desc">{{ task.description }}</div>
-                <span class="task-tag">{{ task.type }}</span>
+                <div class="task-tags">
+                  <span class="task-tag">{{ task.type === 'regression' ? '回归' : '分类' }}</span>
+                  @if (task.dataset) { <span class="task-tag muted-tag">{{ task.dataset }}</span> }
+                  @if (task.lossFunction) { <span class="task-tag loss-tag">{{ task.lossFunction }}</span> }
+                </div>
               </div>
             }
           </div>
@@ -697,6 +701,26 @@
           }
         </div>
 
+        <div class="training-inline-panels side-training-panels">
+          <div class="chart-wrap training-log-card">
+            <div class="chart-label">训练日志</div>
+            <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
+          </div>
+          <div class="chart-wrap backprop-card">
+            <div class="chart-label">反向传播观察</div>
+            @if (latestBackprop; as bp) {
+              <div class="backprop-summary">
+                <div><span>当前 Loss</span><strong>{{ bp.loss | number:'1.4-4' }}</strong></div>
+                <div><span>全局梯度 Norm</span><strong>{{ bp.globalGradNorm | number:'1.4-4' }}</strong></div>
+                <div><span>参数更新 Norm</span><strong>{{ bp.globalUpdateNorm | number:'1.6-6' }}</strong></div>
+                <div><span>状态</span><strong [class]="'bp-state ' + layerGradStatusClass(bp.gradientStatus)">{{ backpropStatusText }}</strong></div>
+              </div>
+            } @else {
+              <div class="warn-box">暂无反向传播数据。</div>
+            }
+          </div>
+        </div>
+
       </aside>
 
       <main class="training-center">
@@ -729,7 +753,7 @@
             </div>
             <div class="dataset-stat-grid">
               <div class="dataset-stat"><span>样本数量</span><strong>{{ ds.sampleCount }}</strong></div>
-              <div class="dataset-stat"><span>{{ ds.kind === 'table' ? '配置类别数' : '类别数量' }}</span><strong>{{ ds.classCount }}</strong></div>
+              <div class="dataset-stat"><span>{{ selectedTaskIsRegression ? '输出维度' : (ds.kind === 'table' ? '配置类别数' : '类别数量') }}</span><strong>{{ ds.classCount }}</strong></div>
               @if (ds.kind === 'table') {
                 <div class="dataset-stat"><span>标签取值数</span><strong>{{ ds.labels.length }}</strong></div>
               }
@@ -975,8 +999,8 @@
             </div>
 
             <div class="dataset-lower">
-              <div>
-                <div class="section-title" style="margin-bottom:6px">标签分布</div>
+              <div class="label-distribution-panel">
+                <div class="section-title label-distribution-title">{{ selectedTaskIsRegression ? '目标分布' : '标签分布' }}</div>
                 <div class="label-dist-list">
                   @for (item of ds.labelDistribution; track item.label) {
                     <div class="label-dist-row"><span class="label-dot" [style.background]="item.color"></span><span class="label-name">{{ item.label }}</span><div class="label-bar-wrap"><div class="label-bar" [style.background]="item.color" [style.width.%]="labelPercent(item.count)"></div></div><span class="label-count">{{ item.count }}</span></div>
@@ -1033,26 +1057,19 @@
             <div class="status-card"><div class="status-card-label">预计剩余</div><div class="status-card-value">{{ formatDuration(trainingEtaSeconds) }}</div></div>
             <div class="status-card status-card-progress"><div class="status-card-label">进度</div><div class="status-card-value">{{ trainingProgressPercent | number:'1.0-0' }}%</div></div>
           </div>
-        </div>
-
-        <div class="training-inline-panels">
-          <div class="chart-wrap training-log-card">
-            <div class="chart-label">训练日志 <span class="muted">[Backend]</span></div>
-            <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
-          </div>
-          <div class="chart-wrap backprop-card">
-            <div class="chart-label">反向传播观察 <span class="muted">[真实后端数据]</span></div>
-            @if (latestBackprop; as bp) {
-              <div class="backprop-summary">
-                <div><span>当前 Loss</span><strong>{{ bp.loss | number:'1.4-4' }}</strong></div>
-                <div><span>全局梯度 Norm</span><strong>{{ bp.globalGradNorm | number:'1.4-4' }}</strong></div>
-                <div><span>参数更新 Norm</span><strong>{{ bp.globalUpdateNorm | number:'1.6-6' }}</strong></div>
-                <div><span>状态</span><strong [class]="'bp-state ' + layerGradStatusClass(bp.gradientStatus)">{{ backpropStatusText }}</strong></div>
+          @if (showSingleInferencePrompt && trainingStatus === 'completed') {
+            <div class="single-inference-nudge">
+              <div class="nudge-icon">▶</div>
+              <div>
+                <strong>训练已完成，可以尝试单样本推理</strong>
+                <span>选择刚保存的 checkpoint 和一条数据，观察模型逐层激活并查看预测结果。</span>
               </div>
-            } @else {
-              <div class="warn-box">开始后端训练后，这里会显示真实反向传播数据：每层梯度、参数更新和输出层损失解释。</div>
-            }
-          </div>
+              <div class="nudge-actions">
+                <a class="btn-primary btn-sm" routerLink="/training/inference">立即体验</a>
+                <button class="btn-ghost btn-sm" type="button" (click)="dismissSingleInferencePrompt()">稍后再说</button>
+              </div>
+            </div>
+          }
         </div>
 
         <div class="backprop-board">
@@ -1288,86 +1305,6 @@
           }
         }
 
-        @if (trainingTestResult; as test) {
-          <div class="test-result-panel">
-            <div class="test-result-head">
-              <div>
-                <div class="section-title">测试集效果</div>
-                <div class="muted">训练完成后由后端在测试集上推理得到。</div>
-              </div>
-              <div class="test-metrics">
-                <div><span>测试准确率</span><strong>{{ test.testAccuracy === null ? 'N/A' : ((test.testAccuracy * 100) | number:'1.1-1') + '%' }}</strong></div>
-                <div><span>测试损失</span><strong>{{ test.testLoss === null ? 'N/A' : (test.testLoss | number:'1.4-4') }}</strong></div>
-                <div><span>测试样本</span><strong>{{ test.sampleCount }}</strong></div>
-              </div>
-            </div>
-            @if (test.samples.length) {
-              <div class="prediction-grid">
-                @for (sample of test.samples; track sample.index) {
-                  <div class="prediction-card" [class.correct]="sample.correct" [class.wrong]="!sample.correct">
-                    @if (sample.imageUrl) {
-                      <img [src]="sample.imageUrl" [alt]="sample.name || sample.trueLabel" />
-                    } @else {
-                      <div class="prediction-placeholder">#{{ sample.index }}</div>
-                    }
-                    <div class="prediction-meta">
-                      <div><span>预测</span><strong>{{ sample.predictedLabel }}</strong></div>
-                      <div><span>真实</span><strong>{{ sample.trueLabel }}</strong></div>
-                      <div><span>置信度</span><strong>{{ (sample.confidence * 100) | number:'1.1-1' }}%</strong></div>
-                    </div>
-                    <div [class]="sample.correct ? 'prediction-tag ok' : 'prediction-tag bad'">{{ sample.correct ? '正确' : '错误' }}</div>
-                  </div>
-                }
-              </div>
-            } @else {
-              <div class="muted">当前划分没有测试样本，或该数据集暂不提供图片预览。</div>
-            }
-          </div>
-        }
-
-        <div class="checkpoint-panel">
-          <div class="checkpoint-head">
-            <div>
-              <div class="section-title">模型 Checkpoint</div>
-              <div class="muted">登录后训练完成会自动保存 checkpoint，可手动选择并重新跑测试集。</div>
-            </div>
-            <button class="btn-sm" (click)="loadTrainingCheckpoints()" [disabled]="!authUser || checkpointBusy">刷新</button>
-          </div>
-          @if (!authUser) {
-            <div class="warn-box">需要登录后才能保存和加载自己的 checkpoint。</div>
-          } @else if (trainingCheckpoints.length) {
-            <div class="checkpoint-controls">
-              <label>选择 Checkpoint
-                <select [(ngModel)]="selectedCheckpointId">
-                  @for (ckpt of trainingCheckpoints; track ckpt.id) {
-                    <option [ngValue]="ckpt.id">{{ ckpt.name }} · {{ ckpt.createdAt | date:'MM-dd HH:mm' }}</option>
-                  }
-                </select>
-              </label>
-              <button class="btn-primary" (click)="runSelectedCheckpointTest()" [disabled]="checkpointBusy || !selectedCheckpointId || trainingStatus==='running'">跑测试集</button>
-            </div>
-            @if (selectedCheckpoint; as ckpt) {
-              <div class="checkpoint-meta">
-                <span>{{ ckpt.datasetName }}</span>
-                <span>Epoch {{ ckpt.epoch }} / {{ ckpt.totalEpochs }}</span>
-                <span>训练 {{ checkpointPercent(ckpt.trainAccuracy) }}</span>
-                <span>验证 {{ checkpointPercent(ckpt.valAccuracy) }}</span>
-                <span>测试 {{ checkpointPercent(ckpt.testAccuracy) }}</span>
-                <span>签名 {{ ckpt.modelSignature.slice(0, 10) }}</span>
-              </div>
-              <div class="checkpoint-detail">
-                <div class="checkpoint-detail-title">网络结构</div>
-                <div class="checkpoint-structure">{{ checkpointLayerText(ckpt) }}</div>
-                <div class="checkpoint-detail-title">训练设置</div>
-                <div class="checkpoint-structure">{{ checkpointConfigText(ckpt) }} · {{ checkpointSplitText(ckpt) }}</div>
-              </div>
-            }
-          } @else {
-            <div class="muted">暂无 checkpoint。完成一次登录状态下的训练后会自动出现。</div>
-          }
-          @if (checkpointError) { <div class="error-box" style="margin-top:8px">{{ checkpointError }}</div> }
-        </div>
-
         <div class="charts-area">
           <div class="chart-wrap metric-card metric-card-loss">
             <div class="metric-card-head">
@@ -1471,33 +1408,121 @@
             <div class="metric-x-axis"><span>{{ weightHistogramFirstLabel }}</span><strong>权重值</strong><span>{{ weightHistogramLastLabel }}</span></div>
             <div class="chart-legend"><span>Mean {{ trainingWeightMean | number:'1.3-3' }}</span><span>Std {{ trainingWeightStd | number:'1.3-3' }}</span></div>
           </div>
-          <div class="experiment-history" style="grid-column:1/-1">
-            <div class="experiment-head">
-              <div class="section-title">实验对比 <span class="muted">（当前数据集历史训练）</span></div>
+
+          @if (trainingTestResult; as test) {
+            <div class="test-result-panel">
+              <div class="test-result-head">
+                <div>
+                  <div class="section-title">测试集效果</div>
+                  <div class="muted">训练完成后由后端在测试集上推理得到。</div>
+                </div>
+                <div class="test-metrics">
+                  <div><span>测试准确率</span><strong>{{ test.testAccuracy === null ? 'N/A' : ((test.testAccuracy * 100) | number:'1.1-1') + '%' }}</strong></div>
+                  <div><span>测试损失</span><strong>{{ test.testLoss === null ? 'N/A' : (test.testLoss | number:'1.4-4') }}</strong></div>
+                  <div><span>测试样本</span><strong>{{ test.sampleCount }}</strong></div>
+                </div>
+              </div>
+              @if (test.samples.length) {
+                <div class="prediction-grid">
+                  @for (sample of test.samples; track sample.index) {
+                    <div class="prediction-card" [class.correct]="sample.correct" [class.wrong]="!sample.correct">
+                      @if (sample.imageUrl) {
+                        <img [src]="sample.imageUrl" [alt]="sample.name || sample.trueLabel" />
+                      } @else {
+                        <div class="prediction-placeholder">#{{ sample.index }}</div>
+                      }
+                      <div class="prediction-meta">
+                        <div><span>预测</span><strong>{{ sample.predictedLabel }}</strong></div>
+                        <div><span>真实</span><strong>{{ sample.trueLabel }}</strong></div>
+                        <div><span>置信度</span><strong>{{ (sample.confidence * 100) | number:'1.1-1' }}%</strong></div>
+                      </div>
+                      <div [class]="sample.correct ? 'prediction-tag ok' : 'prediction-tag bad'">{{ sample.correct ? '正确' : '错误' }}</div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="muted">当前划分没有测试样本，或该数据集暂不提供图片预览。</div>
+              }
+            </div>
+          }
+
+          <div class="checkpoint-panel">
+            <div class="checkpoint-head">
+              <div class="checkpoint-title-wrap">
+                <div class="checkpoint-icon">CK</div>
+                <div>
+                  <div class="section-title">模型 Checkpoint</div>
+                  <div class="muted">登录后训练完成会自动保存 checkpoint，可手动选择并重新跑测试集。</div>
+                </div>
+              </div>
               <button class="btn-sm" (click)="loadTrainingCheckpoints()" [disabled]="!authUser || checkpointBusy">刷新</button>
             </div>
             @if (!authUser) {
-              <div class="muted">登录后可查看当前数据集曾训练过的网络和指标。</div>
-            } @else if (datasetCheckpointHistory.length) {
-              @for (ckpt of datasetCheckpointHistory; track ckpt.id) {
-                <div class="exp-row checkpoint-exp-row">
-                  <div class="exp-main">
-                    <span class="exp-name">{{ ckpt.name }}</span>
-                    <span class="exp-sub">{{ checkpointConfigText(ckpt) }}</span>
-                    <span class="exp-structure">{{ checkpointLayerText(ckpt) }}</span>
-                  </div>
-                  <div class="exp-metrics">
-                    <span>训练 {{ checkpointPercent(ckpt.trainAccuracy) }}</span>
-                    <span>验证 {{ checkpointPercent(ckpt.valAccuracy) }}</span>
-                    <span>测试 {{ checkpointPercent(ckpt.testAccuracy) }}</span>
-                  </div>
-                  <div class="exp-bar-wrap"><div class="exp-bar" [style.width.%]="checkpointBarWidth(ckpt.testAccuracy)"></div></div>
-                  <span class="exp-acc">{{ checkpointPercent(ckpt.testAccuracy) }}</span>
+              <div class="warn-box">需要登录后才能保存和加载自己的 checkpoint。</div>
+            } @else if (trainingCheckpoints.length) {
+              <div class="checkpoint-workbench">
+                <div class="checkpoint-picker-panel">
+                  <label>选择 Checkpoint
+                    <select [(ngModel)]="selectedCheckpointId">
+                      @for (ckpt of trainingCheckpoints; track ckpt.id) {
+                        <option [ngValue]="ckpt.id">{{ ckpt.name }} · {{ ckpt.createdAt | date:'MM-dd HH:mm' }}</option>
+                      }
+                    </select>
+                  </label>
+                  <button class="btn-primary checkpoint-run-btn" (click)="runSelectedCheckpointTest()" [disabled]="checkpointBusy || !selectedCheckpointId || trainingStatus==='running'">跑测试集</button>
+                  @if (selectedCheckpoint; as ckpt) {
+                    <div class="checkpoint-signature">
+                      <span>模型签名</span>
+                      <strong>#{{ ckpt.modelSignature.slice(0, 10) }}</strong>
+                    </div>
+                  }
                 </div>
-              }
+                @if (selectedCheckpoint; as ckpt) {
+                  <div class="checkpoint-summary-panel">
+                    <div class="checkpoint-record-head">
+                      <div>
+                        <strong>{{ ckpt.name }}</strong>
+                        <span>{{ ckpt.datasetName }} · Epoch {{ ckpt.epoch }} / {{ ckpt.totalEpochs }}</span>
+                      </div>
+                      <em>{{ ckpt.createdAt | date:'yyyy-MM-dd HH:mm' }}</em>
+                    </div>
+                    <div class="checkpoint-metric-grid">
+                      <div class="checkpoint-metric train">
+                        <span>训练准确率</span>
+                        <strong>{{ checkpointPercent(ckpt.trainAccuracy) }}</strong>
+                        <i><b [style.width.%]="checkpointBarWidth(ckpt.trainAccuracy)"></b></i>
+                      </div>
+                      <div class="checkpoint-metric val">
+                        <span>验证准确率</span>
+                        <strong>{{ checkpointPercent(ckpt.valAccuracy) }}</strong>
+                        <i><b [style.width.%]="checkpointBarWidth(ckpt.valAccuracy)"></b></i>
+                      </div>
+                      <div class="checkpoint-metric test">
+                        <span>测试准确率</span>
+                        <strong>{{ checkpointPercent(ckpt.testAccuracy) }}</strong>
+                        <i><b [style.width.%]="checkpointBarWidth(ckpt.testAccuracy)"></b></i>
+                      </div>
+                    </div>
+                    <div class="checkpoint-info-grid">
+                      <div>
+                        <span>网络结构</span>
+                        <strong>{{ checkpointLayerText(ckpt) }}</strong>
+                      </div>
+                      <div>
+                        <span>训练设置</span>
+                        <strong>{{ checkpointConfigText(ckpt) }} · {{ checkpointSplitText(ckpt) }}</strong>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
             } @else {
-              <div class="muted">当前选中的数据集还没有保存过训练记录。</div>
+              <div class="checkpoint-empty">
+                <strong>暂无 checkpoint</strong>
+                <span>完成一次登录状态下的训练后，这里会自动展示可复测的模型记录。</span>
+              </div>
             }
+            @if (checkpointError) { <div class="error-box" style="margin-top:8px">{{ checkpointError }}</div> }
           </div>
         </div>
       </main>

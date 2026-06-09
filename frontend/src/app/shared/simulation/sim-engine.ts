@@ -92,6 +92,29 @@ export class SimEngine {
         ]
       },
       {
+        id: 'binary-mlp',
+        name: 'Binary Classification MLP',
+        description: '2-feature table input -> Dense -> Dense -> 2-class output',
+        layers: [
+          tableInputDraft('2D Point Input', 2),
+          { type: 'dense', name: 'Dense 1', inputs: [], params: { units: 32, activation: 'relu' } },
+          { type: 'dropout', name: 'Dropout', inputs: [], params: { rate: 0.1, training: false } },
+          { type: 'dense', name: 'Dense 2', inputs: [], params: { units: 16, activation: 'relu' } },
+          { type: 'output', name: 'Binary Output', inputs: [], params: { units: 2, activation: 'softmax' } }
+        ]
+      },
+      {
+        id: 'regression-mlp',
+        name: 'Regression MLP',
+        description: 'Numeric table input -> Dense -> Dense -> 1-value output',
+        layers: [
+          tableInputDraft('Regression Input', 5),
+          { type: 'dense', name: 'Dense 1', inputs: [], params: { units: 64, activation: 'relu' } },
+          { type: 'dense', name: 'Dense 2', inputs: [], params: { units: 32, activation: 'relu' } },
+          { type: 'output', name: 'Value Output', inputs: [], params: { units: 1, activation: 'none' } }
+        ]
+      },
+      {
         id: 'mlp-basic',
         name: 'MLP Basic',
         description: 'Input -> Flatten -> Dense -> Output',

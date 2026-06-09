@@ -381,6 +381,13 @@ export interface PresetTask {
   type: 'classification' | 'regression';
   dataset: string;
   description: string;
+  datasetId?: string;
+  templateId?: string;
+  lossFunction?: 'cross_entropy' | 'bce' | 'mse';
+  outputUnits?: number;
+  outputActivation?: ActivationType;
+  learningRate?: number;
+  totalEpochs?: number;
 }
 
 export interface ExperimentResult {

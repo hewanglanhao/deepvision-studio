@@ -49,7 +49,7 @@ public class TrainingDatasetService {
   private static final int MIN_CLASS_COUNT = 2;
   private static final int MIN_ROWS = 10;
   private static final int MIN_SAMPLES_PER_IMAGE_CLASS = 2;
-  private static final int PREVIEW_IMAGES_PER_CLASS = 3;
+  private static final int PREVIEW_IMAGES_PER_CLASS = 6;
 
   private final TrainingDatasetRepository datasets;
   private final ObjectMapper objectMapper;
@@ -549,6 +549,28 @@ public class TrainingDatasetService {
         makePointPreview(),
         List.of()
     ));
+
+    saveBuiltinIfMissing(new TrainingDatasetDetail(
+        "house-price-regression",
+        "房价回归数据集",
+        "builtin",
+        "table",
+        "5 维合成数值特征，目标是预测连续房价，适合演示回归任务。",
+        240,
+        1,
+        "5 numeric features",
+        "70% / 15% / 15%",
+        List.of("price"),
+        true,
+        0.7,
+        0.15,
+        0.15,
+        mapToDistribution(Map.of("price", 240)),
+        null,
+        regressionTablePreview(),
+        null,
+        List.of("这是回归任务，指标中的 accuracy 会显示为基于误差的拟合分数。")
+    ));
   }
 
   private void saveBuiltinIfMissing(TrainingDatasetDetail detail) {
@@ -796,6 +818,19 @@ public class TrainingDatasetService {
             List.of("6.4", "3.2", "4.5", "1.5", "versicolor"),
             List.of("6.3", "3.3", "6.0", "2.5", "virginica"),
             List.of("5.8", "2.7", "4.1", "1.0", "versicolor")
+        )
+    );
+  }
+
+  private TablePreview regressionTablePreview() {
+    return new TablePreview(
+        List.of("area", "rooms", "age", "distance", "school_score", "price"),
+        List.of(
+            List.of("63.0", "2", "18.0", "5.8", "72.0", "228.4"),
+            List.of("82.5", "3", "9.0", "3.1", "81.0", "356.7"),
+            List.of("108.0", "4", "4.0", "1.8", "88.0", "512.9"),
+            List.of("47.0", "1", "25.0", "8.6", "64.0", "141.6"),
+            List.of("135.0", "5", "2.0", "2.4", "91.0", "646.3")
         )
     );
   }

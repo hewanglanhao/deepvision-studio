@@ -138,6 +138,49 @@ class CsvClassificationDataset(Dataset):
         return self.x[index], self.y[index]
 
 
+class SyntheticRegressionDataset(Dataset):
+    def __init__(self, count: int = 240, seed: int = 20260518) -> None:
+        rng = random.Random(seed)
+        rows: list[list[str]] = []
+        features: list[list[float]] = []
+        targets: list[float] = []
+        for index in range(count):
+            area = rng.uniform(45.0, 145.0)
+            rooms = rng.choice([1, 2, 3, 4, 5])
+            age = rng.uniform(0.0, 30.0)
+            distance = rng.uniform(0.5, 12.0)
+            school_score = rng.uniform(55.0, 98.0)
+            noise = rng.gauss(0.0, 10.0)
+            price = 28.0 + area * 4.2 + rooms * 18.0 - age * 2.1 - distance * 7.5 + school_score * 1.9 + noise
+            price = max(60.0, price)
+            rows.append([
+                f"{area:.2f}",
+                str(rooms),
+                f"{age:.2f}",
+                f"{distance:.2f}",
+                f"{school_score:.2f}",
+                f"{price:.2f}",
+            ])
+            features.append([area / 150.0, rooms / 5.0, age / 30.0, distance / 12.0, school_score / 100.0])
+            targets.append(price / 700.0)
+        self.x = torch.tensor(features, dtype=torch.float32)
+        self.y = torch.tensor(targets, dtype=torch.float32)
+        self.raw_headers = ["area", "rooms", "age", "distance", "school_score", "price"]
+        self.raw_rows = rows
+        self.feature_names = self.raw_headers[:-1]
+        self.feature_count = self.x.shape[1]
+        self.classes = ["price"]
+        self.is_regression = True
+        self.target_scale = 1.0
+        self.target_display_scale = 700.0
+
+    def __len__(self) -> int:
+        return len(self.y)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.x[index], self.y[index]
+
+
 class AutoFlatten(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.ndim > 2:
@@ -221,7 +264,7 @@ def train(request: dict[str, Any]) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = build_criterion(config, dataset)
     optimizer = build_optimizer(model.parameters(), config)
     scheduler = build_scheduler(optimizer, config, int(config.get("totalEpochs") or 20))
 
@@ -325,7 +368,8 @@ def test_checkpoint(request: dict[str, Any]) -> None:
     model.to(device)
 
     loader = DataLoader(test_set, batch_size=max(1, int(request.get("batchSize") or 32)), shuffle=False, num_workers=0)
-    criterion = nn.CrossEntropyLoss()
+    config = checkpoint.get("config") or request.get("config") or {}
+    criterion = build_criterion(config, dataset)
     test_loss, test_accuracy = evaluate(model, loader, criterion, device)
     emit({
         "type": "test_result",
@@ -380,11 +424,30 @@ def infer_checkpoint_sample(request: dict[str, Any]) -> None:
 
     with torch.no_grad():
         logits, activations = infer_with_activations(model, sample_x.to(device))
-        probs = torch.softmax(logits, dim=1)[0].detach().cpu()
     classes = list(getattr(dataset, "classes", []))
-    predicted_index = int(torch.argmax(probs).item())
-    true_index = int(sample_y.detach().cpu().item())
-    top_k = top_class_predictions(probs, classes, limit=5)
+    is_regression = bool(getattr(dataset, "is_regression", False)) or loss_mode(checkpoint.get("config") or {}, dataset) == "mse"
+    if is_regression:
+        display_scale = float(getattr(dataset, "target_display_scale", 1.0) or 1.0)
+        pred_value = float(logits.detach().cpu().view(-1)[0].item())
+        true_value = float(sample_y.detach().cpu().view(-1)[0].item())
+        predicted_index = 0
+        true_index = 0
+        confidence = max(0.0, min(1.0, 1.0 - abs(pred_value - true_value) / max(1e-6, float(getattr(dataset, "target_scale", 1.0) or 1.0))))
+        true_label = f"{true_value * display_scale:.2f}"
+        predicted_label = f"{pred_value * display_scale:.2f}"
+        top_k = [{
+            "index": 0,
+            "label": "predicted value",
+            "probability": round(confidence, 6),
+        }]
+    else:
+        probs = torch.softmax(logits, dim=1)[0].detach().cpu()
+        predicted_index = int(torch.argmax(probs).item())
+        true_index = int(sample_y.detach().cpu().item())
+        confidence = float(probs[predicted_index].item())
+        true_label = classes[true_index] if 0 <= true_index < len(classes) else str(true_index)
+        predicted_label = classes[predicted_index] if 0 <= predicted_index < len(classes) else str(predicted_index)
+        top_k = top_class_predictions(probs, classes, limit=5)
     emit({
         "type": "single_inference",
         "jobId": job_id,
@@ -392,11 +455,11 @@ def infer_checkpoint_sample(request: dict[str, Any]) -> None:
         "sample": sample_metadata(dataset, sample_index, dataset_root),
         "prediction": {
             "trueIndex": true_index,
-            "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
+            "trueLabel": true_label,
             "predictedIndex": predicted_index,
-            "predictedLabel": classes[predicted_index] if 0 <= predicted_index < len(classes) else str(predicted_index),
-            "confidence": round(float(probs[predicted_index].item()), 6),
-            "correct": predicted_index == true_index,
+            "predictedLabel": predicted_label,
+            "confidence": round(float(confidence), 6),
+            "correct": abs(float(predicted_label) - float(true_label)) <= 35.0 if is_regression else predicted_index == true_index,
             "topK": top_k,
         },
         "activations": activations,
@@ -436,6 +499,8 @@ def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any
         return CsvClassificationDataset(dataset_root / "builtin" / "iris" / "iris.csv", "label")
     if dataset_id == "points-2d":
         return CsvClassificationDataset(dataset_root / "builtin" / "points-2d" / "points.csv", "label")
+    if dataset_id == "house-price-regression":
+        return SyntheticRegressionDataset()
     upload_root = dataset_root / "upload" / dataset_id
     if upload_root.exists():
         image_root = upload_root / "images"
@@ -636,6 +701,65 @@ def build_scheduler(optimizer, config: dict[str, Any], total_epochs: int):
     return None
 
 
+def dataset_attr(loader_or_dataset: Any, name: str, default: Any = None) -> Any:
+    current = loader_or_dataset
+    if isinstance(current, DataLoader):
+        current = current.dataset
+    while hasattr(current, "dataset"):
+        current = getattr(current, "dataset")
+    return getattr(current, name, default)
+
+
+def loss_mode(config: dict[str, Any], dataset: Any) -> str:
+    configured = str(config.get("lossFunction") or "").lower()
+    if configured in {"mse", "mean_squared_error"} or bool(getattr(dataset, "is_regression", False)):
+        return "mse"
+    if configured in {"bce", "binary_cross_entropy", "binary_crossentropy"}:
+        return "bce"
+    return "cross_entropy"
+
+
+def criterion_mode(criterion: nn.Module) -> str:
+    if isinstance(criterion, nn.MSELoss):
+        return "mse"
+    if isinstance(criterion, nn.BCEWithLogitsLoss):
+        return "bce"
+    return "cross_entropy"
+
+
+def build_criterion(config: dict[str, Any], dataset: Dataset) -> nn.Module:
+    mode = loss_mode(config, dataset)
+    if mode == "mse":
+        return nn.MSELoss()
+    if mode == "bce":
+        return nn.BCEWithLogitsLoss()
+    return nn.CrossEntropyLoss()
+
+
+def prepare_targets(logits: torch.Tensor, y: torch.Tensor, mode: str) -> torch.Tensor:
+    if mode == "mse":
+        return y.float().view(logits.shape)
+    if mode == "bce":
+        if logits.ndim == 2 and logits.shape[1] > 1:
+            return torch.nn.functional.one_hot(y.long(), num_classes=logits.shape[1]).float()
+        return y.float().view_as(logits)
+    return y.long()
+
+
+def batch_score(logits: torch.Tensor, y: torch.Tensor, mode: str, target_scale: float = 1.0) -> float:
+    if mode == "mse":
+        prediction = logits.detach().float().view(-1)
+        target = y.detach().float().view(-1)
+        mae = torch.abs(prediction - target)
+        score = torch.clamp(1.0 - mae / max(1e-6, float(target_scale)), min=0.0, max=1.0)
+        return float(score.sum().cpu())
+    if mode == "bce" and logits.ndim == 2 and logits.shape[1] == 1:
+        pred = (torch.sigmoid(logits).view(-1) >= 0.5).long()
+    else:
+        pred = logits.argmax(dim=1)
+    return float((pred == y.long()).sum().detach().cpu())
+
+
 def train_epoch(
     model,
     loader,
@@ -650,8 +774,10 @@ def train_epoch(
     config: dict[str, Any],
 ) -> tuple[float, float, float, dict[str, Any] | None]:
     model.train()
+    mode = criterion_mode(criterion)
+    target_scale = float(dataset_attr(loader, "target_scale", 1.0) or 1.0)
     total_loss = 0.0
-    total_correct = 0
+    total_score = 0.0
     total = 0
     last_gradient_norm = 0.0
     latest_backprop: dict[str, Any] | None = None
@@ -663,6 +789,7 @@ def train_epoch(
         y = y.to(device)
         optimizer.zero_grad(set_to_none=True)
         logits = model(x)
+        target = prepare_targets(logits, y, mode)
         should_emit_phase = batch_index == 1
         if should_emit_phase:
             emit(build_backprop_event(
@@ -679,7 +806,7 @@ def train_epoch(
                 y,
                 [],
             ))
-        loss = criterion(logits, y)
+        loss = criterion(logits, target)
         if should_emit_phase:
             emit(build_backprop_event(
                 job_id,
@@ -748,9 +875,9 @@ def train_epoch(
             emit(latest_backprop)
         batch_size = y.shape[0]
         total_loss += float(loss.detach().cpu()) * batch_size
-        total_correct += int((logits.argmax(dim=1) == y).sum().detach().cpu())
+        total_score += batch_score(logits, y, mode, target_scale)
         total += batch_size
-    return total_loss / max(1, total), total_correct / max(1, total), last_gradient_norm, latest_backprop
+    return total_loss / max(1, total), total_score / max(1, total), last_gradient_norm, latest_backprop
 
 
 def snapshot_trainable_parameters(model: nn.Module) -> dict[str, torch.Tensor]:
@@ -913,20 +1040,23 @@ def prediction_explanation(predicted_index: int, true_index: int, confidence: fl
 
 def evaluate(model, loader, criterion, device) -> tuple[float, float]:
     model.eval()
+    mode = criterion_mode(criterion)
+    target_scale = float(dataset_attr(loader, "target_scale", 1.0) or 1.0)
     total_loss = 0.0
-    total_correct = 0
+    total_score = 0.0
     total = 0
     with torch.no_grad():
         for x, y in loader:
             x = x.to(device)
             y = y.to(device)
             logits = model(x)
-            loss = criterion(logits, y)
+            target = prepare_targets(logits, y, mode)
+            loss = criterion(logits, target)
             batch_size = y.shape[0]
             total_loss += float(loss.detach().cpu()) * batch_size
-            total_correct += int((logits.argmax(dim=1) == y).sum().detach().cpu())
+            total_score += batch_score(logits, y, mode, target_scale)
             total += batch_size
-    return total_loss / max(1, total), total_correct / max(1, total)
+    return total_loss / max(1, total), total_score / max(1, total)
 
 
 def collect_prediction_samples(
@@ -940,6 +1070,8 @@ def collect_prediction_samples(
     if len(subset) <= 0:
         return []
     classes = list(getattr(dataset, "classes", []))
+    is_regression = bool(getattr(dataset, "is_regression", False))
+    display_scale = float(getattr(dataset, "target_display_scale", 1.0) or 1.0)
     samples: list[dict[str, Any]] = []
     model.eval()
     indices = list(getattr(subset, "indices", []))[:limit]
@@ -947,18 +1079,34 @@ def collect_prediction_samples(
         for raw_index in indices:
             x, y = dataset[int(raw_index)]
             logits = model(x.unsqueeze(0).to(device))
-            probs = torch.softmax(logits, dim=1)[0].detach().cpu()
-            pred = int(torch.argmax(probs).item())
-            true_index = int(y.item())
-            item: dict[str, Any] = {
-                "index": int(raw_index),
-                "trueIndex": true_index,
-                "predictedIndex": pred,
-                "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
-                "predictedLabel": classes[pred] if 0 <= pred < len(classes) else str(pred),
-                "confidence": round(float(probs[pred].item()), 4),
-                "correct": pred == true_index,
-            }
+            if is_regression:
+                pred_value = float(logits.detach().cpu().view(-1)[0].item())
+                true_value = float(y.detach().cpu().view(-1)[0].item())
+                abs_error = abs(pred_value - true_value)
+                score = max(0.0, min(1.0, 1.0 - abs_error / max(1e-6, float(getattr(dataset, "target_scale", 1.0) or 1.0))))
+                item: dict[str, Any] = {
+                    "index": int(raw_index),
+                    "trueIndex": 0,
+                    "predictedIndex": 0,
+                    "trueLabel": f"{true_value * display_scale:.2f}",
+                    "predictedLabel": f"{pred_value * display_scale:.2f}",
+                    "confidence": round(score, 4),
+                    "correct": abs_error <= 0.05,
+                    "absoluteError": round(abs_error * display_scale, 4),
+                }
+            else:
+                probs = torch.softmax(logits, dim=1)[0].detach().cpu()
+                pred = int(torch.argmax(probs).item())
+                true_index = int(y.item())
+                item = {
+                    "index": int(raw_index),
+                    "trueIndex": true_index,
+                    "predictedIndex": pred,
+                    "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
+                    "predictedLabel": classes[pred] if 0 <= pred < len(classes) else str(pred),
+                    "confidence": round(float(probs[pred].item()), 4),
+                    "correct": pred == true_index,
+                }
             image_path = sample_image_path(dataset, int(raw_index))
             if image_path is not None:
                 item["name"] = image_path.name
@@ -974,11 +1122,16 @@ def collect_dataset_samples(dataset: Dataset, dataset_root: Path, limit: int = 6
 def sample_metadata(dataset: Dataset, index: int, dataset_root: Path) -> dict[str, Any]:
     x, y = dataset[index]
     classes = list(getattr(dataset, "classes", []))
-    true_index = int(y.item())
+    is_regression = bool(getattr(dataset, "is_regression", False))
+    display_scale = float(getattr(dataset, "target_display_scale", 1.0) or 1.0)
+    true_index = 0 if is_regression else int(y.item())
+    true_label = f"{float(y.detach().cpu().view(-1)[0].item()) * display_scale:.2f}" if is_regression else (
+        classes[true_index] if 0 <= true_index < len(classes) else str(true_index)
+    )
     item: dict[str, Any] = {
         "index": int(index),
         "trueIndex": true_index,
-        "trueLabel": classes[true_index] if 0 <= true_index < len(classes) else str(true_index),
+        "trueLabel": true_label,
         "shape": list(x.shape),
     }
     image_path = sample_image_path(dataset, index)

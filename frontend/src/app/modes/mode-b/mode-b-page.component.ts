@@ -33,6 +33,7 @@ const MAX_IMAGE_SIDE = 640;
 const IMAGE_DECODE_TIMEOUT = 5000;
 /** DOM 像素网格只用于教学预览，避免大图生成海量节点。计算张量不受这个限制。 */
 const MAX_PREVIEW_GRID_SIDE = 56;
+const DATASET_PREVIEW_IMAGES_PER_CLASS = 6;
 
 export interface KernelPreset {
   label: string;
@@ -237,6 +238,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   collaborationRooms: CollaborationRoomSummary[] = [];
   collaborationRoomsOpen = false;
   collaborationRoomsLoading = false;
+  showSingleInferencePrompt = false;
 
   selectedTaskId = 'mnist-classify';
   experimentResults: ExperimentResult[] = [];
@@ -248,10 +250,10 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   channelModalPreviews: ChannelPreviewItem[] = [];
 
   readonly presetTasks: PresetTask[] = [
-    { id: 'mnist-classify',  name: '手写数字识别',   type: 'classification', dataset: 'MNIST',    description: '识别 MNIST 数据集中的 0-9 数字' },
-    { id: 'cifar-classify',  name: '图像分类',       type: 'classification', dataset: 'CIFAR-10', description: '对 CIFAR-10 的 10 类图像分类' },
-    { id: 'binary-classify', name: '二分类示例',     type: 'classification', dataset: 'Custom',   description: '两类别分类演示' },
-    { id: 'regression',      name: '回归任务（占位）', type: 'regression',   dataset: 'Custom',   description: '回归任务（待后端支持）' }
+    { id: 'mnist-classify',  name: '手写数字识别', type: 'classification', dataset: 'MNIST', datasetId: 'mnist-1000', templateId: 'cnn-classic', lossFunction: 'cross_entropy', outputUnits: 10, outputActivation: 'softmax', description: '识别 MNIST 数据集中的 0-9 数字' },
+    { id: 'cifar-classify',  name: '图像分类', type: 'classification', dataset: 'CIFAR-10', datasetId: 'cifar10-5000', templateId: 'cnn-classic', lossFunction: 'cross_entropy', outputUnits: 10, outputActivation: 'softmax', description: '对 CIFAR-10 的 10 类图像分类' },
+    { id: 'binary-classify', name: '二分类示例', type: 'classification', dataset: '二维分类', datasetId: 'points-2d', templateId: 'binary-mlp', lossFunction: 'bce', outputUnits: 2, outputActivation: 'softmax', learningRate: 0.003, totalEpochs: 25, description: '二维点 A/B 分类，自动使用表格输入、2 输出和二元交叉熵' },
+    { id: 'regression', name: '房价回归任务', type: 'regression', dataset: '合成房价', datasetId: 'house-price-regression', templateId: 'regression-mlp', lossFunction: 'mse', outputUnits: 1, outputActivation: 'none', learningRate: 0.001, totalEpochs: 35, description: '根据面积、房龄、交通等数值特征预测连续价格，使用 MSE 训练' }
   ];
 
   builtinTrainingDatasets: TrainingDatasetOption[] = [
@@ -314,6 +316,18 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       inputShape: 'x, y',
       recommendedSplit: '70% / 15% / 15%',
       labels: ['class A', 'class B']
+    },
+    {
+      id: 'house-price-regression',
+      name: '房价回归数据集',
+      source: 'builtin',
+      kind: 'table',
+      description: '5 维合成数值特征，目标是预测连续房价，适合演示回归任务。',
+      sampleCount: 240,
+      classCount: 1,
+      inputShape: '5 numeric features',
+      recommendedSplit: '70% / 15% / 15%',
+      labels: ['price']
     }
   ];
 
@@ -365,6 +379,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.loadLocalImageSamples();
     void this.loadTrainingDatasets();
     this.subs.add(this.trainingSvc.state$.subscribe(s => {
+      const previousStatus = this.trainingStatus;
       this.trainingStatus  = s.status;
       this.trainingEpoch   = s.currentEpoch;
       this.trainingLr      = s.currentLr;
@@ -379,6 +394,10 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       this.trainingEtaSeconds = s.etaSeconds;
       this.trainingCurrentBatchValue = s.currentBatch ?? 0;
       this.trainingTotalBatchesValue = s.totalBatches ?? 0;
+      if (previousStatus !== 'completed' && s.status === 'completed') {
+        this.showSingleInferencePrompt = true;
+        if (this.authUser) void this.loadTrainingCheckpoints();
+      }
     }));
     this.subs.add(this.trainingSvc.history$.subscribe(h => this.trainingHistory = h));
     this.subs.add(this.trainingSvc.logs$.subscribe(l => this.trainingLogs = l));
@@ -463,6 +482,8 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get parameterCount() { return SimEngine.parameterCount(this.layers, this.connections); }
   get layerPalette(): LayerType[] { return ['conv2d', 'residual', 'pool2d', 'flatten', 'dense', 'activation', 'dropout']; }
   get selectedTemplate() { return this.modelTemplates.find(t => t.id === this.selectedTemplateId); }
+  get selectedPresetTask() { return this.presetTasks.find(task => task.id === this.selectedTaskId) ?? null; }
+  get selectedTaskIsRegression(): boolean { return this.selectedPresetTask?.type === 'regression'; }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
   get selectedCheckpoint() { return this.trainingCheckpoints.find(item => item.id === this.selectedCheckpointId) ?? null; }
   get currentTrainingJobId(): string { return this.trainingSvc.currentBackendJobId; }
@@ -523,6 +544,17 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
         level: 'error',
         message: `输出层类别数为 ${this.outputLayer.params.units}，当前数据集需要 ${ds.classCount}。`
       });
+    }
+    if (this.outputLayer) {
+      if (this.trainingConfig.lossFunction === 'mse' && this.outputLayer.params.units !== 1) {
+        issues.push({ level: 'error', message: '回归任务使用 MSE 时，输出层应为 1 个连续数值。' });
+      }
+      if (this.trainingConfig.lossFunction === 'bce' && ds.classCount !== 2) {
+        issues.push({ level: 'error', message: '二元交叉熵适用于 2 类数据集，请选择二分类数据集或改用交叉熵。' });
+      }
+      if (this.trainingConfig.lossFunction === 'cross_entropy' && ds.classCount < 2) {
+        issues.push({ level: 'error', message: '交叉熵至少需要 2 个类别；回归任务请使用 MSE。' });
+      }
     }
 
     if (this.inputLayer && ds.kind === 'image') {
@@ -1990,6 +2022,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   async startTraining(): Promise<void> {
+    this.showSingleInferencePrompt = false;
     if (!this.trainingDatasetDetail) {
       this.trainingDatasetError = '请先选择或导入一个训练数据集。';
       return;
@@ -2030,7 +2063,14 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   pauseTraining(): void  { void this.trainingSvc.pause(); }
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
-  resetTraining(): void  { void this.trainingSvc.reset(); }
+  resetTraining(): void  {
+    this.showSingleInferencePrompt = false;
+    void this.trainingSvc.reset();
+  }
+
+  dismissSingleInferencePrompt(): void {
+    this.showSingleInferencePrompt = false;
+  }
 
   private buildModeBLlmContext(): LlmChatContext {
     const ds = this.trainingDatasetDetail;
@@ -2250,8 +2290,44 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   selectTask(id: string): void {
     this.selectedTaskId = id;
     const task = this.presetTasks.find(t => t.id === id);
-    if (task?.dataset === 'MNIST') void this.selectTrainingDataset('mnist-1000');
-    if (task?.dataset === 'CIFAR-10') void this.selectTrainingDataset('cifar10-5000');
+    if (!task) return;
+    void this.applyPresetTask(task);
+  }
+
+  private async applyPresetTask(task: PresetTask): Promise<void> {
+    if (task.templateId && this.modelTemplates.some(t => t.id === task.templateId)) {
+      this.selectedTemplateId = task.templateId;
+      this.applyTemplate();
+    }
+    if (task.lossFunction) {
+      this.trainingConfig.lossFunction = task.lossFunction;
+    }
+    if (typeof task.learningRate === 'number') {
+      this.trainingConfig.learningRate = task.learningRate;
+      this.trainingLr = task.learningRate;
+    }
+    if (typeof task.totalEpochs === 'number') {
+      this.trainingConfig.totalEpochs = task.totalEpochs;
+    }
+    if (task.datasetId) {
+      await this.selectTrainingDataset(task.datasetId);
+    }
+    this.applyTaskOutputShape(task);
+    this.syncTemplateWithTrainingDataset();
+    this.rebuildTopology();
+    this.rebuildInputAsset();
+    this.runForward();
+  }
+
+  private applyTaskOutputShape(task: PresetTask): void {
+    const output = this.layers.find(layer => layer.type === 'output');
+    if (output?.type !== 'output') return;
+    if (typeof task.outputUnits === 'number') {
+      output.params.units = task.outputUnits;
+    }
+    if (task.outputActivation) {
+      output.params.activation = task.outputActivation;
+    }
   }
 
   runExperiments(): void {
@@ -2888,7 +2964,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       return {
         ...base,
         imagePreview: option.labels.flatMap(label =>
-          Array.from({ length: 3 }, (_, i) => ({
+          Array.from({ length: DATASET_PREVIEW_IMAGES_PER_CLASS }, (_, i) => ({
             name: `mnist_${label}_${i}.png`,
             label,
             url: this.svgThumb(label, '#111827', '#f8fafc')
@@ -2901,7 +2977,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       return {
         ...base,
         imagePreview: option.labels.flatMap((label, labelIndex) =>
-          Array.from({ length: 3 }, (_, i) => ({
+          Array.from({ length: DATASET_PREVIEW_IMAGES_PER_CLASS }, (_, i) => ({
             name: `${label}_${i}.png`,
             label,
             url: this.svgThumb(label.slice(0, 2).toUpperCase(), DATASET_COLORS[labelIndex % DATASET_COLORS.length], '#e0f2fe')
@@ -2982,7 +3058,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   private async buildUploadedImageDataset(files: File[]): Promise<TrainingDatasetDetail> {
-    const previewFiles = files.slice(0, 12);
+    const previewFiles = this.pickImagePreviewFiles(files);
     const previews = await Promise.all(previewFiles.map(file => this.readImagePreview(file)));
     const sizeSet = new Set(previews.map(item => `${item.width}x${item.height}`));
     const labelCounts = new Map<string, number>();
@@ -3016,6 +3092,19 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       imagePreview: previews.map(item => ({ name: item.name, label: item.label, url: item.url })),
       warnings
     };
+  }
+
+  private pickImagePreviewFiles(files: File[]): File[] {
+    const byLabel = new Map<string, File[]>();
+    for (const file of files) {
+      const label = this.labelFromImageName(file.name);
+      const group = byLabel.get(label) ?? [];
+      if (group.length < DATASET_PREVIEW_IMAGES_PER_CLASS) {
+        group.push(file);
+        byLabel.set(label, group);
+      }
+    }
+    return [...byLabel.values()].flat();
   }
 
   private isCsvFile(file: File): boolean {
