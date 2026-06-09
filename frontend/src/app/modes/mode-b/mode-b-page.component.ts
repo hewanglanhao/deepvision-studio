@@ -226,6 +226,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   latestBackprop: TrainingBackpropSnapshot | null = null;
   selectedBackpropLayerId: number | null = null;
   showBackpropLayerModal = false;
+  backpropNetworkScrollPercent = 0;
   backpropLayerHistory: Record<number, BackpropLayerHistoryPoint[]> = {};
   private backpropHistoryStep = 0;
   private backpropHistoryJobId = '';
@@ -336,7 +337,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   trainingDatasetDetail: TrainingDatasetDetail | null = null;
   trainingDatasetError = '';
   trainingDatasetLoading = false;
-  trainingBackendNotice = '正在连接 Spring Boot 后端...';
+  trainingBackendNotice = '正在加载训练数据集...';
   datasetImportDraft: DatasetImportDraft = {
     status: 'idle',
     message: '尚未导入自定义数据。',
@@ -1771,13 +1772,13 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   // ── Training ──────────────────────────────────────────
   async loadTrainingDatasets(): Promise<void> {
     this.trainingDatasetLoading = true;
-    this.trainingBackendNotice = '正在从 Spring Boot 后端加载训练数据集...';
+    this.trainingBackendNotice = '正在加载训练数据集...';
     try {
       this.builtinTrainingDatasets = await this.trainingDatasetApi.listDatasets();
-      this.trainingBackendNotice = '已连接 Spring Boot 后端。';
+      this.trainingBackendNotice = '训练数据集加载完成。';
       await this.selectTrainingDataset(this.selectedTrainingDatasetId);
     } catch (err) {
-      this.trainingBackendNotice = '后端数据集接口暂不可用，已使用前端兜底数据。';
+      this.trainingBackendNotice = '数据集暂时加载失败，已显示备用数据。';
       this.trainingDatasetError = err instanceof Error ? err.message : '加载后端数据集失败。';
       this.selectTrainingDatasetLocal(this.selectedTrainingDatasetId);
     } finally {
@@ -1798,11 +1799,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     try {
       this.trainingDatasetDetail = await this.trainingDatasetApi.getDatasetDetail(option.id);
       this.trainingDatasetError = '';
-      this.trainingBackendNotice = '数据集详情来自 Spring Boot 后端。';
+      this.trainingBackendNotice = '数据集详情已加载。';
     } catch (err) {
       this.trainingDatasetDetail = this.buildBuiltinTrainingDatasetDetail(option);
       this.trainingDatasetError = err instanceof Error ? err.message : '后端详情加载失败，已使用前端兜底数据。';
-      this.trainingBackendNotice = '后端详情接口暂不可用，当前详情为前端兜底。';
+      this.trainingBackendNotice = '数据集详情加载失败，已显示备用信息。';
     } finally {
       this.trainingDatasetLoading = false;
     }
@@ -2066,7 +2067,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
         connections: this.connections,
         config: this.trainingConfig
       });
-      this.trainingBackendNotice = '训练任务由 Spring Boot 后端运行，指标通过 WebSocket 推送。';
+      this.trainingBackendNotice = '训练任务已启动，指标将实时更新。';
       this.collaborationJoinId = this.trainingSvc.currentBackendJobId;
     } catch (err) {
       this.trainingDatasetError = err instanceof Error ? err.message : '启动后端训练失败。';
@@ -2362,6 +2363,16 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
   checkpointBarWidth(value: number | null | undefined): number {
     return Math.max(0, Math.min(100, (value ?? 0) * 100));
+  }
+  scrollBackpropNetwork(container: HTMLElement, value: string): void {
+    const percent = Math.max(0, Math.min(100, Number(value) || 0));
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    this.backpropNetworkScrollPercent = percent;
+    container.scrollLeft = maxScroll * percent / 100;
+  }
+  syncBackpropNetworkSlider(container: HTMLElement): void {
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    this.backpropNetworkScrollPercent = maxScroll > 0 ? container.scrollLeft / maxScroll * 100 : 0;
   }
   checkpointConfigText(ckpt: TrainingCheckpointSummary): string {
     const config = ckpt.config;

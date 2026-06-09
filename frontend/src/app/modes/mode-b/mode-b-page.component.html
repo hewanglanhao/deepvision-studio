@@ -588,7 +588,7 @@
     <div class="workspace mode-workspace training-mode-workspace">
       <aside class="side-panel">
         <div class="pane training-data-pane">
-          <div class="pane-title">训练数据</div>
+          <div class="pane-title mode-b-panel-title">训练数据</div>
           <div [class]="trainingDatasetError && trainingBackendNotice.includes('暂不可用') ? 'warn-box' : 'success-box'" style="margin-bottom:8px">
             {{ trainingBackendNotice }}
           </div>
@@ -610,7 +610,7 @@
           <label style="margin-top:8px">自定义导入
             <input type="file" multiple accept=".zip,application/zip,.csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" [disabled]="trainingDatasetLoading" />
           </label>
-          <div class="muted">通过 Spring Boot 导入：支持两种数据集：1. 1 个 CSV，2. 1 个“类别目录/图片”的 ZIP，或按“类别_序号.jpg”命名的图片文件。</div>
+          <div class="muted">支持两种数据集：1. 1 个 CSV，2. 1 个“类别目录/图片”的 ZIP，或按“类别_序号.jpg”命名的图片文件。</div>
           @if (datasetImportDraft.status !== 'idle') {
             <div [class]="datasetImportDraft.status === 'ready' ? 'success-box' : 'warn-box'" style="margin-top:6px">
               {{ datasetImportDraft.message }}
@@ -672,7 +672,7 @@
 
         <div class="pane collaboration-pane">
           <div class="pane-title">多人协作聊天室</div>
-          <div class="muted">聊天室已拆分为独立页面，可基于当前训练任务创建房间，也可输入已有 jobId 加入观察。</div>
+          <div class="muted">可基于当前训练任务创建房间，也可输入已有房间号加入观察。</div>
           <button class="btn-sm btn-primary" (click)="openCurrentTrainingChat()" [disabled]="!currentTrainingJobId">用当前训练新建聊天室</button>
           <label>训练房间 ID
             <input [(ngModel)]="collaborationJoinId" placeholder="粘贴 train-... jobId" />
@@ -706,19 +706,6 @@
             <div class="chart-label">训练日志</div>
             <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
           </div>
-          <div class="chart-wrap backprop-card">
-            <div class="chart-label">反向传播观察</div>
-            @if (latestBackprop; as bp) {
-              <div class="backprop-summary">
-                <div><span>当前 Loss</span><strong>{{ bp.loss | number:'1.4-4' }}</strong></div>
-                <div><span>全局梯度 Norm</span><strong>{{ bp.globalGradNorm | number:'1.4-4' }}</strong></div>
-                <div><span>参数更新 Norm</span><strong>{{ bp.globalUpdateNorm | number:'1.6-6' }}</strong></div>
-                <div><span>状态</span><strong [class]="'bp-state ' + layerGradStatusClass(bp.gradientStatus)">{{ backpropStatusText }}</strong></div>
-              </div>
-            } @else {
-              <div class="warn-box">暂无反向传播数据。</div>
-            }
-          </div>
         </div>
 
       </aside>
@@ -740,8 +727,6 @@
           <button (click)="stopTraining()">⏹ 停止</button>
           <button class="btn-ghost" (click)="resetTraining()">↺ 重置</button>
         </div>
-        <div class="mock-banner">Spring Boot + Python 训练模式：后端按当前网络结构启动 PyTorch 训练，指标通过 WebSocket 实时推送。</div>
-
         @if (trainingDatasetDetail; as ds) {
           <div class="dataset-board">
             <div class="dataset-board-head">
@@ -774,7 +759,7 @@
 
             <div class="training-network-editor">
               <div class="training-network-head">
-                <div><div class="section-title">网络结构编辑器</div><div class="muted">{{ layerCount }} 层 · {{ parameterCount | number }} 参数</div></div>
+                <div><div class="section-title mode-b-panel-title">网络结构编辑器</div><div class="muted">{{ layerCount }} 层 · {{ parameterCount | number }} 参数</div></div>
                 <label class="network-template-select">模型模板
                   <select [(ngModel)]="selectedTemplateId" (change)="applyTemplate()">
                     @for (t of modelTemplates; track t.id) { <option [value]="t.id">{{ t.name }}</option> }
@@ -975,7 +960,7 @@
             </div>
 
             <div class="training-hyperparams-panel">
-              <div class="section-title">训练超参数</div>
+              <div class="section-title mode-b-panel-title">训练超参数</div>
               <div class="training-hyperparams-grid">
                 <label>批大小 <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>
                 <label>训练轮数 <input type="number" min="1" [(ngModel)]="trainingConfig.totalEpochs" /></label>
@@ -1037,7 +1022,7 @@
         <div class="training-status-block">
           <div class="training-status-head">
             <div>
-              <div class="section-title">当前训练状态</div>
+              <div class="section-title mode-b-panel-title">当前训练状态</div>
               <div class="training-status-summary">Epoch {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }} · Batch {{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</div>
             </div>
             <div class="training-status-right">
@@ -1075,8 +1060,7 @@
         <div class="backprop-board">
           <div class="backprop-head">
             <div>
-              <div class="section-title">反向传播教学面板</div>
-              <div class="muted">由 Python worker 在真实训练 batch 上采集梯度、权重和预测结果后推送。</div>
+              <div class="section-title mode-b-panel-title">反向传播教学面板</div>
             </div>
             @if (latestBackprop; as bp) {
               <div class="backprop-epoch">Epoch {{ bp.epoch }} / {{ bp.totalEpochs }} · Batch {{ bp.batch }} / {{ bp.totalBatches }}</div>
@@ -1098,8 +1082,19 @@
               </div>
               <div class="bp-network-shell">
                 <div class="bp-network-rail forward"><span>forward</span></div>
+                <div class="bp-forward-scroll-control">
+                  <input
+                    #bpForwardSlider
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    [value]="backpropNetworkScrollPercent"
+                    aria-label="左右滑动查看网络结构"
+                    (input)="scrollBackpropNetwork(bpNetworkScroll, bpForwardSlider.value)" />
+                </div>
                 <div class="bp-network-rail backward"><span>backward</span></div>
-                <div class="bp-network-scroll">
+                <div #bpNetworkScroll class="bp-network-scroll" (scroll)="syncBackpropNetworkSlider(bpNetworkScroll)">
                   @for (layer of backpropNetworkLayers; track layer.layerId + '-' + $index) {
                     <div class="bp-network-stage">
                       <div
@@ -1451,7 +1446,7 @@
               <div class="checkpoint-title-wrap">
                 <div class="checkpoint-icon">CK</div>
                 <div>
-                  <div class="section-title">模型 Checkpoint</div>
+                  <div class="section-title mode-b-panel-title">模型 Checkpoint</div>
                   <div class="muted">登录后训练完成会自动保存 checkpoint，可手动选择并重新跑测试集。</div>
                 </div>
               </div>
