@@ -41,6 +41,14 @@ CIFAR10_URLS = [
     "http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz",
 ]
 IRIS_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+BUILTIN_DATASET_IDS = {
+    "mnist-1000",
+    "cifar10-500",
+    "cifar10-5000",
+    "iris",
+    "points-2d",
+    "house-price-regression",
+}
 
 
 def main() -> int:
@@ -52,6 +60,7 @@ def main() -> int:
     create_cifar10_5000_subset()
     download_iris()
     generate_points()
+    generate_house_price_regression()
 
     write_catalog()
     print(f"Builtin datasets are stored in: {DATA_ROOT}")
@@ -220,10 +229,66 @@ def generate_points() -> None:
     print("2D points dataset ready.")
 
 
+def generate_house_price_regression() -> None:
+    """Materialize the same deterministic regression data used by the trainer."""
+    target = DATA_ROOT / "house-price-regression"
+    csv_path = target / "house_prices.csv"
+    metadata_path = target / "metadata.json"
+    if csv_path.exists() and metadata_path.exists():
+        print("House-price regression CSV already exists; skipping.")
+        return
+
+    target.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(20260518)
+    rows = []
+    for _ in range(240):
+        area = rng.uniform(45.0, 145.0)
+        rooms = rng.choice([1, 2, 3, 4, 5])
+        age = rng.uniform(0.0, 30.0)
+        distance = rng.uniform(0.5, 12.0)
+        school_score = rng.uniform(55.0, 98.0)
+        noise = rng.gauss(0.0, 10.0)
+        price = 28.0 + area * 4.2 + rooms * 18.0 - age * 2.1 - distance * 7.5 + school_score * 1.9 + noise
+        rows.append([
+            f"{area:.2f}",
+            str(rooms),
+            f"{age:.2f}",
+            f"{distance:.2f}",
+            f"{school_score:.2f}",
+            f"{max(60.0, price):.2f}",
+        ])
+
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["area", "rooms", "age", "distance", "school_score", "price"])
+        writer.writerows(rows)
+
+    write_metadata(target, {
+        "id": "house-price-regression",
+        "sourceUrl": "generated",
+        "sampleCount": len(rows),
+        "labels": ["price"],
+        "layout": "house_prices.csv",
+        "task": "regression",
+        "targetColumn": "price",
+        "featureColumns": ["area", "rooms", "age", "distance", "school_score"],
+        "generationSeed": 20260518,
+        "targetFormula": "max(60, 28 + area*4.2 + rooms*18 - age*2.1 - distance*7.5 + school_score*1.9 + gaussian_noise(0,10))",
+    })
+    print("House-price regression dataset ready.")
+
+
 def write_catalog() -> None:
     datasets = []
     for metadata_path in sorted(DATA_ROOT.glob("*/metadata.json")):
         datasets.append(json.loads(metadata_path.read_text(encoding="utf-8")))
+    materialized_ids = {dataset.get("id") for dataset in datasets}
+    missing_ids = sorted(BUILTIN_DATASET_IDS - materialized_ids)
+    if missing_ids:
+        raise RuntimeError(
+            "Builtin dataset catalog is incomplete. Missing metadata for: "
+            + ", ".join(missing_ids)
+        )
     (DATA_ROOT / "catalog.json").write_text(
         json.dumps({"datasets": datasets}, ensure_ascii=False, indent=2),
         encoding="utf-8",
