@@ -12,11 +12,14 @@ import {
   TrainingCheckpointSummary,
   TrainingRuntimeService
 } from '@shared/training/training-runtime.service';
+import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
+import { LlmChatContext } from '@shared/llm/llm.models';
+import { MODE_B_LLM_SYSTEM_PROMPT } from '@shared/llm/llm-prompts';
 
 @Component({
   selector: 'app-single-inference-page',
   standalone: true,
-  imports: [CommonModule, RouterLink, PlatformTopbarComponent],
+  imports: [CommonModule, RouterLink, PlatformTopbarComponent, LlmFloatingAssistantComponent],
   templateUrl: './single-inference-page.component.html',
   styleUrl: './single-inference-page.component.css'
 })
@@ -41,6 +44,18 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
   private playTimer: number | null = null;
 
   readonly topbarStatusPills = ['单样本推理', '逐层激活', 'Checkpoint'];
+  readonly inferenceLlmSystemPrompt = [
+    MODE_B_LLM_SYSTEM_PROMPT,
+    '',
+    '当前页面是单样本推理页。请结合 checkpoint、原始样本、预测结果和逐层激活解释模型为何得到该结果，区分确定信息与推测，并指出置信度、激活或数据方面的异常。'
+  ].join('\n');
+  readonly inferenceLlmContextProvider = (): LlmChatContext => this.buildInferenceLlmContext();
+  readonly inferenceLlmQuickPrompts: LlmQuickPrompt[] = [
+    { label: '解释预测', question: '请解释当前样本为什么得到这个预测结果。' },
+    { label: '分析激活', question: '请分析逐层激活变化，指出哪些层最值得关注。' },
+    { label: '判断可信度', question: '请判断当前预测是否可信，并说明依据和风险。' },
+    { label: '排查错误', question: '如果当前预测错误，请分析可能原因和改进方向。' }
+  ];
 
   constructor(
     private authSvc: AuthService,
@@ -392,5 +407,65 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
       return value.toExponential(2);
     }
     return Number(value.toFixed(4)).toString();
+  }
+
+  private buildInferenceLlmContext(): LlmChatContext {
+    const checkpoint = this.selectedCheckpoint;
+    const sample = this.selectedSample;
+    const result = this.inferenceResult;
+    const lines = [
+      '页面: B 模式 / 单样本推理',
+      `当前用户: ${this.authUser?.username ?? '未登录'}`,
+      `Checkpoint: ${checkpoint ? `#${checkpoint.id} ${checkpoint.name}` : '未选择'}`
+    ];
+
+    if (checkpoint) {
+      lines.push(
+        `数据集: ${checkpoint.datasetName} (${checkpoint.datasetId})`,
+        `训练进度: epoch ${checkpoint.epoch}/${checkpoint.totalEpochs}; status=${checkpoint.status ?? '未知'}`,
+        `训练指标: train_loss=${this.llmNumber(checkpoint.trainLoss)}, train_accuracy=${this.percent(checkpoint.trainAccuracy)}, val_loss=${this.llmNumber(checkpoint.valLoss)}, val_accuracy=${this.percent(checkpoint.valAccuracy)}, test_loss=${this.llmNumber(checkpoint.testLoss)}, test_accuracy=${this.percent(checkpoint.testAccuracy)}`,
+        `超参数: ${this.checkpointConfigText(checkpoint)}`,
+        `数据划分: ${this.checkpointSplitText(checkpoint)}`,
+        `网络结构: ${checkpoint.networkDescription || this.checkpointLayerPreview(checkpoint, 30).join(' -> ') || '暂无结构描述'}`
+      );
+    }
+
+    if (sample) {
+      const rawRows = this.rawDataRows(sample).slice(0, 20);
+      lines.push(
+        '',
+        `当前样本: index=${sample.index}; name=${sample.name ?? '未命名'}; true_label=${sample.trueLabel}; shape=${this.shapeLabel(sample.shape)}`,
+        `原始数据预览: ${rawRows.length ? rawRows.map(row => `${row.name}=${row.value}`).join('; ') : this.sampleFeatureText(sample) || '无'}`
+      );
+    } else {
+      lines.push('', '当前尚未选择样本。');
+    }
+
+    if (result) {
+      const prediction = result.prediction;
+      lines.push(
+        '',
+        `预测结果: predicted=${prediction.predictedLabel}; true=${prediction.trueLabel}; confidence=${this.percent(prediction.confidence)}; correct=${prediction.correct ? '是' : '否'}`,
+        `Top-K: ${prediction.topK.map(item => `${item.label}=${this.percent(item.probability)}`).join(', ')}`
+      );
+      for (const activation of result.activations.slice(0, 24)) {
+        lines.push(
+          `激活层 ${activation.order}: ${activation.layerName} (${this.layerTypeLabel(activation.layerType)}); shape=${this.shapeLabel(activation.shape)}; min=${this.llmNumber(activation.stats.min)}; max=${this.llmNumber(activation.stats.max)}; mean=${this.llmNumber(activation.stats.mean)}; non_zero=${this.percent(activation.stats.nonZeroRatio)}; top_values=${activation.topValues.slice(0, 5).map(item => `${item.index}:${this.llmNumber(item.value)}`).join(', ')}`
+        );
+      }
+      if (result.activations.length > 24) {
+        lines.push(`其余 ${result.activations.length - 24} 层激活未展开。`);
+      }
+    } else {
+      lines.push('当前尚未运行推理，没有预测和逐层激活结果。');
+    }
+
+    return { text: lines.join('\n'), images: [] };
+  }
+
+  private llmNumber(value: number | null | undefined): string {
+    return value === null || value === undefined || !Number.isFinite(value)
+      ? 'N/A'
+      : Number(value.toFixed(6)).toString();
   }
 }

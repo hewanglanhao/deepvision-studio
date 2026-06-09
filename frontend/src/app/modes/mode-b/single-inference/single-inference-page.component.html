@@ -366,4 +366,11 @@
       </footer>
     </div>
   }
+
+  <app-llm-floating-assistant
+    title="AI 单样本推理助手"
+    [systemPrompt]="inferenceLlmSystemPrompt"
+    [contextProvider]="inferenceLlmContextProvider"
+    [quickPrompts]="inferenceLlmQuickPrompts"
+  />
 </div>

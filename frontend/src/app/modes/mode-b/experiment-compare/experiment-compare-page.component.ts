@@ -11,6 +11,9 @@ import { AuthService } from '@core/auth/auth.service';
 import { TrainingCheckpointSummary, TrainingRuntimeService } from '@shared/training/training-runtime.service';
 import { SimEngine } from '@shared/simulation/sim-engine';
 import { NetworkLayer, TensorShape } from '@shared/simulation/sim-models';
+import { LlmFloatingAssistantComponent, LlmQuickPrompt } from '@shared/llm/llm-floating-assistant.component';
+import { LlmChatContext } from '@shared/llm/llm.models';
+import { MODE_B_LLM_SYSTEM_PROMPT } from '@shared/llm/llm-prompts';
 
 interface DatasetHistoryOption {
   id: string;
@@ -25,7 +28,14 @@ type CheckpointMetricKey = 'loss' | 'valLoss' | 'accuracy' | 'valAccuracy' | 'lr
 @Component({
   selector: 'app-experiment-compare-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NetworkOverviewComponent, PlatformTopbarComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    NetworkOverviewComponent,
+    PlatformTopbarComponent,
+    LlmFloatingAssistantComponent
+  ],
   templateUrl: './experiment-compare-page.component.html',
   styleUrl: './experiment-compare-page.component.css'
 })
@@ -40,6 +50,18 @@ export class ExperimentComparePageComponent implements OnInit, OnDestroy {
   private readonly subs = new Subscription();
 
   readonly topbarStatusPills = ['Checkpoint 历史', '真实训练记录', '结构对比'];
+  readonly experimentLlmSystemPrompt = [
+    MODE_B_LLM_SYSTEM_PROMPT,
+    '',
+    '当前页面是实验对比页。请重点比较不同 checkpoint 的网络结构、超参数、训练状态和指标，识别过拟合、欠拟合、未完成训练与异常结果，并给出有依据的下一轮实验建议。'
+  ].join('\n');
+  readonly experimentLlmContextProvider = (): LlmChatContext => this.buildExperimentLlmContext();
+  readonly experimentLlmQuickPrompts: LlmQuickPrompt[] = [
+    { label: '对比实验', question: '请比较当前数据集下的各次训练，指出表现最好的一次及原因。' },
+    { label: '分析拟合', question: '请结合训练、验证和测试指标判断这些实验是否存在过拟合或欠拟合。' },
+    { label: '调参建议', question: '根据当前实验历史，给出下一轮网络结构和超参数调整建议。' },
+    { label: '检查异常', question: '请检查未完成、停止或指标异常的训练记录，并分析可能原因。' }
+  ];
 
   constructor(
     private authSvc: AuthService,
@@ -403,5 +425,53 @@ export class ExperimentComparePageComponent implements OnInit, OnDestroy {
         .join('，');
     }
     return String(value);
+  }
+
+  private buildExperimentLlmContext(): LlmChatContext {
+    const rows = this.selectedDatasetCheckpoints.slice(0, 12);
+    const lines = [
+      '页面: B 模式 / 实验对比',
+      `当前用户: ${this.authUser?.username ?? '未登录'}`,
+      `当前数据集: ${this.selectedDatasetName} (${this.selectedDatasetId || '未选择'})`,
+      `该数据集历史训练数: ${this.selectedDatasetCheckpoints.length}`,
+      `当前选中 checkpoint: ${this.selectedCheckpoint?.name ?? '未选择'}`
+    ];
+
+    for (const checkpoint of rows) {
+      const history = this.checkpointMetricHistory(checkpoint);
+      const lastMetric = history[history.length - 1];
+      lines.push(
+        '',
+        `Checkpoint #${checkpoint.id}: ${checkpoint.name}`,
+        `状态: ${this.checkpointStatusText(checkpoint)}; epoch=${checkpoint.epoch}/${checkpoint.totalEpochs}; 创建时间=${checkpoint.createdAt}`,
+        `指标: train_loss=${this.llmNumber(checkpoint.trainLoss)}, train_accuracy=${this.checkpointPercent(checkpoint.trainAccuracy)}, val_loss=${this.llmNumber(checkpoint.valLoss)}, val_accuracy=${this.checkpointPercent(checkpoint.valAccuracy)}, test_loss=${this.llmNumber(checkpoint.testLoss)}, test_accuracy=${this.checkpointPercent(checkpoint.testAccuracy)}`,
+        `超参数: ${this.checkpointConfigText(checkpoint)}`,
+        `数据划分: ${this.checkpointSplitText(checkpoint)}`,
+        `网络结构: ${this.checkpointLayerText(checkpoint)}`,
+        `曲线记录: ${history.length} 个点${lastMetric ? `; 最后 step=${lastMetric.step}, lr=${this.llmNumber(lastMetric.lr)}, gradient_norm=${this.llmNumber(lastMetric.gradientNorm)}` : ''}`
+      );
+    }
+
+    if (this.selectedCheckpoint && this.selectedLayerId !== null) {
+      const layer = this.selectedLayerFor(this.selectedCheckpoint);
+      if (layer) {
+        lines.push(
+          '',
+          `当前选中网络层: ${layer.name} (${this.layerTypeLabel(layer.type)})`,
+          `层参数: ${this.layerParamRows(layer).map(row => `${row.label}=${row.value}`).join('; ')}`
+        );
+      }
+    }
+
+    if (this.selectedDatasetCheckpoints.length > rows.length) {
+      lines.push('', `其余 ${this.selectedDatasetCheckpoints.length - rows.length} 条训练记录未展开。`);
+    }
+    return { text: lines.join('\n'), images: [] };
+  }
+
+  private llmNumber(value: number | null | undefined): string {
+    return value === null || value === undefined || !Number.isFinite(value)
+      ? 'N/A'
+      : Number(value.toFixed(6)).toString();
   }
 }

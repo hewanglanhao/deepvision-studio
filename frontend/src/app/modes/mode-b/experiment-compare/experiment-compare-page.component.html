@@ -229,4 +229,11 @@
       }
     </main>
   </div>
+
+  <app-llm-floating-assistant
+    title="AI 实验对比助手"
+    [systemPrompt]="experimentLlmSystemPrompt"
+    [contextProvider]="experimentLlmContextProvider"
+    [quickPrompts]="experimentLlmQuickPrompts"
+  />
 </div>
