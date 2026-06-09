@@ -78,6 +78,9 @@ class CsvClassificationDataset(Dataset):
                 normalized_rows.append(normalized)
         if not normalized_rows:
             raise ValueError(f"No labeled rows found in {path}")
+        self.raw_headers = headers
+        self.raw_rows = normalized_rows
+        self.label_column = headers[label_index]
         labels = sorted({row[label_index].strip() for row in normalized_rows})
         if class_count is not None and class_count < len(labels):
             raise ValueError(
@@ -105,6 +108,13 @@ class CsvClassificationDataset(Dataset):
             raise ValueError(f"No usable feature columns found in {path}")
         features: list[list[float]] = []
         targets: list[int] = []
+        feature_names: list[str] = []
+        for spec in feature_specs:
+            header = headers[int(spec["index"])]
+            if spec["kind"] == "numeric":
+                feature_names.append(header)
+            else:
+                feature_names.extend(f"{header}={category}" for category in list(spec["categories"]))
         for row in normalized_rows:
             values: list[float] = []
             for spec in feature_specs:
@@ -119,6 +129,7 @@ class CsvClassificationDataset(Dataset):
         self.x = torch.tensor(features, dtype=torch.float32)
         self.y = torch.tensor(targets, dtype=torch.long)
         self.feature_count = self.x.shape[1]
+        self.feature_names = feature_names
 
     def __len__(self) -> int:
         return len(self.y)
@@ -976,9 +987,19 @@ def sample_metadata(dataset: Dataset, index: int, dataset_root: Path) -> dict[st
         item["imageUrl"] = dataset_url(image_path, dataset_root)
     else:
         values = x.detach().cpu().flatten().tolist()
+        raw_headers = list(getattr(dataset, "raw_headers", []))
+        raw_rows = list(getattr(dataset, "raw_rows", []))
+        raw_row = raw_rows[index] if 0 <= index < len(raw_rows) else []
         item["name"] = f"sample {index}"
         item["featurePreview"] = [round(float(value), 6) for value in values[:18]]
+        item["featureNames"] = list(getattr(dataset, "feature_names", []))[:18]
         item["featureCount"] = len(values)
+        item["rawHeaders"] = raw_headers
+        item["rawValues"] = raw_row
+        item["rawPreview"] = [
+            {"name": raw_headers[i] if i < len(raw_headers) else f"column {i + 1}", "value": raw_row[i] if i < len(raw_row) else ""}
+            for i in range(min(8, max(len(raw_headers), len(raw_row))))
+        ]
     return item
 
 

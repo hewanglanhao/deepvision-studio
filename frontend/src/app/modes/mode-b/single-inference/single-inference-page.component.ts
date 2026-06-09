@@ -1,6 +1,5 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { PlatformTopbarComponent } from '@shared/components/platform-topbar.component';
@@ -17,7 +16,7 @@ import {
 @Component({
   selector: 'app-single-inference-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PlatformTopbarComponent],
+  imports: [CommonModule, RouterLink, PlatformTopbarComponent],
   templateUrl: './single-inference-page.component.html',
   styleUrl: './single-inference-page.component.css'
 })
@@ -31,6 +30,9 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
   inferenceResult: SingleInferenceResult | null = null;
   activeActivationOrder = 0;
   sampleDialogOpen = false;
+  rawSampleDetail: InferenceSampleItem | null = null;
+  hoveredCheckpointId: number | null = null;
+  checkpointDetailPosition: { left: number; top: number } | null = null;
   loadingCheckpoints = false;
   loadingSamples = false;
   inferring = false;
@@ -74,9 +76,17 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
     return this.completedCheckpoints.find(checkpoint => checkpoint.id === this.selectedCheckpointId) ?? this.completedCheckpoints[0] ?? null;
   }
 
+  get checkpointDetail(): TrainingCheckpointSummary | null {
+    return this.completedCheckpoints.find(checkpoint => checkpoint.id === this.hoveredCheckpointId) ?? null;
+  }
+
   get activeActivation(): SingleInferenceActivation | null {
     const activations = this.inferenceResult?.activations ?? [];
     return activations.find(item => item.order === this.activeActivationOrder) ?? activations[0] ?? null;
+  }
+
+  get samplePreviewKind(): 'image' | 'table' {
+    return this.samples.some(sample => !!sample.imageUrl) ? 'image' : 'table';
   }
 
   async loadCheckpoints(): Promise<void> {
@@ -88,9 +98,11 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
       if (!this.selectedCheckpointId || !this.completedCheckpoints.some(item => item.id === this.selectedCheckpointId)) {
         this.selectedCheckpointId = this.completedCheckpoints[0]?.id ?? null;
       }
+      this.hideCheckpointPreview();
       this.samples = [];
       this.selectedSample = null;
       this.inferenceResult = null;
+      this.rawSampleDetail = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : '加载 checkpoint 失败。';
     } finally {
@@ -102,7 +114,24 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
     this.samples = [];
     this.selectedSample = null;
     this.inferenceResult = null;
+    this.rawSampleDetail = null;
     this.stopActivationPlayback();
+  }
+
+  selectCheckpoint(checkpointId: number): void {
+    if (this.selectedCheckpointId === checkpointId) return;
+    this.selectedCheckpointId = checkpointId;
+    this.onCheckpointChange();
+  }
+
+  previewCheckpoint(checkpointId: number, event?: Event): void {
+    this.hoveredCheckpointId = checkpointId;
+    this.placeCheckpointDetail(event?.currentTarget ?? null);
+  }
+
+  hideCheckpointPreview(): void {
+    this.hoveredCheckpointId = null;
+    this.checkpointDetailPosition = null;
   }
 
   async openSampleDialog(): Promise<void> {
@@ -125,8 +154,18 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
   chooseSample(sample: InferenceSampleItem): void {
     this.selectedSample = sample;
     this.sampleDialogOpen = false;
+    this.rawSampleDetail = null;
     this.inferenceResult = null;
     this.stopActivationPlayback();
+  }
+
+  openRawSampleDetail(sample: InferenceSampleItem, event?: MouseEvent): void {
+    event?.stopPropagation();
+    this.rawSampleDetail = sample;
+  }
+
+  closeRawSampleDetail(): void {
+    this.rawSampleDetail = null;
   }
 
   async runInference(): Promise<void> {
@@ -173,8 +212,39 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
     this.authSvc.logout();
   }
 
-  checkpointLabel(checkpoint: TrainingCheckpointSummary): string {
-    return `${checkpoint.name} · ${checkpoint.datasetName} · ${new Date(checkpoint.createdAt).toLocaleString()}`;
+  checkpointConfigText(checkpoint: TrainingCheckpointSummary): string {
+    const config = checkpoint.config;
+    if (!config) return '超参数 N/A';
+    return [
+      `优化器 ${config.optimizer ?? 'N/A'}`,
+      `LR ${config.learningRate ?? 'N/A'}`,
+      `Batch ${config.batchSize ?? 'N/A'}`,
+      `Epoch ${config.totalEpochs ?? checkpoint.totalEpochs}`,
+      `Loss ${config.lossFunction ?? 'N/A'}`,
+      `Scheduler ${config.scheduler ?? 'none'}`
+    ].join(' · ');
+  }
+
+  checkpointSplitText(checkpoint: TrainingCheckpointSummary): string {
+    const split = checkpoint.split;
+    if (!split) return '划分 N/A';
+    return `${Math.round((split.train ?? 0) * 100)}% / ${Math.round((split.val ?? 0) * 100)}% / ${Math.round((split.test ?? 0) * 100)}%`;
+  }
+
+  checkpointLayerPreview(checkpoint: TrainingCheckpointSummary, limit = 8): string[] {
+    const summary = checkpoint.layerSummary?.length
+      ? checkpoint.layerSummary
+      : (checkpoint.layers ?? []).map(layer => `${this.layerTypeLabel(layer.type)} ${layer.name}`);
+    return summary.slice(0, limit);
+  }
+
+  checkpointLayerMoreCount(checkpoint: TrainingCheckpointSummary, limit = 8): number {
+    const count = checkpoint.layerSummary?.length || checkpoint.layers?.length || 0;
+    return Math.max(0, count - limit);
+  }
+
+  checkpointCreatedText(checkpoint: TrainingCheckpointSummary): string {
+    return new Date(checkpoint.createdAt).toLocaleString();
   }
 
   percent(value: number | null | undefined): string {
@@ -232,8 +302,55 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
 
   sampleFeatureText(sample: InferenceSampleItem | null): string {
     if (!sample?.featurePreview?.length) return '';
-    const values = sample.featurePreview.slice(0, 8).map(value => Number(value).toFixed(3)).join(', ');
-    return `${values}${(sample.featureCount ?? 0) > 8 ? ' ...' : ''}`;
+    const values = this.sampleFeatureRows(sample, 4)
+      .map(row => `${row.label}: ${row.valueText}`)
+      .join('，');
+    return `${values}${(sample.featureCount ?? 0) > 4 ? ' ...' : ''}`;
+  }
+
+  hasRawData(sample: InferenceSampleItem | null): boolean {
+    return !!sample?.rawHeaders?.length || !!sample?.rawValues?.length || !!sample?.rawPreview?.length;
+  }
+
+  rawPreviewRows(sample: InferenceSampleItem | null, limit = 6): Array<{ name: string; value: string }> {
+    if (!sample) return [];
+    if (sample.rawPreview?.length) return sample.rawPreview.slice(0, limit);
+    return this.rawDataRows(sample).slice(0, limit);
+  }
+
+  rawDataRows(sample: InferenceSampleItem | null): Array<{ name: string; value: string }> {
+    const headers = sample?.rawHeaders ?? [];
+    const values = sample?.rawValues ?? [];
+    const count = Math.max(headers.length, values.length);
+    return Array.from({ length: count }, (_, index) => ({
+      name: headers[index] || `column ${index + 1}`,
+      value: values[index] ?? ''
+    }));
+  }
+
+  sampleFeatureRows(
+    sample: InferenceSampleItem | null,
+    limit = 6
+  ): Array<{ label: string; value: number; valueText: string; width: number; active: boolean }> {
+    const values = sample?.featurePreview ?? [];
+    const names = sample?.featureNames ?? [];
+    if (!values.length) return [];
+    const maxAbs = Math.max(0.000001, ...values.map(value => Math.abs(Number(value) || 0)));
+    return values.slice(0, limit).map((raw, index) => {
+      const value = Number(raw) || 0;
+      return {
+        label: names[index] || `特征 ${index + 1}`,
+        value,
+        valueText: this.formatFeatureValue(value),
+        width: Math.max(4, Math.min(100, Math.abs(value) / maxAbs * 100)),
+        active: Math.abs(value) > 0.000001
+      };
+    });
+  }
+
+  featureColumnLabels(sample: InferenceSampleItem | null): string[] {
+    const names = sample?.featureNames ?? [];
+    return Array.from({ length: Math.min(6, sample?.featurePreview?.length ?? 0) }, (_, index) => names[index] || `特征 ${index + 1}`);
   }
 
   activationBars(activation: SingleInferenceActivation | null): Array<{ index: number; value: number; width: number }> {
@@ -248,5 +365,32 @@ export class SingleInferencePageComponent implements OnInit, OnDestroy {
 
   private isCompletedCheckpoint(checkpoint: TrainingCheckpointSummary): boolean {
     return checkpoint.status !== 'stopped' && checkpoint.epoch >= checkpoint.totalEpochs;
+  }
+
+  private placeCheckpointDetail(target: EventTarget | null): void {
+    if (!(target instanceof HTMLElement)) {
+      this.checkpointDetailPosition = null;
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    const width = 390;
+    const estimatedHeight = 360;
+    const gap = 12;
+    const padding = 14;
+    const rightSideLeft = rect.right + gap;
+    const leftSideLeft = rect.left - width - gap;
+    const left = rightSideLeft + width <= window.innerWidth - padding
+      ? rightSideLeft
+      : Math.max(padding, leftSideLeft);
+    const maxTop = Math.max(padding, window.innerHeight - estimatedHeight - padding);
+    const top = Math.min(Math.max(padding, rect.top - 8), maxTop);
+    this.checkpointDetailPosition = { left, top };
+  }
+
+  private formatFeatureValue(value: number): string {
+    if (Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.001)) {
+      return value.toExponential(2);
+    }
+    return Number(value.toFixed(4)).toString();
   }
 }

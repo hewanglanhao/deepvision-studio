@@ -51,7 +51,11 @@ export interface InferenceSampleItem {
   imageUrl?: string;
   shape: number[];
   featurePreview?: number[];
+  featureNames?: string[];
   featureCount?: number;
+  rawHeaders?: string[];
+  rawValues?: string[];
+  rawPreview?: Array<{ name: string; value: string }>;
 }
 
 export interface InferenceSampleListResponse {

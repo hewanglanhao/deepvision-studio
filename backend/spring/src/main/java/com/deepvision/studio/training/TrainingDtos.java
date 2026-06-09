@@ -238,7 +238,11 @@ public final class TrainingDtos {
       String imageUrl,
       List<Integer> shape,
       List<Double> featurePreview,
-      Integer featureCount
+      List<String> featureNames,
+      Integer featureCount,
+      List<String> rawHeaders,
+      List<String> rawValues,
+      JsonNode rawPreview
   ) {}
 
   @Schema(description = "Samples available for checkpoint inference")

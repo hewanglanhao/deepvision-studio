@@ -24,13 +24,37 @@
             {{ loadingCheckpoints ? '加载中...' : '刷新 Checkpoint' }}
           </button>
           @if (completedCheckpoints.length) {
-            <label>选择已完成训练
-              <select [(ngModel)]="selectedCheckpointId" (ngModelChange)="onCheckpointChange()">
-                @for (checkpoint of completedCheckpoints; track checkpoint.id) {
-                  <option [ngValue]="checkpoint.id">{{ checkpointLabel(checkpoint) }}</option>
-                }
-              </select>
-            </label>
+            <div class="checkpoint-list-head">
+              <span>选择已完成训练</span>
+              <small>{{ completedCheckpoints.length }} 个 checkpoint</small>
+            </div>
+            <div class="checkpoint-option-list">
+              @for (checkpoint of completedCheckpoints; track checkpoint.id) {
+                <div
+                  class="checkpoint-option"
+                  role="button"
+                  tabindex="0"
+                  [class.active]="checkpoint.id === selectedCheckpoint?.id"
+                  [class.preview]="checkpoint.id === checkpointDetail?.id && checkpoint.id !== selectedCheckpoint?.id"
+                  (mouseenter)="previewCheckpoint(checkpoint.id, $event)"
+                  (focus)="previewCheckpoint(checkpoint.id, $event)"
+                  (mouseleave)="hideCheckpointPreview()"
+                  (blur)="hideCheckpointPreview()"
+                  (click)="selectCheckpoint(checkpoint.id)"
+                  (keydown.enter)="selectCheckpoint(checkpoint.id)"
+                  (keydown.space)="selectCheckpoint(checkpoint.id)"
+                >
+                  <div class="checkpoint-option-main">
+                    <strong>{{ checkpoint.name }}</strong>
+                    <span>{{ checkpoint.datasetName }} · {{ checkpointCreatedText(checkpoint) }}</span>
+                  </div>
+                  <div class="checkpoint-option-metric">
+                    <span>{{ percent(checkpoint.testAccuracy) }}</span>
+                    <small>测试</small>
+                  </div>
+                </div>
+              }
+            </div>
             @if (selectedCheckpoint; as checkpoint) {
               <div class="checkpoint-card">
                 <strong>{{ checkpoint.name }}</strong>
@@ -54,16 +78,26 @@
           {{ selectedSample ? '重新选择样本' : '选择数据样本' }}
         </button>
         @if (selectedSample; as sample) {
-          <div class="sample-summary">
+          <div class="sample-summary" [class.table-sample]="!sample.imageUrl">
             @if (sample.imageUrl) {
               <img [src]="sample.imageUrl" [alt]="sample.name || 'sample'" />
             }
             <div>
               <strong>{{ sample.name || ('sample ' + sample.index) }}</strong>
               <span>真实类别：{{ sample.trueLabel }}</span>
-              <small>shape {{ shapeLabel(sample.shape) }}</small>
-              @if (sample.featurePreview?.length) {
-                <small>{{ sampleFeatureText(sample) }}</small>
+              @if (sample.imageUrl) {
+                <small>shape {{ shapeLabel(sample.shape) }}</small>
+              }
+              @if (!sample.imageUrl && hasRawData(sample)) {
+                <div class="summary-raw-list">
+                  @for (cell of rawPreviewRows(sample, 4); track cell.name) {
+                    <span>
+                      <b>{{ cell.name }}</b>
+                      <em>{{ cell.value || '空' }}</em>
+                    </span>
+                  }
+                </div>
+                <button type="button" class="text-detail-btn" (click)="openRawSampleDetail(sample, $event)">查看完整原始数据</button>
               }
             </div>
           </div>
@@ -75,6 +109,48 @@
         </button>
       </section>
     </aside>
+
+    @if (checkpointDetailPosition) {
+      @if (checkpointDetail; as checkpoint) {
+        <div
+          class="checkpoint-detail-popout"
+          [style.left.px]="checkpointDetailPosition.left"
+          [style.top.px]="checkpointDetailPosition.top"
+        >
+          <header>
+            <div>
+              <span>Checkpoint 详情</span>
+              <strong>{{ checkpoint.name }}</strong>
+            </div>
+            <small>{{ checkpoint.datasetName }} · #{{ checkpoint.modelSignature.slice(0, 10) }}</small>
+          </header>
+          <div class="hover-metric-grid">
+            <div><span>训练</span><strong>{{ percent(checkpoint.trainAccuracy) }}</strong></div>
+            <div><span>验证</span><strong>{{ percent(checkpoint.valAccuracy) }}</strong></div>
+            <div><span>测试</span><strong>{{ percent(checkpoint.testAccuracy) }}</strong></div>
+          </div>
+          <div class="hover-detail-row">
+            <span>超参数</span>
+            <strong>{{ checkpointConfigText(checkpoint) }}</strong>
+          </div>
+          <div class="hover-detail-row">
+            <span>数据划分</span>
+            <strong>{{ checkpointSplitText(checkpoint) }}</strong>
+          </div>
+          <div class="hover-layer-list">
+            <span>网络层</span>
+            <div>
+              @for (layerText of checkpointLayerPreview(checkpoint); track layerText) {
+                <em>{{ layerText }}</em>
+              }
+              @if (checkpointLayerMoreCount(checkpoint) > 0) {
+                <em>+ {{ checkpointLayerMoreCount(checkpoint) }} 层</em>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    }
 
     <main class="inference-main">
       @if (error) {
@@ -216,25 +292,78 @@
       @if (loadingSamples) {
         <div class="empty-large compact"><strong>正在加载样本...</strong></div>
       } @else {
-        <div class="sample-grid">
-          @for (sample of samples; track sample.index) {
-            <button class="sample-tile" [class.active]="sample.index === selectedSample?.index" (click)="chooseSample(sample)">
-              @if (sample.imageUrl) {
-                <img [src]="sample.imageUrl" [alt]="sample.name || 'sample'" />
-              } @else {
-                <div class="feature-thumb">
-                  @for (value of sample.featurePreview?.slice(0, 12) ?? []; track $index) {
-                    <i [style.height.%]="Math.min(100, Math.abs(value) * 18 + 8)"></i>
+        @if (samplePreviewKind === 'table' && samples.length) {
+          <div class="table-sample-list">
+            <div class="table-sample-head">
+              <span>样本</span>
+              <span>标签</span>
+              <span>原始数据预览</span>
+              <span></span>
+            </div>
+            @for (sample of samples; track sample.index) {
+              <div class="table-sample-row" [class.active]="sample.index === selectedSample?.index" (click)="chooseSample(sample)">
+                <strong>#{{ sample.index }}</strong>
+                <span class="label-pill">{{ sample.trueLabel }}</span>
+                <div class="raw-cell-grid">
+                  @for (cell of rawPreviewRows(sample, 6); track cell.name) {
+                    <span class="raw-cell" [title]="cell.name + ': ' + (cell.value || '空')">
+                      <b>{{ cell.name }}</b>
+                      <strong>{{ cell.value || '空' }}</strong>
+                    </span>
                   }
                 </div>
-              }
-              <strong>{{ sample.name || ('sample ' + sample.index) }}</strong>
-              <span>{{ sample.trueLabel }}</span>
-              <small>{{ shapeLabel(sample.shape) }}</small>
-            </button>
-          }
-        </div>
+                <span class="table-row-actions">
+                  <button type="button" class="detail-pill" (click)="openRawSampleDetail(sample, $event)">详情</button>
+                  <button type="button" class="choose-pill" (click)="chooseSample(sample); $event.stopPropagation()">选择</button>
+                </span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="sample-grid">
+            @for (sample of samples; track sample.index) {
+              <button class="sample-tile" [class.active]="sample.index === selectedSample?.index" (click)="chooseSample(sample)">
+                @if (sample.imageUrl) {
+                  <img [src]="sample.imageUrl" [alt]="sample.name || 'sample'" />
+                } @else {
+                  <div class="feature-thumb">
+                    @for (feature of sampleFeatureRows(sample, 12); track feature.label) {
+                      <i [style.height.%]="Math.min(100, Math.abs(feature.value) * 18 + 8)"></i>
+                    }
+                  </div>
+                }
+                <strong>{{ sample.name || ('sample ' + sample.index) }}</strong>
+                <span>{{ sample.trueLabel }}</span>
+                <small>{{ shapeLabel(sample.shape) }}</small>
+              </button>
+            }
+          </div>
+        }
       }
+    </div>
+  }
+
+  @if (rawSampleDetail; as sample) {
+    <div class="raw-modal-mask" (click)="closeRawSampleDetail()"></div>
+    <div class="raw-modal">
+      <header>
+        <div>
+          <strong>样本 #{{ sample.index }} 原始数据</strong>
+          <span>真实类别：{{ sample.trueLabel }} · {{ rawDataRows(sample).length }} 列</span>
+        </div>
+        <button class="ghost-btn" (click)="closeRawSampleDetail()">关闭</button>
+      </header>
+      <div class="raw-detail-grid">
+        @for (cell of rawDataRows(sample); track cell.name) {
+          <div class="raw-detail-cell">
+            <span>{{ cell.name }}</span>
+            <strong>{{ cell.value || '空' }}</strong>
+          </div>
+        }
+      </div>
+      <footer>
+        <button class="primary-action" (click)="chooseSample(sample)">选择这条数据</button>
+      </footer>
     </div>
   }
 </div>
