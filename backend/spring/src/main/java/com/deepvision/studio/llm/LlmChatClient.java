@@ -32,6 +32,7 @@ public class LlmChatClient {
   private final String arkApiKey;
   private final String defaultModel;
 
+  /** 初始化上游 Ark 客户端配置，前端助手的深度学习问题会经由这里转发给大模型。 */
   public LlmChatClient(
       RestTemplateBuilder restTemplateBuilder,
       ObjectMapper objectMapper,
@@ -51,6 +52,7 @@ public class LlmChatClient {
     this.defaultModel = defaultModel;
   }
 
+  /** 发送普通 LLM 对话请求并返回完整响应。 */
   public ChatResponse chat(ChatRequest request) {
     if (arkApiKey.isBlank()) {
       throw new IllegalStateException("ARK_API_KEY is not configured.");
@@ -76,6 +78,7 @@ public class LlmChatClient {
     }
   }
 
+  /** 调用上游流式接口，把模型生成的增量文本逐段回调给 SSE 层，前端可实时显示解释过程。 */
   public ChatResponse stream(ChatRequest request, Consumer<String> onDelta) {
     if (arkApiKey.isBlank()) {
       throw new IllegalStateException("ARK_API_KEY is not configured.");
@@ -122,6 +125,7 @@ public class LlmChatClient {
     }
   }
 
+  /** 把平台内部的文本/图片消息转换成 Ark chat/completions 格式，并附加模型和 reasoning 参数。 */
   private Map<String, Object> toArkPayload(ChatRequest request, boolean stream) {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("model", blankToDefault(request.model(), defaultModel));
@@ -157,6 +161,7 @@ public class LlmChatClient {
     return payload;
   }
 
+  /** 从 SSE 原始行里提取 data 字段，过滤掉注释行和其他事件元数据。 */
   private String sseData(String line) {
     String trimmed = line.trim();
     if (!trimmed.startsWith("data:")) {
@@ -165,6 +170,7 @@ public class LlmChatClient {
     return trimmed.substring(5).trim();
   }
 
+  /** 解析上游流式 JSON，优先取可展示回答，也兼容推理模型返回的 reasoning_content 字段。 */
   private String streamDelta(String data) {
     try {
       JsonNode root = objectMapper.readTree(data);
@@ -189,6 +195,7 @@ public class LlmChatClient {
     }
   }
 
+  /** 从非流式 Ark 响应中提取首个候选答案，并包装成前端统一使用的 ChatResponse。 */
   private ChatResponse parseArkResponse(Map<String, Object> response) {
     if (response == null) {
       return new ChatResponse("", defaultModel, "");
@@ -209,10 +216,12 @@ public class LlmChatClient {
     );
   }
 
+  /** 将空配置值替换为默认值，保证模型名和 reasoning_effort 不会传空到上游。 */
   private static String blankToDefault(String value, String fallback) {
     return value == null || value.isBlank() ? fallback : value;
   }
 
+  /** 规范化 Ark 基础地址，拼接 /chat/completions 时避免出现双斜杠。 */
   private static String trimTrailingSlash(String value) {
     if (value == null || value.isBlank()) {
       return "https://ark.cn-beijing.volces.com/api/v3";

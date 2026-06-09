@@ -26,6 +26,7 @@ public class AuthController {
   private final JwtService jwtService;
   private final AuthenticationManager authenticationManager;
 
+  /** 汇集用户仓库、密码加密器、JWT 服务和认证管理器，提供前端登录注册入口。 */
   public AuthController(
       AppUserRepository users,
       PasswordEncoder passwordEncoder,
@@ -42,6 +43,7 @@ public class AuthController {
   @Operation(summary = "Register a new user")
   @ApiResponse(responseCode = "200", description = "User registered and JWT issued")
   @ApiResponse(responseCode = "400", description = "Invalid request or duplicated username")
+  /** 创建新用户、加密密码并签发登录凭证。 */
   public AuthResponse register(@Valid @RequestBody AuthRequest request) {
     String username = request.username().trim();
     if (users.existsByUsername(username)) {
@@ -58,6 +60,7 @@ public class AuthController {
   @Operation(summary = "Login with username and password")
   @ApiResponse(responseCode = "200", description = "Login succeeded and JWT issued")
   @ApiResponse(responseCode = "400", description = "Invalid username or password")
+  /** 校验用户名密码并签发 JWT 登录凭证。 */
   public AuthResponse login(@Valid @RequestBody AuthRequest request) {
     authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(request.username().trim(), request.password())
@@ -70,6 +73,7 @@ public class AuthController {
   @GetMapping("/me")
   @Operation(summary = "Get current authenticated user")
   @ApiResponse(responseCode = "200", description = "Current user, or null when no principal is available")
+  /** 返回当前 JWT 对应的用户信息。 */
   public UserResponse me(Principal principal) {
     if (principal == null) {
       return null;

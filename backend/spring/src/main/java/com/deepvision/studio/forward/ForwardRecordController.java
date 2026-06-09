@@ -33,6 +33,7 @@ public class ForwardRecordController {
   private final LocalImageStorage imageStorage;
   private final ObjectMapper objectMapper;
 
+  /** 注入记录仓库、用户仓库、图片存储和 JSON 工具；保存记录时会同时落盘预览图和完整页面快照。 */
   public ForwardRecordController(
       ForwardRecordRepository records,
       AppUserRepository users,
@@ -49,6 +50,7 @@ public class ForwardRecordController {
   @Operation(summary = "List Mode A saved records for the current user")
   @ApiResponse(responseCode = "200", description = "Saved record summaries")
   @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
+  /** 查询当前登录用户的 A 模式记录摘要，列表只展示元数据，不返回完整 snapshot。 */
   public List<ForwardRecordSummary> list(Principal principal) {
     return records.findByUserUsernameOrderByCreatedAtDesc(principal.getName()).stream()
         .map(ForwardRecordSummary::from)
@@ -60,6 +62,7 @@ public class ForwardRecordController {
   @ApiResponse(responseCode = "200", description = "Saved record detail")
   @ApiResponse(responseCode = "400", description = "Invalid snapshot or preview image")
   @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
+  /** 保存 A 模式实验快照：预览图落盘，网络结构和 forwardResult 序列化到 snapshotJson。 */
   public ForwardRecordDetail create(
       Principal principal,
       @Valid @RequestBody SaveForwardRecordRequest request
@@ -86,6 +89,7 @@ public class ForwardRecordController {
   @ApiResponse(responseCode = "200", description = "Saved record detail")
   @ApiResponse(responseCode = "400", description = "Record not found for current user")
   @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
+  /** 读取当前用户的一条记录详情，并把 snapshotJson 还原成前端可恢复页面状态的 JSON。 */
   public ForwardRecordDetail detail(Principal principal, @PathVariable Long id) throws JsonProcessingException {
     ForwardRecord record = records.findByIdAndUserUsername(id, principal.getName())
         .orElseThrow(() -> new IllegalArgumentException("Record not found."));
@@ -98,6 +102,7 @@ public class ForwardRecordController {
   @ApiResponse(responseCode = "200", description = "Record deleted")
   @ApiResponse(responseCode = "400", description = "Record not found for current user")
   @ApiResponse(responseCode = "401", description = "JWT is missing or invalid")
+  /** 删除当前用户的一条记录；查询条件带用户名，避免用户访问或删除别人的快照。 */
   public void delete(Principal principal, @PathVariable Long id) {
     ForwardRecord record = records.findByIdAndUserUsername(id, principal.getName())
         .orElseThrow(() -> new IllegalArgumentException("Record not found."));

@@ -120,12 +120,6 @@
             <text [attr.x]="nx(li)" [attr.y]="PAD - 4" text-anchor="middle"
                   fill="#94a3b8" font-size="10"
             >{{ layer.type === 'input' ? '输入层' : layer.type === 'output' ? '输出层 (Softmax)' : layer.type === 'dense' ? (layer.params['activation'] ?? '线性') : layer.type }}</text>
-            <!-- ReLU note -->
-            @if (layer.type === 'dense' && layer.params['activation'] === 'relu') {
-              <text [attr.x]="nx(li)" [attr.y]="PAD + 8" text-anchor="middle"
-                    fill="#94a3b8" font-size="9"
-              >ReLU: 负输入->0</text>
-            }
           </g>
         }
       </svg>

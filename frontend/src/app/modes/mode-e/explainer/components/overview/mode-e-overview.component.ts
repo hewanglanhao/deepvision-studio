@@ -176,7 +176,7 @@ export class ModeEOverviewComponent {
       case 'forward': {
         const from = layers[ss.layerPair]?.name ?? `L${ss.layerPair}`;
         const to = layers[ss.layerPair + 1]?.name ?? `L${ss.layerPair + 1}`;
-        return `前向传播：${from} -> ${to}`;
+        return `前向传播：${from} → ${to}`;
       }
       case 'backward': {
         const from = layers[ss.layerPair + 1]?.name ?? `L${ss.layerPair + 1}`;
@@ -219,9 +219,9 @@ export class ModeEOverviewComponent {
   }
 
   edgeLabel(e: { weight: number; gradient?: number; before?: number; after?: number }): string {
-    if (this.phase() === 'backward' && e.gradient != null) return 'grad ' + this.fmt(e.gradient);
+    if (this.phase() === 'backward' && e.gradient != null) return '∇' + this.fmt(e.gradient);
     if (this.sub().type === 'update' && e.after != null && e.before != null)
-      return this.fmt(e.before) + '->' + this.fmt(e.after);
+      return this.fmt(e.before) + '→' + this.fmt(e.after);
     return this.fmt(e.weight);
   }
 

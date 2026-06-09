@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Mode E — Backpropagation Visualization
+// Mode D — Backpropagation Visualization
 // Domain types for the backprop explainer feature.
 // ---------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ export interface ModeEForwardCacheEntry {
   layerIndex: number;
   input: number[][];       // pre-activation (or input tensor for non-dense layers)
   output: number[][];      // post-activation
-  preActivation?: number[][]; // Z = W.X + b  (before activation)
+  preActivation?: number[][]; // Z = W·X + b  (before activation)
 }
 
 // ---- Gradient tracking ------------------------------------------------------
@@ -134,7 +134,7 @@ export interface ModeELayerActivationSummary {
 
 export interface ModeEDecisionBoundary {
   // grid of predictions over the 2D input space
-  resolution: number;          // e.g. 50 -> 50x50 grid
+  resolution: number;          // e.g. 50 → 50×50 grid
   xMin: number;
   xMax: number;
   yMin: number;

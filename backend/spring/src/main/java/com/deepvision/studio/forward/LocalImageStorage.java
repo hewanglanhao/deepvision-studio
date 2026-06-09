@@ -13,10 +13,12 @@ import org.springframework.stereotype.Service;
 public class LocalImageStorage {
   private final Path uploadsRoot;
 
+  /** 保存上传根目录，并规范化绝对路径，后续写入预览图时会防止路径逃逸。 */
   public LocalImageStorage(@Value("${deepvision.uploads.root}") String uploadsRoot) {
     this.uploadsRoot = Path.of(uploadsRoot).toAbsolutePath().normalize();
   }
 
+  /** 将前端生成的输入预览 Data URL 解码落盘，返回可被历史记录列表访问的相对路径。 */
   public String saveDataUrl(Long userId, String dataUrl) {
     if (dataUrl == null || dataUrl.isBlank()) {
       return null;
@@ -47,4 +49,3 @@ public class LocalImageStorage {
     }
   }
 }
-

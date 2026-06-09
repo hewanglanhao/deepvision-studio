@@ -8,9 +8,11 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 
 public final class ForwardRecordDtos {
+  /** 工具类不需要实例化，DTO 只通过内部 record 类型承载请求和响应。 */
   private ForwardRecordDtos() {}
 
   @Schema(description = "Request body for saving a Mode A forward-pass snapshot")
+  /** 保存记录请求：前端提交列表元数据、输入预览图和可完整恢复 A 模式的 snapshot。 */
   public record SaveForwardRecordRequest(
       @Schema(description = "User-visible record name", example = "Edge kernel experiment")
       @NotBlank(message = "Record name is required.")
@@ -34,6 +36,7 @@ public final class ForwardRecordDtos {
   ) {}
 
   @Schema(description = "Summary item for a saved Mode A record")
+  /** 历史记录列表项，只包含名称、模板、数据集、层数、参数量和预览图路径。 */
   public record ForwardRecordSummary(
       Long id,
       String name,
@@ -44,6 +47,7 @@ public final class ForwardRecordDtos {
       String imagePath,
       Instant createdAt
   ) {
+    /** 从实体生成列表摘要，不读取大字段 snapshotJson，避免列表接口返回过重。 */
     static ForwardRecordSummary from(ForwardRecord record) {
       return new ForwardRecordSummary(
           record.getId(),
@@ -59,6 +63,7 @@ public final class ForwardRecordDtos {
   }
 
   @Schema(description = "Detail payload for a saved Mode A record")
+  /** 历史记录详情，比摘要多出 snapshot，前端用它恢复完整 A 模式页面状态。 */
   public record ForwardRecordDetail(
       Long id,
       String name,
@@ -70,6 +75,7 @@ public final class ForwardRecordDtos {
       Instant createdAt,
       JsonNode snapshot
   ) {
+    /** 从实体和已解析的 snapshot 组装详情响应。 */
     static ForwardRecordDetail from(ForwardRecord record, JsonNode snapshot) {
       return new ForwardRecordDetail(
           record.getId(),

@@ -589,6 +589,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
   private readonly resizeObserver = new ResizeObserver(() => this.resizeRenderer());
   private pointerDown: { x: number; y: number } | null = null;
 
+  /** 生成 3D 查看器副标题，概括快照来源、数据集、层数和参数量。 */
   get subtitle(): string {
     if (!this.payload) return '等待 A/B/C/D 模式传入网络层数据';
     const meta = [
@@ -601,15 +602,18 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return `${meta.join(' · ')} · ${new Date(this.payload.createdAt).toLocaleString()}`;
   }
 
+  /** 返回当前选中的 3D 层节点，右侧面板据此显示该层 shape 和类型。 */
   get selectedView(): Network3dLayerView | undefined {
     return this.layerViews.find(item => item.layer.id === this.selectedLayerId) ?? this.layerViews[0];
   }
 
+  /** 返回当前层的 forward 快照，包括特征图预览、统计值、通道图和 Top-K。 */
   get selectedSnapshot(): Network3dLayerSnapshot | undefined {
     const id = this.selectedView?.layer.id;
     return id === undefined ? undefined : this.payload?.layerSnapshots?.[id];
   }
 
+  /** 初始化页面状态、订阅数据源并触发首次数据加载。 */
   ngOnInit(): void {
     this.payload = this.readPayload();
     if (!this.payload) return;
@@ -624,11 +628,13 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 在视图元素创建后初始化依赖 DOM 的渲染流程。 */
   ngAfterViewInit(): void {
     if (!this.payload || !this.stageRef) return;
     this.initScene(this.stageRef.nativeElement);
   }
 
+  /** 释放组件订阅、定时器和渲染资源，避免页面离开后继续占用内存。 */
   ngOnDestroy(): void {
     if (this.animationId) cancelAnimationFrame(this.animationId);
     this.resizeObserver.disconnect();
@@ -641,6 +647,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.disposeObject(this.networkGroup);
   }
 
+  /** 重置相机到能完整观察网络层序列的位置。 */
   resetCamera(): void {
     if (!this.camera || !this.controls) return;
     const length = Math.max(1, this.layerViews.length);
@@ -649,19 +656,23 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.controls.update();
   }
 
+  /** 关闭 3D 查看窗口，回到产生快照的 A 模式页面。 */
   closeWindow(): void {
     window.close();
   }
 
+  /** 开关前向传播粒子动画，用动态粒子表示张量从输入层流向输出层。 */
   toggleFlow(): void {
     this.flowPlaying = !this.flowPlaying;
   }
 
+  /** 切换鼠标交互模式：旋转观察整体网络，或平移查看局部层结构。 */
   setInteractionMode(mode: 'rotate' | 'pan'): void {
     this.interactionMode = mode;
     this.applyInteractionMode();
   }
 
+  /** 将相机聚焦到某一层，便于近距离查看特征图堆叠或神经元网格。 */
   focusLayer(layerId: number): void {
     this.selectedLayerId = layerId;
     this.updateSelectionMaterials();
@@ -674,11 +685,13 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.controls.update();
   }
 
+  /** 选中一层并更新材质高亮，右侧详情会同步显示该层 forward 信息。 */
   selectLayer(layerId: number): void {
     this.selectedLayerId = layerId;
     this.updateSelectionMaterials();
   }
 
+  /** 把层类型转成可读标签，帮助区分 Conv2D、Pooling、Flatten、Dense 等角色。 */
   typeLabel(type: string): string {
     const labels: Record<string, string> = {
       input: 'Input',
@@ -693,11 +706,13 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return labels[type] ?? type;
   }
 
+  /** 将 Top-K 数值映射成条形宽度，用于展示类别概率或神经元响应强弱。 */
   topKWidth(value: number, items: Array<{ value: number }>): number {
     const max = Math.max(...items.map(item => Math.abs(item.value)), 1e-6);
     return Math.max(4, Math.min(100, Math.abs(value) / max * 100));
   }
 
+  /** 读取 A 模式写入的网络快照；3D 页面只消费已有结果，不重新执行 forward。 */
   private readPayload(): Network3dPayload | null {
     try {
       const raw = sessionStorage.getItem(NETWORK_3D_SESSION_KEY)
@@ -708,6 +723,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 初始化 Three.js 场景、相机、渲染器和控制器，为网络层 3D 展示做准备。 */
   private initScene(host: HTMLDivElement): void {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#101620');
@@ -739,6 +755,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.animate();
   }
 
+  /** 添加环境光、方向光和点光，让层板、特征图和连接线在 3D 空间中清晰可见。 */
   private addLights(): void {
     if (!this.scene) return;
     this.scene.add(new THREE.HemisphereLight('#e0f2fe', '#1e293b', 1.45));
@@ -757,6 +774,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.scene.add(cool);
   }
 
+  /** 添加地面网格，给网络层在深度方向上的排列提供空间参照。 */
   private addFloor(): void {
     if (!this.scene) return;
     const grid = new THREE.GridHelper(46, 46, '#42526a', '#222d3d');
@@ -764,6 +782,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.scene.add(grid);
   }
 
+  /** 根据 layerViews 创建所有 3D 层对象、连接线和 forward 流动粒子。 */
   private buildNetworkObjects(): void {
     if (!this.scene || !this.payload) return;
     this.networkGroup = new THREE.Group();
@@ -819,6 +838,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.updateSelectionMaterials();
   }
 
+  /** 在输入层前放置输入图片，让用户看到网络从哪张图开始提取特征。 */
   private addInputImage(z: number, imageUrl: string): { width: number; height: number } {
     const ratio = this.imageRatioFromShape(this.payload?.layerShapes[this.payload.layers[0]?.id] ?? []);
     const width = 2.35 * ratio.width;
@@ -843,6 +863,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return { width, height };
   }
 
+  /** 按层类型创建 3D 表达：卷积/池化画特征图堆叠，Flatten 画展开带，Dense 画神经元网格。 */
   private createLayerObject(view: Network3dLayerView): THREE.Group {
     const group = new THREE.Group();
     group.userData['layerId'] = view.layer.id;
@@ -869,6 +890,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return group;
   }
 
+  /** 绘制多通道特征图堆叠；每张薄片代表一个卷积输出通道或池化后的通道。 */
   private addFeatureStack(group: THREE.Group, view: Network3dLayerView, snapshot?: Network3dLayerSnapshot): void {
     const channels = Math.max(1, view.shape.length === 3 ? view.shape[2] : snapshot?.channelPreviews.length ?? 1);
     const visible = Math.min(channels, 10);
@@ -901,6 +923,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 用带状块表现 Flatten，把二维/三维特征图展开成一维向量。 */
   private addFlattenRibbon(group: THREE.Group, view: Network3dLayerView): void {
     this.addLayerFrame(group, view, '#fbbf24');
     const bars = Math.min(Math.max(view.shape[0] ?? 32, 18), 72);
@@ -924,6 +947,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 绘制 Dense/Output 的神经元网格，每个小块代表一个隐藏单元或类别单元。 */
   private addUnitGrid(group: THREE.Group, view: Network3dLayerView, role: 'dense' | 'output' | 'vector'): void {
     const frameColor = role === 'output' ? '#f87171' : role === 'dense' ? '#c084fc' : view.color;
     this.addLayerFrame(group, view, frameColor);
@@ -960,6 +984,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 绘制二维矩阵型张量，用于展示抽象响应面或矩阵结构。 */
   private addMatrixSheet(group: THREE.Group, view: Network3dLayerView): void {
     this.addLayerFrame(group, view, view.color);
     const [rows, cols] = view.shape as [number, number];
@@ -983,11 +1008,13 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 判断当前层是否适合用特征图堆叠表示，通常是 [H, W, C] 的图像类张量。 */
   private shouldRenderFeatureStack(view: Network3dLayerView): boolean {
     return view.shape.length === 3
       && ['input', 'conv2d', 'pool2d', 'residual', 'activation', 'dropout'].includes(view.layer.type);
   }
 
+  /** 给层对象添加外框，区分不同网络层在 3D 空间中的边界。 */
   private addLayerFrame(group: THREE.Group, view: Network3dLayerView, color: string): void {
     const frame = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(view.width, view.height, Math.max(view.depth, 0.18))),
@@ -997,6 +1024,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     group.add(frame);
   }
 
+  /** 为无法具体展开的层创建抽象块，例如激活层、Dropout 或未知 shape 层。 */
   private addAbstractLayer(group: THREE.Group, view: Network3dLayerView): void {
     const material = this.layerMaterial(view, 0.68);
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(view.width, view.height, view.depth), material);
@@ -1013,6 +1041,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     mesh.add(ring);
   }
 
+  /** 把 A 模式传来的特征图预览贴到层对象上，避免 3D 页面重新计算张量。 */
   private addPreviewPlane(group: THREE.Group, imageUrl: string, width: number, height: number, z: number): void {
     this.textureLoader.load(imageUrl, (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -1026,6 +1055,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
+  /** 创建层对象材质，颜色来自层类型，透明度用于表现特征图堆叠层次。 */
   private layerMaterial(view: Network3dLayerView, opacity: number): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
       color: view.color,
@@ -1036,12 +1066,14 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
+  /** 记录某层使用过的材质，选中层时可以统一调整高亮效果。 */
   private registerMaterial(layerId: number, material: THREE.MeshStandardMaterial): void {
     const list = this.layerMaterials.get(layerId) ?? [];
     list.push(material);
     this.layerMaterials.set(layerId, list);
   }
 
+  /** 绘制层间连接线，表示上一层输出张量被送入下一层继续前向传播。 */
   private addSemanticConnections(from: LayerFace, to: LayerFace): void {
     if (!this.networkGroup) return;
     const style = this.connectionStyle(to.type);
@@ -1064,6 +1096,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
+  /** 根据目标层类型设置连接线数量、颜色和弯曲程度，突出卷积/池化/Dense 的不同连接语义。 */
   private connectionStyle(type?: LayerType): { color: string; opacity: number; points: number; bulge: number } {
     if (type === 'conv2d') return { color: '#55c2d7', opacity: 0.58, points: 9, bulge: 0.08 };
     if (type === 'pool2d') return { color: '#4ade80', opacity: 0.52, points: 5, bulge: 0.04 };
@@ -1072,6 +1105,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return { color: '#9fb4ce', opacity: 0.44, points: 9, bulge: 0.06 };
   }
 
+  /** 沿连接曲线添加流动粒子，动态表达一次 forward 中特征张量的传递方向。 */
   private addFlowParticle(curve: THREE.QuadraticBezierCurve3, color: string, seed: number): void {
     if (!this.networkGroup) return;
     const particle = new THREE.Mesh(
@@ -1087,6 +1121,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
+  /** 在层的前后表面生成连接点，连接点数量越多越能表现 Dense/Flatten 的多路特征流。 */
   private facePoints(center: THREE.Vector3, width: number, height: number, count: number): THREE.Vector3[] {
     if (count === 5) {
       const x = width * 0.31;
@@ -1104,6 +1139,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return this.gridFacePoints(center, width, height, 3, 3);
   }
 
+  /** 按网格生成表面连接点，让层间连接线从特征图或神经元区域均匀发出。 */
   private gridFacePoints(center: THREE.Vector3, width: number, height: number, cols: number, rows: number): THREE.Vector3[] {
     const points: THREE.Vector3[] = [];
     for (let row = 0; row < rows; row += 1) {
@@ -1116,6 +1152,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return points;
   }
 
+  /** 创建层标签贴图，显示层名、层类型和 shape，便于在 3D 场景中对应回网络结构。 */
   private createLabelSprite(name: string, shapeLabel: string, type: LayerType): THREE.Sprite {
     const canvas = document.createElement('canvas');
     canvas.width = 560;
@@ -1143,6 +1180,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return sprite;
   }
 
+  /** 创建小徽标，用于提示隐藏的通道数、神经元数或矩阵尺寸。 */
   private createBadgeSprite(text: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -1167,6 +1205,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return sprite;
   }
 
+  /** 根据输入张量的高宽比设置图片平面比例，避免输入图在 3D 中被拉伸。 */
   private imageRatioFromShape(shape: TensorShape): { width: number; height: number } {
     if (shape.length !== 3) return { width: 1, height: 1 };
     const [height, width] = shape;
@@ -1174,11 +1213,13 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return { width: width / max, height: height / max };
   }
 
+  /** 估算 Dense/Output 的单元数量，3D 神经元网格用它决定需要画多少小块。 */
   private layerUnits(layer: NetworkLayer): number {
     if (layer.type === 'dense' || layer.type === 'output') return layer.params.units;
     return 32;
   }
 
+  /** 根据选中/悬停状态更新层材质，帮助定位当前正在分析的网络层。 */
   private updateSelectionMaterials(): void {
     for (const [layerId, materials] of this.layerMaterials) {
       const selected = layerId === this.selectedLayerId;
@@ -1191,6 +1232,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 将当前交互模式应用到 OrbitControls，控制鼠标左键是旋转还是平移。 */
   private applyInteractionMode(): void {
     if (!this.controls) return;
     this.controls.enableRotate = true;
@@ -1241,6 +1283,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.updateSelectionMaterials();
   };
 
+  /** 用射线检测鼠标指向的 3D 对象，并沿父节点查找对应的 layerId。 */
   private pickLayerId(event: MouseEvent | PointerEvent): number {
     if (!this.camera || !this.renderer || !this.networkGroup) return -1;
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -1259,11 +1302,13 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     return -1;
   }
 
+  /** 判断一次点击是否其实是拖拽，避免旋转场景时误选中网络层。 */
   private wasDrag(event: MouseEvent | PointerEvent): boolean {
     if (!this.pointerDown) return false;
     return Math.hypot(event.clientX - this.pointerDown.x, event.clientY - this.pointerDown.y) > 5;
   }
 
+  /** 根据容器尺寸调整 renderer 和相机比例，保证 3D 网络在窗口变化后不变形。 */
   private resizeRenderer(): void {
     if (!this.stageRef || !this.renderer || !this.camera) return;
     const host = this.stageRef.nativeElement;
@@ -1274,6 +1319,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     this.renderer.setSize(width, height, false);
   }
 
+  /** 每帧更新控制器和 forward 粒子位置，并渲染当前 3D 网络场景。 */
   private animate(): void {
     this.animationId = requestAnimationFrame(() => this.animate());
     this.controls?.update();
@@ -1288,6 +1334,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  /** 释放 Three.js geometry/material，页面销毁时避免 WebGL 资源泄漏。 */
   private disposeObject(object?: THREE.Object3D): void {
     object?.traverse((item) => {
       const mesh = item as THREE.Mesh;
@@ -1301,6 +1348,7 @@ export class Network3dViewerComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
+  /** 截断过长层名或 shape 文本，避免 Canvas 标签中文字溢出。 */
   private truncate(value: string, max: number): string {
     return value.length > max ? `${value.slice(0, max - 1)}...` : value;
   }

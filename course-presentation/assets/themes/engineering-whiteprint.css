@@ -1,0 +1,49 @@
+.slide {
+  background-color: #fbfdff;
+  background-image:
+    linear-gradient(rgba(126, 178, 223, .10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 178, 223, .10) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, .90), rgba(241, 248, 255, .88));
+  background-size: 40px 40px, 40px 40px, 100% 100%;
+}
+
+.slide::before {
+  content: attr(data-title);
+  position: absolute;
+  left: 96px;
+  top: 30px;
+  color: #5c86aa;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.slide::after {
+  content: "";
+  position: absolute;
+  left: 54px;
+  right: 54px;
+  top: 54px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(31, 106, 165, .85), rgba(31, 106, 165, .12));
+}
+
+.title::after {
+  content: "";
+  display: block;
+  width: 96px;
+  height: 3px;
+  margin-top: 16px;
+  border-radius: 999px;
+  background: #1f6aa5;
+}
+
+.title-slide::before {
+  content: "TECHNICAL WHITEPRINT";
+}
+
+.title-slide .title::after {
+  width: 280px;
+}

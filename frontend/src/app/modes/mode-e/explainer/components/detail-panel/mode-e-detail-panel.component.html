@@ -5,7 +5,7 @@
     @if (neuron(); as n) {
       <div class="neuron-header">
         <span class="neuron-badge">{{ n.layerType }}</span>
-        <strong>{{ n.layerName }} . 神经元 #{{ n.neuronIdx }}</strong>
+        <strong>{{ n.layerName }} · 神经元 #{{ n.neuronIdx }}</strong>
       </div>
       <div class="neuron-meta">
         <div class="meta-row">
@@ -22,13 +22,13 @@
           @if (b.gradient != null) {
             <div class="meta-row">
               <span>偏置梯度</span>
-              <span [style.color]="b.gradient >= 0 ? '#10b981' : '#f59e0b'">grad {{ fmt(b.gradient) }}</span>
+              <span [style.color]="b.gradient >= 0 ? '#10b981' : '#f59e0b'">∇{{ fmt(b.gradient) }}</span>
             </div>
           }
           @if (b.before != null && b.after != null) {
             <div class="meta-row">
               <span>偏置变化</span>
-              <span class="chg-val">{{ fmt(b.before) }} -> {{ fmt(b.after) }} (Delta={{ fmt(abs(b.after - b.before)) }})</span>
+              <span class="chg-val">{{ fmt(b.before) }} → {{ fmt(b.after) }} (Δ={{ fmt(abs(b.after - b.before)) }})</span>
             </div>
           }
         }
@@ -56,12 +56,12 @@
                 </span>
                 @if (e.gradient != null) {
                   <span class="grad-tag" [style.background]="gradientColor(e.gradient)">
-                    grad {{ fmt(e.gradient) }}
+                    ∇{{ fmt(e.gradient) }}
                   </span>
                 }
                 @if (e.before != null && e.after != null) {
                   <span class="chg-tag" [style.background]="changeColor(e.after - e.before)">
-                    Delta {{ fmt(abs(e.after - e.before)) }}
+                    Δ{{ fmt(abs(e.after - e.before)) }}
                   </span>
                 }
               </div>
@@ -79,7 +79,7 @@
           @for (e of n.outgoing; track e.layerTo + '-' + e.neuronTo) {
             <div class="edge-row">
               <div class="edge-source">
-                <span class="src-layer">-> L{{ e.layerTo }}</span>
+                <span class="src-layer">→ L{{ e.layerTo }}</span>
                 <span class="src-neuron">N{{ e.neuronTo }}</span>
               </div>
               <div class="edge-values">
@@ -88,7 +88,7 @@
                 </span>
                 @if (e.gradient != null) {
                   <span class="grad-tag" [style.background]="gradientColor(e.gradient)">
-                    grad {{ fmt(e.gradient) }}
+                    ∇{{ fmt(e.gradient) }}
                   </span>
                 }
               </div>

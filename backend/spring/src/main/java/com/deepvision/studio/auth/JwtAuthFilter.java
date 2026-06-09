@@ -16,12 +16,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
   private final JwtService jwtService;
   private final AppUserDetailsService userDetailsService;
 
+  /** 注入 JWT 解析器和用户加载器，每个请求都可从 Bearer token 恢复登录身份。 */
   public JwtAuthFilter(JwtService jwtService, AppUserDetailsService userDetailsService) {
     this.jwtService = jwtService;
     this.userDetailsService = userDetailsService;
   }
 
   @Override
+  /** 解析 Authorization 头里的 JWT 并写入 Spring Security 上下文。 */
   protected void doFilterInternal(
       HttpServletRequest request,
       HttpServletResponse response,
@@ -42,4 +44,3 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     filterChain.doFilter(request, response);
   }
 }
-

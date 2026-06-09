@@ -1,11 +1,12 @@
 import { Component, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import { ModeEStateService } from '../../services/mode-e-state.service';
 import type { ModeEOptimizer } from '../../models/mode-e.types';
 
 @Component({
   selector: 'app-mode-e-control-panel',
-  imports: [CommonModule],
+  imports: [CommonModule, TeachingTermDirective],
   templateUrl: './mode-e-control-panel.component.html',
   styleUrl: './mode-e-control-panel.component.css',
 })
@@ -16,8 +17,17 @@ export class ModeEControlPanelComponent {
   readonly presetId = computed(() => this.state.selectedPresetId());
   readonly config = computed(() => this.state.trainingConfig());
   readonly isPlaying = computed(() => this.state.isPlaying());
+  readonly isRunning = computed(() => this.state.isPlaying() || this.state.isAnimating());
   readonly iteration = computed(() => this.state.currentIteration());
   readonly status = computed(() => this.state.status());
+
+  readonly currentActivation = computed(() => this.state.currentActivation());
+
+  readonly activationOptions: { value: string; label: string }[] = [
+    { value: 'relu', label: 'ReLU' },
+    { value: 'sigmoid', label: 'Sigmoid' },
+    { value: 'tanh', label: 'Tanh' },
+  ];
 
   readonly optimizerOptions: { value: ModeEOptimizer; label: string }[] = [
     { value: 'sgd', label: 'SGD' },
@@ -45,8 +55,17 @@ export class ModeEControlPanelComponent {
     this.state.setTrainingConfig({ optimizer: value });
   }
 
+  setActivation(value: string): void {
+    this.state.setActivation(value);
+  }
+
   setSpeed(ms: number): void {
     this.state.setPlaySpeed(ms);
+  }
+
+  setSteps(val: string): void {
+    const n = parseInt(val, 10);
+    if (n > 0) this.state.setTrainingConfig({ maxIterations: n });
   }
 
   readonly isAnimating = computed(() => this.state.isAnimating());
@@ -68,5 +87,13 @@ export class ModeEControlPanelComponent {
 
   reset(): void {
     this.state.reset();
+  }
+
+  saveCurve(): void {
+    this.state.saveCurrentCurve();
+  }
+
+  clearCurves(): void {
+    this.state.clearSavedCurves();
   }
 }

@@ -43,7 +43,7 @@ export class ModeEStateService {
   readonly networkMeta = signal<ModeENetworkPreset | null>(null);
 
   readonly trainingConfig = signal<ModeETrainingConfig>({
-    learningRate: 0.1, optimizer: 'adam', lossFunction: 'crossEntropy', maxIterations: 2000,
+    learningRate: 0.1, optimizer: 'adam', lossFunction: 'crossEntropy', maxIterations: 1000,
   });
 
   readonly currentStep = signal<ModeEBackpropStep | null>(null);
@@ -109,6 +109,8 @@ export class ModeEStateService {
       if (lh.length > 500) lh.shift();
       this.lossHistory.set(lh);
     }
+    this.maybeRecordAvgLoss(iteration + 1);
+
     const nextIdx = Math.floor(Math.random() * dataset.length);
     this.currentSampleIndex.set(nextIdx);
 
@@ -182,6 +184,7 @@ export class ModeEStateService {
       if (lh.length > 500) lh.shift();
       this.lossHistory.set(lh);
     }
+    this.maybeRecordAvgLoss(iteration + 1);
     const nextIdx = Math.floor(Math.random() * dataset.length);
     this.currentSampleIndex.set(nextIdx);
   }
@@ -190,9 +193,19 @@ export class ModeEStateService {
 
   play(): void {
     if (this.isPlaying()) return;
+    // Auto-reset if previous run completed
+    if (this.currentIteration() >= this.trainingConfig().maxIterations) {
+      this.reset();
+    }
     this.isPlaying.set(true);
     this.status.set('running');
+    const maxSteps = this.trainingConfig().maxIterations;
     const run = () => {
+      if (this.currentIteration() >= maxSteps) {
+        this.saveCurrentCurve();
+        this.pause();
+        return;
+      }
       if (!this.isAnimating()) {
         this.instantStep();
       }
@@ -224,8 +237,11 @@ export class ModeEStateService {
     this.stepHistory.set([]);
     this.currentIteration.set(0);
     this.lossHistory.set([]);
+    this.avgLossHistory.set([]);
+    this.latestAccuracy.set(0);
     this.gradientNormHistory.set([]);
     this.decisionBoundary.set(null);
+    setTimeout(() => this.computeBoundary(), 100); // after layers reload
     this.subStep.set({ type: 'idle' });
     this.activePhase.set('forward');
     this.status.set('ready');
@@ -249,7 +265,7 @@ export class ModeEStateService {
   });
 
   readonly totalTrainableParams = computed(() => {
-    // Compute from architecture (neuron counts x input sizes), not from weight existence
+    // Compute from architecture (neuron counts × input sizes), not from weight existence
     const counts = this.neuronCounts();
     let total = 0;
     for (let i = 1; i < this.networkLayers().length; i++) {
@@ -277,6 +293,11 @@ export class ModeEStateService {
   });
 
   readonly lossHistory = signal<{ iteration: number; loss: number }[]>([]);
+  /** Periodically computed average loss over all samples — smooth trend line */
+  readonly avgLossHistory = signal<{ iteration: number; loss: number; accuracy: number }[]>([]);
+
+  /** Saved loss curves for optimizer comparison */
+  readonly savedCurves = signal<{ label: string; color: string; points: { iteration: number; loss: number; accuracy?: number }[] }[]>([]);
   readonly gradientNormHistory = signal<{ iteration: number; norm: number }[]>([]);
   readonly decisionBoundary = signal<any>(null);
 
@@ -392,6 +413,9 @@ export class ModeEStateService {
     })));
     this.connections.set(preset.connections.map(c => ({ ...c })));
     this.currentDataset.set(dataset.samples.map(s => ({ input: [...s.input], label: s.label })));
+    // Sync currentActivation from the first dense layer's activation
+    const firstDense = preset.layers.find((l: any) => l.type === 'dense');
+    if (firstDense) this.currentActivation.set((firstDense as any).params['activation'] ?? 'relu');
     this.reset();
   }
 
@@ -405,6 +429,101 @@ export class ModeEStateService {
   }
 
   setFocusedArea(area: ModeEFocusArea): void { this.focusedArea.set(area); }
+
+  readonly currentActivation = signal('relu');
+
+  setActivation(act: string): void {
+    this.currentActivation.set(act);
+    // Reset first to get fresh random weights
+    this.reset();
+    // Then patch the activation on the freshly loaded layers
+    const layers = this.networkLayers();
+    for (const l of layers) {
+      if (l.type === 'dense' || l.type === 'output') {
+        l.params['activation'] = l.type === 'output' ? 'softmax' : act;
+      }
+    }
+    // Force signal update since we mutated in place
+    this.networkLayers.set([...layers]);
+  }
+
+  /** Compute average loss + accuracy over all samples every 25 steps */
+  private maybeRecordAvgLoss(itr: number): void {
+    if (itr % 25 !== 0) return;
+    const layers = this.networkLayers();
+    if (layers.length === 0) return;
+    const dataset = this.currentDataset();
+    if (dataset.length === 0) return;
+    let totalLoss = 0;
+    let correct = 0;
+    const lossFn = this.trainingConfig().lossFunction;
+    for (const sample of dataset) {
+      const { output } = this.engine.forwardPass(layers, sample.input);
+      const { loss } = this.engine.computeLoss(output, sample.label, lossFn);
+      totalLoss += loss;
+      if (output.indexOf(Math.max(...output)) === sample.label) correct++;
+    }
+    const avg = totalLoss / dataset.length;
+    const acc = correct / dataset.length;
+    const alh = [...this.avgLossHistory(), { iteration: itr, loss: avg, accuracy: acc }];
+    if (alh.length > 200) alh.shift();
+    this.avgLossHistory.set(alh);
+    this.latestAccuracy.set(acc);
+    this.computeBoundary();
+  }
+
+  /** Latest full-dataset accuracy */
+  readonly latestAccuracy = signal(0);
+
+  private computeBoundary(): void {
+    const layers = this.networkLayers();
+    if (layers.length < 2) return;
+    const dataset = this.currentDataset();
+    if (dataset.length === 0) return;
+    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+    for (const s of dataset) {
+      if (s.input[0] < xMin) xMin = s.input[0];
+      if (s.input[0] > xMax) xMax = s.input[0];
+      if (s.input[1] < yMin) yMin = s.input[1];
+      if (s.input[1] > yMax) yMax = s.input[1];
+    }
+    const xPad = Math.max((xMax - xMin) * 0.08, 0.02);
+    const yPad = Math.max((yMax - yMin) * 0.08, 0.02);
+    try {
+      const b = this.engine.computeDecisionBoundary(layers, 50, [xMin - xPad, xMax + xPad], [yMin - yPad, yMax + yPad]);
+      this.decisionBoundary.set(b);
+    } catch { /* ignore */ }
+  }
+
+  /** Save current avg-loss curve for optimizer comparison (called on training complete) */
+  saveCurrentCurve(): void {
+    const points = this.avgLossHistory();
+    if (points.length === 0) return;
+    const config = this.trainingConfig();
+    const act = this.currentActivation();
+    const combo = `${config.optimizer}+${act}`;
+    const colorPalette = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#ca8a04', '#be185d'];
+    const usedColors = new Set(this.savedCurves().map(c => c.color));
+    const color = colorPalette.find(c => !usedColors.has(c)) ?? colorPalette[this.savedCurves().length % colorPalette.length];
+    const last = points[points.length - 1];
+    const curves = this.savedCurves().filter(c => c.label.split(' (')[0] !== combo);
+    curves.push({
+      label: `${combo} (Acc ${(last.accuracy * 100).toFixed(0)}%)`,
+      color,
+      points: [...points],
+    });
+    this.savedCurves.set(curves);
+  }
+
+  deleteSavedCurve(idx: number): void {
+    const curves = [...this.savedCurves()];
+    curves.splice(idx, 1);
+    this.savedCurves.set(curves);
+  }
+
+  clearSavedCurves(): void {
+    this.savedCurves.set([]);
+  }
   setPreset(presetId: string): void { this.loadPreset(presetId); }
   setActiveLayer(layerId: number | null): void {
     this.activeLayerId.set(layerId);

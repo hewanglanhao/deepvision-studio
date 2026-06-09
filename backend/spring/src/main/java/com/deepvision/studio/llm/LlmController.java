@@ -26,6 +26,7 @@ public class LlmController {
   private final LlmChatClient llmChatClient;
   private final ExecutorService streamExecutor = Executors.newCachedThreadPool();
 
+  /** 注入 LLM 客户端，向前端暴露普通回答和 SSE 流式回答两个代理入口。 */
   public LlmController(LlmChatClient llmChatClient) {
     this.llmChatClient = llmChatClient;
   }
@@ -34,6 +35,7 @@ public class LlmController {
   @Operation(summary = "Run a non-streaming assistant chat request")
   @ApiResponse(responseCode = "200", description = "Assistant response")
   @ApiResponse(responseCode = "400", description = "Invalid message payload")
+  /** 发送普通 LLM 对话请求并返回完整响应。 */
   ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
     return ResponseEntity.ok(llmChatClient.chat(request));
   }
@@ -42,6 +44,7 @@ public class LlmController {
   @Operation(summary = "Run a streaming assistant chat request with SSE")
   @ApiResponse(responseCode = "200", description = "SSE stream with delta, done, or error events")
   @ApiResponse(responseCode = "400", description = "Invalid message payload")
+  /** 通过 SSE 接收 LLM 流式响应并逐段回调给界面。 */
   SseEmitter streamChat(@Valid @RequestBody ChatRequest request) {
     SseEmitter emitter = new SseEmitter(180_000L);
     streamExecutor.submit(() -> {
@@ -58,10 +61,12 @@ public class LlmController {
   }
 
   @PreDestroy
+  /** 应用关闭时停止流式响应线程池，避免正在等待上游模型的后台线程泄漏。 */
   void shutdown() {
     streamExecutor.shutdownNow();
   }
 
+  /** 向前端发送 SSE 事件，delta 用于逐字显示回答，done/error 用于结束本次提问。 */
   private void sendEvent(SseEmitter emitter, String event, Object data) {
     try {
       emitter.send(SseEmitter.event().name(event).data(data));

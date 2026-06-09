@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Mode E — Pure TypeScript forward + backward propagation engine
+// Mode D — Pure TypeScript forward + backward propagation engine
 // Zero external dependencies. Works with small networks (MLP focus).
 // ---------------------------------------------------------------------------
 
@@ -328,7 +328,7 @@ export class ModeEBackpropEngine {
           }
           // linear → no change
 
-          // dW = dZ^T . A_prev  ->  W is [out x in], dW should be [out x in]
+          // dW = dZ^T · A_prev  →  W is [out x in], dW should be [out x in]
           // dZ_local is [1 x out], cache.input is [1 x in]
           const dW = dot(transpose(dZ_local), cache.input); // [out x in]
           const db = dZ_local[0];

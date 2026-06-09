@@ -16,6 +16,7 @@ public class JwtService {
   private final SecretKey key;
   private final long expirationMinutes;
 
+  /** 根据配置创建 HMAC 签名密钥，后端用它签发和校验前端保存的 JWT。 */
   public JwtService(
       @Value("${deepvision.jwt.secret}") String secret,
       @Value("${deepvision.jwt.expiration-minutes}") long expirationMinutes
@@ -27,6 +28,7 @@ public class JwtService {
     this.expirationMinutes = expirationMinutes;
   }
 
+  /** 为认证用户生成带过期时间的 JWT。 */
   public String issue(AppUser user) {
     Instant now = Instant.now();
     return Jwts.builder()
@@ -38,6 +40,7 @@ public class JwtService {
         .compact();
   }
 
+  /** 解析 JWT 并返回其中的用户名 subject。 */
   public String subject(String token) {
     Claims claims = Jwts.parser()
         .verifyWith(key)
@@ -47,4 +50,3 @@ public class JwtService {
     return claims.getSubject();
   }
 }
-
