@@ -706,6 +706,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   padding: 12px 14px 14px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  scroll-margin-top: 12px;
 }
 .training-status-head {
   display: flex;

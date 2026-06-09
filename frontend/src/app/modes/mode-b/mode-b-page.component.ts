@@ -1,5 +1,5 @@
 import { CommonModule, DecimalPipe } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -126,6 +126,9 @@ const NETWORK_LAYER_ICON: Record<string, string> = {
   styleUrl: './mode-b-page.component.css'
 })
 export class ModeBPageComponent implements OnInit, OnDestroy {
+  @ViewChild('trainingStatusBlock')
+  private trainingStatusBlock?: ElementRef<HTMLElement>;
+
   readonly modeBLlmSystemPrompt = MODE_B_LLM_SYSTEM_PROMPT;
   readonly modeBLlmContextProvider = (): LlmChatContext => this.buildModeBLlmContext();
   readonly modeBLlmQuickPrompts: LlmQuickPrompt[] = [
@@ -2081,10 +2084,22 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       });
       this.trainingBackendNotice = '训练任务已启动，指标将实时更新。';
       this.collaborationJoinId = this.trainingSvc.currentBackendJobId;
+      this.scrollToTrainingStatus();
     } catch (err) {
       this.trainingDatasetError = err instanceof Error ? err.message : '启动后端训练失败。';
     }
   }
+
+  private scrollToTrainingStatus(): void {
+    window.requestAnimationFrame(() => {
+      this.trainingStatusBlock?.nativeElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest'
+      });
+    });
+  }
+
   pauseTraining(): void  { void this.trainingSvc.pause(); }
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
