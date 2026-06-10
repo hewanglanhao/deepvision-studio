@@ -8,13 +8,13 @@
   >
     <div topbar-actions>
       @if (mode === 'forward') {
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:0">
+        <label class="auto-compute-toggle">
           <input type="checkbox" [(ngModel)]="autoForwardCompute" (ngModelChange)="onAutoForwardComputeToggle()" />
           自动计算
         </label>
-        <button class="btn-sm" (click)="triggerForwardCompute()" [disabled]="forwardBusy">开始计算</button>
-        <button class="btn-sm btn-primary" (click)="openSaveRecordModal()" [disabled]="!canSaveForwardRecord">保存记录</button>
-        <button class="btn-sm" (click)="toggleRecordDrawer()">历史记录</button>
+        <button class="btn-sm btn-primary forward-run-btn" (click)="triggerForwardCompute()" [disabled]="forwardBusy"><span class="button-icon">▶</span>开始计算</button>
+        <button class="btn-sm" (click)="openSaveRecordModal()" [disabled]="!canSaveForwardRecord"><span class="button-icon">↓</span>保存记录</button>
+        <button class="btn-sm" (click)="toggleRecordDrawer()"><span class="button-icon">↶</span>历史记录</button>
       }
     </div>
   </app-platform-topbar>
@@ -56,7 +56,7 @@
       <!-- 左侧面板 -->
       <aside class="side-panel">
         <div class="pane">
-          <div class="pane-title"><span appTeachingTerm="input-source">输入来源</span></div>
+          <div class="pane-title mode-a-block-title" data-icon="▦"><span appTeachingTerm="input-source">输入来源</span></div>
           <div class="dataset-collection-list">
             @for (dataset of localDatasetNames; track dataset) {
               <button class="dataset-collection-card" [class.active]="selectedDataset===dataset" (click)="selectDataset(dataset)">
@@ -78,7 +78,7 @@
 
         @if (currentInputAsset) {
           <div class="pane">
-            <div class="pane-title"><span appTeachingTerm="input-source">输入信息</span></div>
+            <div class="pane-title mode-a-block-title" data-icon="i"><span appTeachingTerm="input-source">输入信息</span></div>
             <div class="info-grid">
               <div class="info-row"><span class="info-k">宽度</span><span class="info-v">{{ currentInputAsset.originalWidth }}px</span></div>
               <div class="info-row"><span class="info-k">高度</span><span class="info-v">{{ currentInputAsset.originalHeight }}px</span></div>
@@ -88,13 +88,13 @@
             </div>
             @if (originalInputImageUrl) {
               <div style="margin-top:8px">
-                <div class="section-title" style="margin-bottom:3px">原始图像预览 · {{ currentInputAsset.originalWidth }}×{{ currentInputAsset.originalHeight }}</div>
+                <div class="section-title mode-a-block-title compact" data-icon="▧" style="margin-bottom:3px">原始图像预览 · {{ currentInputAsset.originalWidth }}×{{ currentInputAsset.originalHeight }}</div>
                 <img class="input-image-preview zoomable-image" [src]="originalInputImageUrl" alt="原始输入图像" (click)="openImageViewer('原始输入图像', originalInputImageUrl, currentInputAsset.originalWidth + '×' + currentInputAsset.originalHeight)" />
               </div>
             }
             @if (preparedInputImageUrl) {
               <div style="margin-top:8px">
-                <div class="section-title" style="margin-bottom:3px"><span appTeachingTerm="preprocessing">预处理后预览</span> · {{ currentInputAsset.prepared.tensor.shape[1] }}×{{ currentInputAsset.prepared.tensor.shape[0] }}</div>
+                <div class="section-title mode-a-block-title compact" data-icon="▧" style="margin-bottom:3px"><span appTeachingTerm="preprocessing">预处理后预览</span> · {{ currentInputAsset.prepared.tensor.shape[1] }}×{{ currentInputAsset.prepared.tensor.shape[0] }}</div>
                 <img class="input-image-preview zoomable-image" [src]="preparedInputImageUrl" alt="预处理后输入图像" (click)="openImageViewer('预处理后输入图像', preparedInputImageUrl, currentInputAsset.prepared.tensor.shape[1] + '×' + currentInputAsset.prepared.tensor.shape[0] + '×' + currentInputAsset.prepared.tensor.shape[2])" />
                 @if (currentInputAsset.prepared.notes.length) {
                   <div class="muted" style="margin-top:3px">{{ currentInputAsset.prepared.notes.join(' · ') }}</div>
@@ -105,7 +105,7 @@
         }
 
         <div class="pane">
-          <div class="pane-title"><span appTeachingTerm="network-template">网络模板</span></div>
+          <div class="pane-title mode-a-block-title" data-icon="◆"><span appTeachingTerm="network-template">网络模板</span></div>
           <label><span appTeachingTerm="network-template">选择模板</span>
             <select [(ngModel)]="selectedTemplateId" (change)="applyTemplate()">
               @for (t of modelTemplates; track t.id) { <option [value]="t.id">{{ t.name }}</option> }
@@ -119,7 +119,7 @@
       <main class="center-panel">
         <div class="canvas-container">
           <div class="canvas-header">
-            <span class="canvas-title" appTeachingTerm="network-template">网络结构</span>
+            <span class="canvas-title mode-a-block-title" data-icon="＋" appTeachingTerm="network-template">网络结构</span>
             <div class="palette">
               @for (type of layerPalette; track type) {
                 <button class="palette-chip"
@@ -282,7 +282,7 @@
                 }
                 <div class="kernel-presets">
                   <div class="section-line" style="margin-bottom:4px">
-                    <div class="section-title" appTeachingTerm="conv2d">经典卷积核预设</div>
+                    <div class="section-title mode-a-block-title compact" data-icon="▦" appTeachingTerm="conv2d">经典卷积核预设</div>
                     <button class="btn-sm compare-kernel-trigger" (click)="openKernelCompareModal()">对比效果</button>
                   </div>
                   <div class="preset-chips">
@@ -292,7 +292,7 @@
                   </div>
                 </div>
                 <div class="kernel-wrap">
-                  <div class="section-title" style="margin-bottom:3px"><span appTeachingTerm="conv2d">卷积核矩阵</span>（Out {{ selectedKernelOutChannel }} · In {{ selectedKernelInChannel }}）</div>
+                  <div class="section-title mode-a-block-title compact" data-icon="▦" style="margin-bottom:3px"><span appTeachingTerm="conv2d">卷积核矩阵</span>（Out {{ selectedKernelOutChannel }} · In {{ selectedKernelInChannel }}）</div>
                   <div class="kernel-grid" [style.--size]="layer.params.kernelSize">
                     @for (row of editableKernelMatrix; track $index; let r = $index) {
                       @for (cell of row; track $index; let c = $index) {
@@ -397,7 +397,7 @@
 
         <ng-template #denseWeightEditor let-layer="layer" let-title="title" let-unitLabel="unitLabel">
           <div class="advanced-param-box dense-weight-editor">
-            <div class="section-title"><span appTeachingTerm="bias">{{ title }}</span></div>
+            <div class="section-title mode-a-block-title compact" data-icon="≡"><span appTeachingTerm="bias">{{ title }}</span></div>
             <div class="row-2">
               <label><span appTeachingTerm="dense">编辑{{ unitLabel }}</span>
                 <select [ngModel]="selectedDenseWeightRow(layer)" (ngModelChange)="onDenseWeightRowChange(layer, $event)">
@@ -419,7 +419,7 @@
       <aside class="side-panel right">
         @if (selectedForwardResult; as res) {
           <div class="pane">
-            <div class="pane-title"><span appTeachingTerm="layer-inspector">层检查器</span></div>
+            <div class="pane-title mode-a-block-title" data-icon="◎"><span appTeachingTerm="layer-inspector">层检查器</span></div>
             <div class="editor-header" style="margin-bottom:6px">
               <span class="layer-type-badge">{{ res.layerType }}</span>
               <span style="font-size:13px;font-weight:600">{{ res.layerName }}</span>
@@ -442,11 +442,11 @@
           </div>
 
           <div class="pane">
-            <div class="pane-title"><span appTeachingTerm="feature-map">可视化输出</span></div>
+            <div class="pane-title mode-a-block-title" data-icon="▧"><span appTeachingTerm="feature-map">可视化输出</span></div>
             @if (res.visualization.mode === 'image') {
               <img class="tensor-image-preview zoomable-image" [src]="selectedTensorImageUrl" [alt]="res.layerName + ' output'" (click)="openImageViewer(res.layerName + ' 输出', selectedTensorImageUrl, res.outputShapeLabel)" />
               @if (selectedChannelPreviews.length > 1) {
-                <div class="section-title" style="margin:6px 0 3px"><span appTeachingTerm="feature-map">特征图</span>（展示前 {{ selectedChannelPreviews.length }} / 共 {{ selectedChannelCount }}）</div>
+                <div class="section-title mode-a-block-title compact" data-icon="▤" style="margin:6px 0 3px"><span appTeachingTerm="feature-map">特征图</span>（展示前 {{ selectedChannelPreviews.length }} / 共 {{ selectedChannelCount }}）</div>
                 <div class="channels-grid">
                   @for (ch of selectedChannelPreviews; track ch.channel) {
                     <div class="channel-card">
@@ -469,7 +469,7 @@
           </div>
 
           <div class="pane">
-            <div class="pane-title"><span appTeachingTerm="tensor-stats">张量统计</span></div>
+            <div class="pane-title mode-a-block-title" data-icon="∑"><span appTeachingTerm="tensor-stats">张量统计</span></div>
             <div class="stat-row">
               <div class="stat-cell"><div class="stat-label" appTeachingTerm="tensor-stats">最小值</div><div class="stat-value">{{ res.stats.min.toFixed(3) }}</div></div>
               <div class="stat-cell"><div class="stat-label" appTeachingTerm="tensor-stats">最大值</div><div class="stat-value">{{ res.stats.max.toFixed(3) }}</div></div>
@@ -480,7 +480,7 @@
 
           @if (res.paramsSummary.length) {
             <div class="pane">
-              <div class="pane-title">层参数</div>
+              <div class="pane-title mode-a-block-title" data-icon="≡">层参数</div>
               @for (p of res.paramsSummary; track $index) {
                 <div class="muted" style="font-family:monospace;font-size:11px;padding:1px 0">{{ p }}</div>
               }
@@ -488,7 +488,7 @@
           }
         } @else {
           <div class="pane">
-            <div class="pane-title">层检查器</div>
+            <div class="pane-title mode-a-block-title" data-icon="◎">层检查器</div>
             <div class="muted">点击网络图中的层卡片查看详情。</div>
           </div>
         }
@@ -497,11 +497,11 @@
         @if (forwardResult?.finalTensor) {
           <div class="pane">
             @if (finalTensorMode === 'image') {
-              <div class="pane-title">最终输出（<span appTeachingTerm="tensor">图像张量</span>）</div>
+              <div class="pane-title mode-a-block-title" data-icon="▶">最终输出（<span appTeachingTerm="tensor">图像张量</span>）</div>
               @if (finalImageViz; as fv) {
                 <img class="tensor-image-preview zoomable-image" [src]="finalTensorImageUrl" alt="最终输出图像" (click)="openImageViewer('最终输出图像', finalTensorImageUrl, fv.width + '×' + fv.height + '×' + fv.channels)" />
                 @if (fv.channelPreviews.length > 1) {
-                  <div class="section-title compact-title"><span appTeachingTerm="feature-map">输出特征图通道</span>（展示前 {{ fv.channelPreviews.length }} / 共 {{ finalChannelCount }}）</div>
+                  <div class="section-title compact-title mode-a-block-title compact" data-icon="▤"><span appTeachingTerm="feature-map">输出特征图通道</span>（展示前 {{ fv.channelPreviews.length }} / 共 {{ finalChannelCount }}）</div>
                   <div class="channels-grid">
                     @for (ch of fv.channelPreviews; track ch.channel) {
                       <div class="channel-card">
@@ -519,7 +519,7 @@
                 <div class="muted" style="margin-top:4px">{{ fv.width }}×{{ fv.height }}×{{ fv.channels }}</div>
               }
             } @else if (finalTensorMode === 'vector') {
-              <div class="pane-title"><span appTeachingTerm="top-k">输出分布（Top-K）</span></div>
+              <div class="pane-title mode-a-block-title" data-icon="↗"><span appTeachingTerm="top-k">输出分布（Top-K）</span></div>
               <div class="topk-list topk-compact">
                 @for (item of forwardResult!.finalTopK; track item.index) {
                   <div class="topk-item">
@@ -551,7 +551,7 @@
     <div class="modal-mask">
       <div class="modal-card" style="max-width:420px">
         <div class="modal-header">
-          <div class="modal-title">后端计算中</div>
+          <div class="modal-title mode-a-block-title compact" data-icon="↻">后端计算中</div>
         </div>
         <div class="modal-body">
           <p>正在执行<span appTeachingTerm="forward-pass">前向传播</span>，请稍候...</p>
@@ -570,7 +570,7 @@
     <div class="modal-mask" (click)="closeChannelModal()">
       <div class="modal-card" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <div class="modal-title">{{ channelModalTitle }}</div>
+          <div class="modal-title mode-a-block-title compact" data-icon="▤">{{ channelModalTitle }}</div>
           <button class="btn-ghost" (click)="closeChannelModal()">关闭</button>
         </div>
         <div class="modal-body">
@@ -592,7 +592,7 @@
       <div class="modal-card kernel-compare-modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div>
-            <div class="modal-title" appTeachingTerm="conv2d">卷积核对比</div>
+            <div class="modal-title mode-a-block-title compact" data-icon="▦" appTeachingTerm="conv2d">卷积核对比</div>
             <div class="modal-subtitle">当前 Conv 层 · Out {{ selectedKernelOutChannel }} · 同一输入图的真实<span appTeachingTerm="forward-pass">前向结果</span></div>
           </div>
           <button class="btn-ghost" (click)="closeKernelCompareModal()">{{ kernelCompareBusy ? '取消' : '关闭' }}</button>
@@ -641,15 +641,15 @@
     <div class="sample-picker-mask" (click)="closeSamplePicker()"></div>
     <div class="sample-picker">
       <div class="picker-header">
-        <span class="picker-title">选择 {{ selectedDataset }} 样本</span>
+        <span class="picker-title mode-a-block-title compact" data-icon="▧">选择 {{ selectedDataset }} 样本</span>
         <button class="btn-ghost" (click)="closeSamplePicker()">✕ 关闭</button>
       </div>
       <div class="sample-grid">
         @for (sample of activeLocalImageSamples; track sample.id) {
-          <div class="sample-tile local-image-tile" [class.active]="sample.id===selectedLocalImageId" (click)="chooseLocalImageSample(sample)">
+          <button type="button" class="sample-tile local-image-tile" [class.active]="sample.id===selectedLocalImageId" (click)="chooseLocalImageSample(sample)">
             <img class="zoomable-image" [src]="sample.url" [alt]="sample.name" (click)="openImageViewer(sample.name, sample.url, sample.label); $event.stopPropagation()" />
             <small>{{ sample.name }} · {{ sample.label }}</small>
-          </div>
+          </button>
         }
         @if (!activeLocalImageSamples.length) {
           <div class="muted">当前集合暂无样本。</div>
@@ -662,7 +662,7 @@
     <div class="modal-mask" (click)="closeAuthModal()">
       <div class="modal-card auth-card" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <div class="modal-title">{{ authTitle }}</div>
+          <div class="modal-title mode-a-block-title compact" data-icon="●">{{ authTitle }}</div>
           <button class="btn-ghost btn-sm" (click)="closeAuthModal()">关闭</button>
         </div>
         <div class="modal-body">
@@ -696,7 +696,7 @@
     <div class="modal-mask" (click)="closeSaveRecordModal()">
       <div class="modal-card auth-card" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <div class="modal-title">保存 A 模式记录</div>
+          <div class="modal-title mode-a-block-title compact" data-icon="↓">保存 A 模式记录</div>
           <button class="btn-ghost btn-sm" (click)="closeSaveRecordModal()">关闭</button>
         </div>
         <div class="modal-body">
@@ -724,7 +724,7 @@
     <aside class="record-drawer">
       <div class="record-drawer-head">
         <div>
-          <div class="pane-title">A 模式历史记录</div>
+          <div class="pane-title mode-a-block-title" data-icon="↶">A 模式历史记录</div>
           <div class="muted">{{ forwardRecords.length }} 条已保存记录</div>
         </div>
         <button class="btn-ghost btn-sm" (click)="showRecordDrawer=false">关闭</button>
@@ -763,7 +763,7 @@
       <div class="image-viewer-card" (click)="$event.stopPropagation()">
         <div class="image-viewer-head">
           <div>
-            <div class="modal-title">{{ imageViewer.title }}</div>
+            <div class="modal-title mode-a-block-title compact" data-icon="▧">{{ imageViewer.title }}</div>
             @if (imageViewer.meta) {
               <div class="muted">{{ imageViewer.meta }}</div>
             }
