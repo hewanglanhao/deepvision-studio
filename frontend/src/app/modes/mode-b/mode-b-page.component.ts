@@ -2466,6 +2466,12 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return Math.round(ratio * 1000) / 10;
   }
 
+  isDatasetSplitPreset(train: number, val: number, test: number): boolean {
+    return Math.abs(this.datasetSplitPercent('train') - train) < 0.05
+      && Math.abs(this.datasetSplitPercent('val') - val) < 0.05
+      && Math.abs(this.datasetSplitPercent('test') - test) < 0.05;
+  }
+
   applyDatasetSplitPreset(train: number, val: number, test: number): void {
     const ds = this.trainingDatasetDetail;
     if (!ds) return;

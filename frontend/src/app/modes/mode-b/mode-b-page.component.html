@@ -588,34 +588,76 @@
     <div class="workspace mode-workspace training-mode-workspace">
       <aside class="side-panel">
         <div class="pane training-data-pane">
-          <div class="pane-title mode-b-panel-title" appTeachingTerm="training-dataset">训练数据</div>
+          <div class="pane-title mode-b-panel-title mode-b-block-title" data-icon="▦" appTeachingTerm="training-dataset">训练数据</div>
           <div [class]="trainingDatasetError && trainingBackendNotice.includes('暂不可用') ? 'warn-box' : 'success-box'" style="margin-bottom:8px">
             {{ trainingBackendNotice }}
           </div>
-          <label><span appTeachingTerm="training-dataset">训练数据集</span>
-            <select [ngModel]="selectedTrainingDatasetId" (ngModelChange)="selectTrainingDataset($event)" [disabled]="trainingDatasetLoading">
-              @for (ds of builtinTrainingDatasets; track ds.id) {
-                <option [value]="ds.id">{{ ds.name }} · {{ ds.source }}</option>
-              }
-            </select>
-          </label>
+          <div class="dataset-picker-head">
+            <span appTeachingTerm="training-dataset">选择训练数据集</span>
+            <small>{{ builtinTrainingDatasets.length }} 个可用</small>
+          </div>
           <div class="dataset-option-list">
             @for (ds of builtinTrainingDatasets; track ds.id) {
-              <button class="dataset-option" [class.active]="selectedTrainingDatasetId===ds.id" (click)="selectTrainingDataset(ds.id)">
+              <button type="button" class="dataset-option" [class.active]="selectedTrainingDatasetId===ds.id" [attr.aria-pressed]="selectedTrainingDatasetId===ds.id" (click)="selectTrainingDataset(ds.id)" [disabled]="trainingDatasetLoading">
                 <span class="dataset-option-name">{{ ds.name }}</span>
-                <span class="dataset-option-meta">{{ ds.sampleCount }} 样本 · {{ ds.classCount }} 类 · {{ ds.kind }} · {{ ds.source }}</span>
+                <span class="dataset-option-stats">
+                  <span>{{ ds.sampleCount }} 样本</span>
+                  <span>{{ ds.classCount }} 类</span>
+                  <span>{{ ds.kind === 'image' ? '图像' : ds.kind === 'table' ? '表格' : ds.kind }}</span>
+                </span>
+                <span [class]="'dataset-source ' + ds.source">{{ ds.source === 'builtin' ? '内置' : '用户上传' }}</span>
               </button>
             }
           </div>
-          <label style="margin-top:8px">自定义导入
-            <input type="file" multiple accept=".zip,application/zip,.csv,text/csv,image/*" (change)="onTrainingDatasetUpload($event)" [disabled]="trainingDatasetLoading" />
-          </label>
-          <div class="muted">支持两种数据集：1. 1 个 CSV，2. 1 个“类别目录/图片”的 ZIP，或按“类别_序号.jpg”命名的图片文件。</div>
-          @if (datasetImportDraft.status !== 'idle') {
-            <div [class]="datasetImportDraft.status === 'ready' ? 'success-box' : 'warn-box'" style="margin-top:6px">
-              {{ datasetImportDraft.message }}
+
+          <section class="dataset-import-panel">
+            <div class="dataset-import-head">
+              <div>
+                <strong>导入自己的数据集</strong>
+                <small>上传后会先校验格式和标签</small>
+              </div>
+              <span aria-hidden="true">＋</span>
+            </div>
+            <input
+              #datasetFileInput
+              class="dataset-file-input"
+              type="file"
+              multiple
+              accept=".zip,application/zip,.csv,text/csv,image/*"
+              (change)="onTrainingDatasetUpload($event)"
+              [disabled]="trainingDatasetLoading"
+            />
+            <button type="button" class="dataset-upload-button" (click)="datasetFileInput.click()" [disabled]="trainingDatasetLoading">
+              <span class="dataset-upload-icon" aria-hidden="true">↑</span>
+              <span>
+                <strong>{{ trainingDatasetLoading ? '正在处理文件' : '选择数据集文件' }}</strong>
+                <small>CSV、ZIP 或按类别命名的图片</small>
+              </span>
+            </button>
+            <div class="dataset-format-list">
+              <span>CSV 表格</span>
+              <span>ZIP 图片目录</span>
+              <span>图片文件</span>
+            </div>
+
+            @if (datasetImportDraft.files.length) {
+              <div class="dataset-file-summary">
+                <span aria-hidden="true">✓</span>
+                <div>
+                  <strong>{{ datasetImportDraft.files.length === 1 ? datasetImportDraft.files[0].name : datasetImportDraft.files.length + ' 个文件' }}</strong>
+                  @if (datasetImportDraft.files.length > 1) {
+                    <small>{{ datasetImportDraft.files[0].name }} 等</small>
+                  }
+                </div>
+              </div>
+            }
+
+            @if (datasetImportDraft.status !== 'idle') {
+              <div [class]="'dataset-import-status ' + datasetImportDraft.status">
+                <div class="dataset-import-message">{{ datasetImportDraft.message }}</div>
               @if (datasetImportDraft.detectedKind === 'table' && !datasetImportDraft.detail) {
-                <label style="margin-top:8px">CSV 标签列
+                <div class="dataset-csv-config">
+                <label>CSV 标签列
                   <select [(ngModel)]="datasetImportDraft.selectedLabelColumn">
                     <option value="">请选择标签列</option>
                     @for (header of datasetImportDraft.csvHeaders; track header) {
@@ -623,28 +665,30 @@
                     }
                   </select>
                 </label>
-                <label style="margin-top:8px">类别数
+                <label>类别数
                   <input type="number" min="2" step="1" placeholder="例如 10" [(ngModel)]="datasetImportDraft.selectedClassCount" />
                 </label>
-                <div class="btn-row" style="margin-top:6px">
-                  <button class="btn-sm" (click)="confirmCsvDatasetImport()" [disabled]="!datasetImportDraft.selectedLabelColumn || !datasetImportDraft.selectedClassCount">导入 CSV</button>
+                </div>
+                <div class="dataset-import-actions">
+                  <button class="btn-primary btn-sm" (click)="confirmCsvDatasetImport()" [disabled]="!datasetImportDraft.selectedLabelColumn || !datasetImportDraft.selectedClassCount">确认导入</button>
                   <button class="btn-ghost btn-sm" (click)="clearImportedTrainingDataset()">取消</button>
                 </div>
               }
               @if (datasetImportDraft.detail) {
-                <div class="btn-row" style="margin-top:6px">
+                <div class="dataset-import-actions">
                   @if (selectedTrainingDatasetId !== datasetImportDraft.detail.id) {
-                    <button class="btn-sm" (click)="useImportedTrainingDataset()">使用导入数据</button>
+                    <button class="btn-primary btn-sm" (click)="useImportedTrainingDataset()">使用该数据集</button>
                   }
                   <button class="btn-ghost btn-sm" (click)="clearImportedTrainingDataset()">清除</button>
                 </div>
               }
             </div>
-          }
+            }
+          </section>
         </div>
 
         <div class="pane">
-          <div class="pane-title">预设任务</div>
+          <div class="pane-title mode-b-block-title" data-icon="◆">预设任务</div>
           <div class="task-list">
             @for (task of presetTasks; track task.id) {
               <button type="button" class="task-item" [class.active]="selectedTaskId===task.id" [attr.aria-pressed]="selectedTaskId===task.id" (click)="selectTask(task.id)">
@@ -679,42 +723,99 @@
         </a>
 
         <div class="pane collaboration-pane">
-          <div class="pane-title">多人协作聊天室</div>
-          <div class="muted">可基于当前训练任务创建房间，也可输入已有房间号加入观察。</div>
-          <button class="btn-sm btn-primary collaboration-create-btn" (click)="openCurrentTrainingChat()" [disabled]="!currentTrainingJobId" [title]="currentTrainingJobId ? '基于当前训练创建协作房间' : '开始训练后才能创建训练聊天室'">
-            <span class="button-icon" aria-hidden="true">＋</span>
-            新建训练聊天室
-          </button>
-          <label>训练房间 ID
-            <input [(ngModel)]="collaborationJoinId" placeholder="粘贴 train-... jobId" />
-          </label>
-          <div class="btn-row">
-            <button class="btn-sm" (click)="openExistingTrainingChat()">加入现有聊天室</button>
-            <button class="btn-sm" (click)="loadCollaborationRooms()" [disabled]="collaborationRoomsLoading">{{ collaborationRoomsLoading ? '加载中' : '查看现有聊天室' }}</button>
-            <button class="btn-ghost btn-sm" (click)="openCollaborationWindow()">打开聊天室页面</button>
-          </div>
+          <div class="pane-title mode-b-block-title" data-icon="◇">多人协作聊天室</div>
+          <div class="collaboration-intro">创建当前训练的观察房间，或加入其他用户已经创建的房间。</div>
+
+          <section class="collaboration-action-section">
+            <div class="collaboration-action-head">
+              <span class="collaboration-step">1</span>
+              <div>
+                <strong>分享当前训练</strong>
+                <small>房间会同步训练指标、进度和日志</small>
+              </div>
+            </div>
+            <div [class]="currentTrainingJobId ? 'current-room-source ready' : 'current-room-source waiting'">
+              <span>{{ currentTrainingJobId ? '当前训练任务' : '等待训练任务' }}</span>
+              <strong>{{ currentTrainingJobId || '开始训练后即可创建房间' }}</strong>
+            </div>
+            <button class="btn-primary collaboration-create-btn" (click)="openCurrentTrainingChat()" [disabled]="!currentTrainingJobId" [title]="currentTrainingJobId ? '基于当前训练创建协作房间' : '开始训练后才能创建训练聊天室'">
+              <span class="button-icon" aria-hidden="true">＋</span>
+              创建并打开聊天室
+            </button>
+          </section>
+
+          <section class="collaboration-action-section join">
+            <div class="collaboration-action-head">
+              <span class="collaboration-step">2</span>
+              <div>
+                <strong>加入已有房间</strong>
+                <small>输入房间 ID，或从在线房间中选择</small>
+              </div>
+            </div>
+            <label class="collaboration-room-input">
+              <span>训练房间 ID</span>
+              <div class="collaboration-input-row">
+                <input [(ngModel)]="collaborationJoinId" placeholder="例如 train-20260610-..." (keydown.enter)="openExistingTrainingChat()" />
+                <button class="collaboration-join-btn" (click)="openExistingTrainingChat()" [disabled]="collaborationRoomsLoading || !collaborationJoinId.trim()" [title]="collaborationJoinId.trim() ? '验证房间并在新窗口加入' : '请输入房间 ID'">
+                  <span class="button-icon" aria-hidden="true">→</span>
+                  加入
+                </button>
+              </div>
+            </label>
+            <div class="collaboration-secondary-actions">
+              <button class="room-list-toggle" (click)="loadCollaborationRooms()" [disabled]="collaborationRoomsLoading">
+                <span class="button-icon" [class.spinning]="collaborationRoomsLoading" aria-hidden="true">{{ collaborationRoomsLoading ? '↻' : '☰' }}</span>
+                {{ collaborationRoomsLoading ? '正在查找' : '查看在线房间' }}
+              </button>
+              <button class="btn-ghost" (click)="openCollaborationWindow()" title="打开独立聊天室页面">
+                聊天室首页
+                <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </section>
+
           @if (collaborationError) {
-            <div class="error-box" style="margin-top:0">{{ collaborationError }}</div>
+            <div class="collaboration-error">
+              <span aria-hidden="true">!</span>
+              <div>{{ collaborationError }}</div>
+            </div>
           }
           @if (collaborationRoomsOpen) {
-            <div class="collab-room-list">
+            <div class="collab-room-list-shell">
+              <div class="collab-room-list-head">
+                <div>
+                  <strong>在线房间</strong>
+                  <span>{{ collaborationRooms.length }} 个可加入</span>
+                </div>
+                <button class="icon-refresh-btn" (click)="loadCollaborationRooms()" [disabled]="collaborationRoomsLoading" title="刷新在线房间" aria-label="刷新在线房间">↻</button>
+              </div>
+              <div class="collab-room-list">
               @if (collaborationRooms.length) {
                 @for (room of collaborationRooms; track room.jobId) {
                   <button class="collab-room-card" (click)="joinListedCollaborationRoom(room)">
-                    <span>{{ room.jobId }}</span>
-                    <small>{{ room.onlineCount }} 人在线 · {{ room.users.join('、') || '暂无成员' }}</small>
+                    <span class="room-online-dot" aria-hidden="true"></span>
+                    <span class="room-copy">
+                      <strong>{{ room.jobId }}</strong>
+                      <small>{{ room.users.join('、') || '等待成员加入' }}</small>
+                    </span>
+                    <span class="room-online-count">{{ room.onlineCount }} 人</span>
+                    <span class="room-enter-arrow" aria-hidden="true">→</span>
                   </button>
                 }
               } @else {
-                <div class="muted">当前没有已创建的聊天室。</div>
+                <div class="collab-room-empty">
+                  <strong>暂无在线房间</strong>
+                  <span>可以先开始训练，再创建一个新的观察房间。</span>
+                </div>
               }
+              </div>
             </div>
           }
         </div>
 
         <div class="training-inline-panels side-training-panels">
           <div class="chart-wrap training-log-card">
-            <div class="chart-label">训练日志</div>
+            <div class="chart-label mode-b-block-title" data-icon="≡">训练日志</div>
             <div class="log-panel">@for (log of trainingLogs; track $index) { <div class="log-line"><span class="log-time">{{ log.time }}</span><span [class]="'log-msg ' + log.level">{{ log.message }}</span></div> } @if (!trainingLogs.length) { <div class="muted">暂无日志，点击“开始”后输出。</div> }</div>
           </div>
         </div>
@@ -774,8 +875,12 @@
             </div>
             <div class="split-track"><div class="split-train" [style.width.%]="ds.trainRatio*100"></div><div class="split-val" [style.width.%]="ds.valRatio*100"></div><div class="split-test" [style.width.%]="ds.testRatio*100"></div></div>
             <div class="split-editor">
-              <div class="split-editor-head"><span class="section-title" appTeachingTerm="dataset-split">数据划分</span><span [class]="datasetSplitError ? 'split-total error' : 'split-total'">合计 {{ datasetSplitSumPercent }}%</span></div>
-              <div class="split-presets"><button class="btn-sm" (click)="applyDatasetSplitPreset(70,15,15)">70 / 15 / 15</button><button class="btn-sm" (click)="applyDatasetSplitPreset(80,10,10)">80 / 10 / 10</button><button class="btn-sm" (click)="applyDatasetSplitPreset(80,20,0)">80 / 20 / 0</button></div>
+              <div class="split-editor-head"><span class="section-title mode-b-block-title" data-icon="%" appTeachingTerm="dataset-split">数据划分</span><span [class]="datasetSplitError ? 'split-total error' : 'split-total'">合计 {{ datasetSplitSumPercent }}%</span></div>
+              <div class="split-presets">
+                <button type="button" class="btn-sm" [class.active]="isDatasetSplitPreset(70,15,15)" [attr.aria-pressed]="isDatasetSplitPreset(70,15,15)" (click)="applyDatasetSplitPreset(70,15,15)">70 / 15 / 15</button>
+                <button type="button" class="btn-sm" [class.active]="isDatasetSplitPreset(80,10,10)" [attr.aria-pressed]="isDatasetSplitPreset(80,10,10)" (click)="applyDatasetSplitPreset(80,10,10)">80 / 10 / 10</button>
+                <button type="button" class="btn-sm" [class.active]="isDatasetSplitPreset(80,20,0)" [attr.aria-pressed]="isDatasetSplitPreset(80,20,0)" (click)="applyDatasetSplitPreset(80,20,0)">80 / 20 / 0</button>
+              </div>
               <div class="split-input-grid">
                 <label><span appTeachingTerm="dataset-split">训练集 %</span><input type="number" min="1" max="100" step="1" [ngModel]="datasetSplitPercent('train')" (ngModelChange)="onDatasetSplitInput('train', $event)" /></label>
                 <label><span appTeachingTerm="dataset-split">验证集 %</span><input type="number" min="0" max="100" step="1" [ngModel]="datasetSplitPercent('val')" (ngModelChange)="onDatasetSplitInput('val', $event)" /></label>
@@ -786,7 +891,7 @@
 
             <div class="training-network-editor">
               <div class="training-network-head">
-                <div><div class="section-title mode-b-panel-title" appTeachingTerm="network-template">网络结构编辑器</div><div class="muted">{{ layerCount }} 层 · {{ parameterCount | number }} 参数</div></div>
+                <div class="training-network-title-wrap"><div class="section-title mode-b-panel-title mode-b-block-title" data-icon="+" appTeachingTerm="network-template">网络结构编辑器</div><div class="muted">{{ layerCount }} 层 · {{ parameterCount | number }} 参数</div></div>
                 <label class="network-template-select"><span appTeachingTerm="network-template">模型模板</span>
                   <select [(ngModel)]="selectedTemplateId" (change)="applyTemplate()">
                     @for (t of modelTemplates; track t.id) { <option [value]="t.id">{{ t.name }}</option> }
@@ -987,7 +1092,9 @@
             </div>
 
             <div class="training-hyperparams-panel">
-              <div class="section-title mode-b-panel-title" appTeachingTerm="hyperparameter">训练超参数</div>
+              <div class="training-hyperparams-head">
+                <div class="section-title mode-b-panel-title mode-b-block-title" data-icon="≡" appTeachingTerm="hyperparameter">训练超参数</div>
+              </div>
               <div class="training-hyperparams-grid">
                 <label><span appTeachingTerm="batch">批大小</span> <input type="number" min="1" [(ngModel)]="trainingConfig.batchSize" /></label>
                 <label><span appTeachingTerm="epoch">训练轮数</span> <input type="number" min="1" [(ngModel)]="trainingConfig.totalEpochs" /></label>
@@ -1012,7 +1119,7 @@
 
             <div class="dataset-lower">
               <div class="label-distribution-panel">
-                <div class="section-title label-distribution-title">{{ selectedTaskIsRegression ? '目标分布' : '标签分布' }}</div>
+                <div class="section-title label-distribution-title mode-b-block-title" data-icon="▤">{{ selectedTaskIsRegression ? '目标分布' : '标签分布' }}</div>
                 <div class="label-dist-list">
                   @for (item of ds.labelDistribution; track item.label) {
                     <div class="label-dist-row"><span class="label-dot" [style.background]="item.color"></span><span class="label-name">{{ item.label }}</span><div class="label-bar-wrap"><div class="label-bar" [style.background]="item.color" [style.width.%]="labelPercent(item.count)"></div></div><span class="label-count">{{ item.count }}</span></div>
@@ -1022,7 +1129,7 @@
                 @if (ds.warnings.length || trainingDatasetError) { <div class="warn-box" style="margin-top:8px">@if (trainingDatasetError) { <div>{{ trainingDatasetError }}</div> } @for (warning of ds.warnings; track warning) { <div>{{ warning }}</div> }</div> }
               </div>
               <div>
-                <div class="section-title" style="margin-bottom:6px">{{ ds.imagePreview?.length ? '图片预览' : ds.tablePreview ? '表格预览' : ds.pointPreview?.length ? '散点预览' : '数据预览' }}</div>
+                <div class="section-title mode-b-block-title" data-icon="▧" style="margin-bottom:10px">{{ ds.imagePreview?.length ? '图片预览' : ds.tablePreview ? '表格预览' : ds.pointPreview?.length ? '散点预览' : '数据预览' }}</div>
                 @if (ds.imagePreview?.length) {
                   <div class="image-preview-groups">
                     @for (group of imagePreviewGroups(ds); track group.label) {
@@ -1049,7 +1156,7 @@
         <div #trainingStatusBlock class="training-status-block">
           <div class="training-status-head">
             <div>
-              <div class="section-title mode-b-panel-title">当前训练状态</div>
+              <div class="section-title mode-b-panel-title mode-b-block-title" data-icon="▶">当前训练状态</div>
               <div class="training-status-summary"><span appTeachingTerm="epoch">Epoch {{ trainingDisplayEpoch }} / {{ trainingDisplayTotalEpochs }}</span> · <span appTeachingTerm="batch">Batch {{ trainingCurrentBatch }} / {{ trainingTotalBatches }}</span></div>
             </div>
             <div class="training-status-right">
@@ -1087,7 +1194,7 @@
         <div class="backprop-board">
           <div class="backprop-head">
             <div>
-              <div class="section-title mode-b-panel-title" appTeachingTerm="backpropagation">反向传播教学面板</div>
+              <div class="section-title mode-b-panel-title mode-b-block-title" data-icon="↶" appTeachingTerm="backpropagation">反向传播教学面板</div>
             </div>
             @if (latestBackprop; as bp) {
               <div class="backprop-epoch">Epoch {{ bp.epoch }} / {{ bp.totalEpochs }} · Batch {{ bp.batch }} / {{ bp.totalBatches }}</div>
@@ -1098,7 +1205,7 @@
             <section class="bp-panel bp-network-panel">
               <div class="bp-network-head">
                 <div>
-                  <div class="section-title"><span appTeachingTerm="gradient-norm">梯度</span>与<span appTeachingTerm="parameter-update">参数更新</span></div>
+                  <div class="section-title mode-b-block-title compact" data-icon="↯"><span appTeachingTerm="gradient-norm">梯度</span>与<span appTeachingTerm="parameter-update">参数更新</span></div>
                   <div class="muted">节点按前向结构排列，流光表示当前 batch 的反向梯度正在从输出端回传。</div>
                   <div class="bp-click-hint">点击每个节点左上角图标，可查看该层梯度变化曲线和梯度直方图。</div>
                 </div>
@@ -1178,7 +1285,7 @@
 
             <div class="bp-grid">
               <section class="bp-panel">
-                <div class="section-title">优化器解释</div>
+                <div class="section-title mode-b-block-title compact" data-icon="◎">优化器解释</div>
                 <p class="bp-explain">{{ optimizerExplanation }}</p>
                 <div class="bp-prediction compact">
                   <div><span>Scheduler</span><strong>{{ bp.scheduler }}</strong></div>
@@ -1187,7 +1294,7 @@
               </section>
 
               <section class="bp-panel">
-                <div class="section-title">异常诊断提醒</div>
+                <div class="section-title mode-b-block-title compact" data-icon="!">异常诊断提醒</div>
                 <div class="bp-diagnosis-list">
                   @for (item of backpropDiagnosis; track item.text) {
                     <div [class]="'bp-diagnosis ' + item.level">{{ item.text }}</div>
@@ -1330,7 +1437,7 @@
         <div class="charts-area">
           <div class="chart-wrap metric-card metric-card-loss">
             <div class="metric-card-head">
-              <div><div class="chart-label" appTeachingTerm="loss-function">损失曲线</div><div class="chart-subtitle">X: 训练 step · Y: loss</div></div>
+              <div><div class="chart-label mode-b-block-title compact" data-icon="↘" appTeachingTerm="loss-function">损失曲线</div><div class="chart-subtitle">X: 训练 step · Y: loss</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ trainingLoss | number:'1.4-4' }}</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1353,7 +1460,7 @@
           </div>
           <div class="chart-wrap metric-card metric-card-accuracy">
             <div class="metric-card-head">
-              <div><div class="chart-label" appTeachingTerm="accuracy">准确率曲线</div><div class="chart-subtitle">X: 训练 step · Y: accuracy</div></div>
+              <div><div class="chart-label mode-b-block-title compact" data-icon="↗" appTeachingTerm="accuracy">准确率曲线</div><div class="chart-subtitle">X: 训练 step · Y: accuracy</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ (trainingAcc*100) | number:'1.1-1' }}%</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1376,7 +1483,7 @@
           </div>
           <div class="chart-wrap metric-card metric-card-lr">
             <div class="metric-card-head">
-              <div><div class="chart-label" appTeachingTerm="learning-rate-scheduler">学习率变化</div><div class="chart-subtitle">X: 训练 step · Y: learning rate</div></div>
+              <div><div class="chart-label mode-b-block-title compact" data-icon="∿" appTeachingTerm="learning-rate-scheduler">学习率变化</div><div class="chart-subtitle">X: 训练 step · Y: learning rate</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ trainingLr | number:'1.5-5' }}</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1398,7 +1505,7 @@
           </div>
           <div class="chart-wrap metric-card metric-card-gradient">
             <div class="metric-card-head">
-              <div><div class="chart-label" appTeachingTerm="gradient-norm">梯度大小变化</div><div class="chart-subtitle">X: 训练 step · Y: gradient norm</div></div>
+              <div><div class="chart-label mode-b-block-title compact" data-icon="↯" appTeachingTerm="gradient-norm">梯度大小变化</div><div class="chart-subtitle">X: 训练 step · Y: gradient norm</div></div>
               <div class="chart-value"><span>当前</span><strong>{{ trainingGradientNorm | number:'1.4-4' }}</strong></div>
             </div>
             <div class="metric-chart metric-chart-large">
@@ -1420,7 +1527,7 @@
           </div>
           <div class="chart-wrap parameter-panel weight-chart-card">
             <div class="metric-card-head">
-              <div><div class="chart-label" appTeachingTerm="weight-distribution">权重分布直方图</div><div class="chart-subtitle">X: 权重值 · Y: 相对频率</div></div>
+              <div><div class="chart-label mode-b-block-title compact" data-icon="▥" appTeachingTerm="weight-distribution">权重分布直方图</div><div class="chart-subtitle">X: 权重值 · Y: 相对频率</div></div>
               <div class="chart-value"><span>Std</span><strong>{{ trainingWeightStd | number:'1.3-3' }}</strong></div>
             </div>
             <div class="weight-chart">
@@ -1435,7 +1542,7 @@
             <div class="test-result-panel">
               <div class="test-result-head">
                 <div>
-                  <div class="section-title" appTeachingTerm="dataset-split">测试集效果</div>
+                  <div class="section-title mode-b-block-title" data-icon="✓" appTeachingTerm="dataset-split">测试集效果</div>
                   <div class="muted">训练完成后由后端在测试集上推理得到。</div>
                 </div>
                 <div class="test-metrics">
@@ -1471,9 +1578,8 @@
           <div class="checkpoint-panel">
             <div class="checkpoint-head">
               <div class="checkpoint-title-wrap">
-                <div class="checkpoint-icon">CK</div>
                 <div>
-                  <div class="section-title mode-b-panel-title" appTeachingTerm="checkpoint">模型 Checkpoint</div>
+                  <div class="section-title mode-b-panel-title mode-b-block-title" data-icon="◆" appTeachingTerm="checkpoint">模型 Checkpoint</div>
                   <div class="muted">登录后训练完成会自动保存 checkpoint，可手动选择并重新跑测试集。</div>
                 </div>
               </div>
