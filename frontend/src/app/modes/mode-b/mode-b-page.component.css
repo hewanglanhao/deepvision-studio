@@ -2954,6 +2954,282 @@ button,
   background: rgba(248, 250, 252, .82);
 }
 
+/* ===== B 模式关键交互层级 ===== */
+button,
+.side-action-link {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  min-height: 36px;
+  border-radius: 7px;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 16px rgba(15, 23, 42, .09);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .08);
+}
+
+button:focus-visible,
+.side-action-link:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, .22);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: .5;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: saturate(.65);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  background: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .24);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+  border-color: #1e40af !important;
+  color: #ffffff !important;
+  box-shadow: 0 11px 24px rgba(37, 99, 235, .3);
+}
+
+.btn-danger {
+  font-weight: 800;
+}
+
+.button-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  min-width: 16px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.button-icon.spinning {
+  animation: button-spin .8s linear infinite;
+}
+
+@keyframes button-spin {
+  to { transform: rotate(360deg); }
+}
+
+.train-control-bar {
+  position: relative;
+  z-index: 4;
+  min-height: 60px;
+  padding: 10px 16px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 12px;
+  margin: 0 14px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .1);
+}
+
+.train-control-bar .status-badge {
+  min-height: 30px;
+  padding-inline: 11px;
+  font-weight: 850;
+}
+
+.control-divider {
+  width: 1px;
+  height: 28px;
+  margin-left: 2px;
+  background: #dbe3ee;
+}
+
+.train-start-btn {
+  min-width: 132px;
+  min-height: 42px;
+  font-size: 14px;
+}
+
+.control-btn,
+.reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.resume-btn {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.stop-btn:not(:disabled) {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.dataset-option {
+  position: relative;
+  min-height: 58px;
+  padding-right: 38px;
+  cursor: pointer;
+}
+
+.dataset-option::after,
+.task-item::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  opacity: 0;
+  transform: translateY(-50%) scale(.72);
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.dataset-option.active::after,
+.task-item.active::after {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.dataset-option:hover,
+.task-item:hover {
+  border-color: #60a5fa;
+  background: #f8fbff;
+  box-shadow: 0 9px 20px rgba(37, 99, 235, .11);
+}
+
+.dataset-option.active,
+.task-item.active {
+  border-color: #60a5fa !important;
+  border-left: 4px solid #2563eb !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .12);
+}
+
+.task-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 74px;
+  padding: 10px 40px 10px 11px;
+  text-align: left;
+  white-space: normal;
+}
+
+.task-name {
+  font-weight: 850;
+}
+
+.side-action-link {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  min-height: 66px;
+  padding: 10px 11px;
+  border-radius: 8px;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.side-action-link.experiments {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.side-action-link.inference {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+  color: #115e59;
+}
+
+.side-action-link .side-action-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.side-action-link.inference .side-action-icon {
+  background: #0f766e;
+}
+
+.side-action-link .side-action-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.side-action-link .side-action-copy strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.side-action-link .side-action-copy small {
+  color: currentColor;
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: .78;
+}
+
+.side-action-link .side-action-arrow {
+  font-size: 18px;
+  font-weight: 900;
+  transition: transform .15s ease;
+}
+
+.side-action-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, .11);
+}
+
+.side-action-link:hover .side-action-arrow {
+  transform: translateX(3px);
+}
+
+.collaboration-create-btn,
+.checkpoint-run-btn {
+  width: 100%;
+}
+
+.checkpoint-head > button {
+  min-width: 78px;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
 @media (max-width: 1100px) {
   .topbar {
     grid-template-columns: 1fr;

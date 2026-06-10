@@ -647,7 +647,7 @@
           <div class="pane-title">预设任务</div>
           <div class="task-list">
             @for (task of presetTasks; track task.id) {
-              <div class="task-item" [class.active]="selectedTaskId===task.id" (click)="selectTask(task.id)">
+              <button type="button" class="task-item" [class.active]="selectedTaskId===task.id" [attr.aria-pressed]="selectedTaskId===task.id" (click)="selectTask(task.id)">
                 <div class="task-name">{{ task.name }}</div>
                 <div class="task-desc">{{ task.description }}</div>
                 <div class="task-tags">
@@ -655,25 +655,36 @@
                   @if (task.dataset) { <span class="task-tag muted-tag">{{ task.dataset }}</span> }
                   @if (task.lossFunction) { <span class="task-tag loss-tag">{{ task.lossFunction }}</span> }
                 </div>
-              </div>
+              </button>
             }
           </div>
         </div>
 
-        <a class="side-action-link" routerLink="/training/experiments">
-          <span>实验对比页面</span>
-          <small>查看历史数据集、网络结构和准确率</small>
+        <a class="side-action-link experiments" routerLink="/training/experiments">
+          <span class="side-action-icon" aria-hidden="true">↗</span>
+          <span class="side-action-copy">
+            <strong>实验对比</strong>
+            <small>查看历史训练、网络结构和指标曲线</small>
+          </span>
+          <span class="side-action-arrow" aria-hidden="true">→</span>
         </a>
 
-        <a class="side-action-link" routerLink="/training/inference">
-          <span>单样本推理页面</span>
-          <small>选择已完成 checkpoint，观察逐层激活</small>
+        <a class="side-action-link inference" routerLink="/training/inference">
+          <span class="side-action-icon" aria-hidden="true">◎</span>
+          <span class="side-action-copy">
+            <strong>单样本推理</strong>
+            <small>选择 Checkpoint，观察逐层激活过程</small>
+          </span>
+          <span class="side-action-arrow" aria-hidden="true">→</span>
         </a>
 
         <div class="pane collaboration-pane">
           <div class="pane-title">多人协作聊天室</div>
           <div class="muted">可基于当前训练任务创建房间，也可输入已有房间号加入观察。</div>
-          <button class="btn-sm btn-primary" (click)="openCurrentTrainingChat()" [disabled]="!currentTrainingJobId">用当前训练新建聊天室</button>
+          <button class="btn-sm btn-primary collaboration-create-btn" (click)="openCurrentTrainingChat()" [disabled]="!currentTrainingJobId" [title]="currentTrainingJobId ? '基于当前训练创建协作房间' : '开始训练后才能创建训练聊天室'">
+            <span class="button-icon" aria-hidden="true">＋</span>
+            新建训练聊天室
+          </button>
           <label>训练房间 ID
             <input [(ngModel)]="collaborationJoinId" placeholder="粘贴 train-... jobId" />
           </label>
@@ -718,14 +729,30 @@
           @if (!trainingDatasetReady) { <span class="warn-inline">需要带标签的数据集</span> }
           @else if (datasetSplitError) { <span class="warn-inline">划分比例无效</span> }
           <div style="flex:1"></div>
-          <button class="btn-primary" (click)="startTraining()" [disabled]="trainingStatus==='running' || trainingDatasetLoading || !trainingDatasetReady || !!datasetSplitError || hasTrainingModelError">▶ 开始</button>
+          <span class="control-divider" aria-hidden="true"></span>
+          <button class="btn-primary train-start-btn" (click)="startTraining()" [disabled]="!canStartTraining" [title]="startTrainingTitle">
+            <span class="button-icon" [class.spinning]="trainingStarting" aria-hidden="true">{{ trainingStarting ? '↻' : '▶' }}</span>
+            {{ trainingStarting ? '正在启动' : '开始训练' }}
+          </button>
           @if (trainingStatus === 'paused') {
-            <button (click)="resumeTraining()">▶ 继续</button>
+            <button class="control-btn resume-btn" (click)="resumeTraining()" title="从当前进度继续训练">
+              <span class="button-icon" aria-hidden="true">▶</span>
+              继续
+            </button>
           } @else {
-            <button (click)="pauseTraining()" [disabled]="trainingStatus!=='running'">⏸ 暂停</button>
+            <button class="control-btn" (click)="pauseTraining()" [disabled]="trainingStatus!=='running'" [title]="trainingStatus === 'running' ? '暂停当前训练' : '训练运行后才可暂停'">
+              <span class="button-icon" aria-hidden="true">Ⅱ</span>
+              暂停
+            </button>
           }
-          <button (click)="stopTraining()">⏹ 停止</button>
-          <button class="btn-ghost" (click)="resetTraining()">↺ 重置</button>
+          <button class="control-btn stop-btn" (click)="stopTraining()" [disabled]="trainingStatus!=='running' && trainingStatus!=='paused'" [title]="trainingStatus === 'running' || trainingStatus === 'paused' ? '停止当前训练任务' : '当前没有可停止的训练'">
+            <span class="button-icon" aria-hidden="true">■</span>
+            停止
+          </button>
+          <button class="btn-ghost reset-btn" (click)="resetTraining()" [disabled]="trainingStarting" title="清空当前训练状态并恢复初始值">
+            <span class="button-icon" aria-hidden="true">↺</span>
+            重置
+          </button>
         </div>
         @if (trainingDatasetDetail; as ds) {
           <div class="dataset-board">
@@ -1464,7 +1491,10 @@
                       }
                     </select>
                   </label>
-                  <button class="btn-primary checkpoint-run-btn" (click)="runSelectedCheckpointTest()" [disabled]="checkpointBusy || !selectedCheckpointId || trainingStatus==='running'">跑测试集</button>
+                  <button class="btn-primary checkpoint-run-btn" (click)="runSelectedCheckpointTest()" [disabled]="checkpointBusy || !selectedCheckpointId || trainingStatus==='running'" [title]="!selectedCheckpointId ? '请先选择 Checkpoint' : trainingStatus==='running' ? '训练运行时不能执行测试' : '使用所选 Checkpoint 运行测试集'">
+                    <span class="button-icon" [class.spinning]="checkpointBusy" aria-hidden="true">{{ checkpointBusy ? '↻' : '▶' }}</span>
+                    {{ checkpointBusy ? '正在测试' : '运行测试集' }}
+                  </button>
                   @if (selectedCheckpoint; as ckpt) {
                     <div class="checkpoint-signature">
                       <span>模型签名</span>

@@ -222,6 +222,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     lossFunction: 'cross_entropy'
   };
   trainingStatus = 'idle';
+  trainingStarting = false;
   trainingEpoch = 0;
   trainingTotalEpochsValue = 20;
   trainingLr = 0.001;
@@ -527,6 +528,27 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return this.localImageSamples.filter(sample => sample.category === dataset).length;
   }
   get trainingDatasetReady(): boolean { return !!this.trainingDatasetDetail?.hasLabels; }
+  get canStartTraining(): boolean {
+    return !this.trainingStarting
+      && this.trainingStatus !== 'running'
+      && this.trainingStatus !== 'paused'
+      && !this.trainingDatasetLoading
+      && this.trainingDatasetReady
+      && !this.datasetSplitError
+      && !this.hasTrainingModelError;
+  }
+  get startTrainingTitle(): string {
+    if (this.trainingStarting) return '正在向后端创建训练任务';
+    if (this.trainingStatus === 'running') return '当前训练正在运行';
+    if (this.trainingStatus === 'paused') return '当前训练已暂停，请点击继续';
+    if (this.trainingDatasetLoading) return '训练数据集仍在加载';
+    if (!this.trainingDatasetDetail) return '请先选择训练数据集';
+    if (!this.trainingDatasetReady) return '当前数据集缺少可用标签';
+    if (this.datasetSplitError) return this.datasetSplitError;
+    const modelError = this.trainingModelIssues.find(issue => issue.level === 'error');
+    if (modelError) return modelError.message;
+    return '开始训练并跳转到当前训练状态';
+  }
   get trainingDatasetMaxLabelCount(): number {
     return Math.max(1, ...(this.trainingDatasetDetail?.labelDistribution ?? []).map(i => i.count));
   }
@@ -2070,6 +2092,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       return;
     }
     this.trainingDatasetError = '';
+    this.trainingStarting = true;
     try {
       await this.trainingSvc.startBackend({
         datasetId: this.trainingDatasetDetail.id,
@@ -2087,6 +2110,8 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       this.scrollToTrainingStatus();
     } catch (err) {
       this.trainingDatasetError = err instanceof Error ? err.message : '启动后端训练失败。';
+    } finally {
+      this.trainingStarting = false;
     }
   }
 
