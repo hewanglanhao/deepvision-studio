@@ -811,10 +811,157 @@ export const MODE_F_TEACHING_TERMS: TeachingTerm[] = [
   },
 ];
 
+export const MODE_D_TEACHING_TERMS: TeachingTerm[] = [
+  {
+    id: 'transformer-token',
+    title: 'Token',
+    aliases: ['token', '词元', '子词'],
+    category: 'Transformer 基础',
+    summary: 'Token 是 Transformer 处理文本时使用的最小离散单位，一句话会先被切分成若干 token，再送入模型。',
+    details: [
+      '一个 token 不一定等于一个完整单词，它也可能只是单词的一部分、一个标点，或者一个常见短语。',
+      '模式 D 中看到的 token 序列，就是模型当前正在计算注意力和下一词预测的输入单位。',
+      '理解 token 很重要，因为 Top-K 预测、注意力矩阵和 QKV 计算都不是直接对“整句”发生，而是围绕这些离散 token 展开。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'next-token-prediction',
+    title: '下一词预测',
+    aliases: ['next token prediction', 'next word prediction', '自回归预测'],
+    category: 'Transformer 基础',
+    summary: '下一词预测指模型根据前文 token 序列，预测下一个最可能出现的 token。',
+    details: [
+      '模式 D 中的 Top-K 面板本质上是在展示“下一个 token 可能是谁”，而不是对整句话做分类。',
+      '模型会先生成一组 logits，再通过 softmax 变成概率分布，最终选出概率最高的候选 token。',
+      '如果前几名概率很接近，通常说明模型对后续词仍有不确定性；如果第一名显著领先，则说明上下文对预测约束更强。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'attention-matrix',
+    title: '注意力矩阵',
+    aliases: ['attention matrix', 'self-attention matrix', '注意力热力图'],
+    category: '注意力机制',
+    summary: '注意力矩阵描述序列中每个 token 在当前层当前头里，对其他 token 分配了多少关注权重。',
+    details: [
+      '矩阵中的一行通常表示“某个查询 token 正在看谁”，一列表示“某个 token 被多少查询 token 关注”。',
+      '某个格子越大，表示对应的 Query 更依赖那个 Key 提供的信息。',
+      '模式 D 的注意力可视化可以帮助解释为什么某个 token 预测会受到前文某些位置的强烈影响。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'attention-head',
+    title: '注意力头',
+    aliases: ['attention head', 'multi-head attention', 'head'],
+    category: '注意力机制',
+    summary: '注意力头是多头注意力中的一个独立子空间，每个头会学习自己偏好的关注模式。',
+    details: [
+      '不同头可能分别关注句法关系、位置邻近、重复词、实体指代或局部搭配。',
+      '模式 D 里切换 head，本质上是在观察“同一层里，不同子空间各自看到了什么关系”。',
+      '因此头与头之间不一定谁更“正确”，而是它们分工不同，共同形成最终输出。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'query-key-value',
+    title: 'QKV',
+    aliases: ['QKV', 'query key value', 'query', 'key', 'value'],
+    category: '注意力机制',
+    summary: 'QKV 是自注意力的核心三元组：Query 决定“我要找什么”，Key 决定“我能提供什么匹配线索”，Value 决定“真正传过去的信息内容”。',
+    details: [
+      '先用 Query 和所有 Key 做匹配，得到一组相关性分数；再把这些分数归一化成注意力权重；最后用这些权重对所有 Value 做加权求和。',
+      '所以注意力强并不等于直接复制某个 token，而是说明它对应的 Value 更大概率被纳入当前输出。',
+      '模式 D 的 QKV 面板就是把这个链条拆开，让你看到“为什么这一格注意力会高”以及“高了以后信息怎样流向输出”。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'scaled-dot-product',
+    title: '缩放点积注意力',
+    aliases: ['scaled dot-product attention', 'dot product attention', '缩放注意力'],
+    category: '注意力机制',
+    summary: '缩放点积注意力先计算 Query 与 Key 的点积相似度，再除以根号下的维度大小，最后经过 softmax 得到权重。',
+    details: [
+      '点积越大，说明当前 Query 和某个 Key 越匹配，对应格子的注意力分数通常也越高。',
+      '除以根号维度是为了避免维度较大时分数过大，导致 softmax 过于尖锐、训练或解释都不稳定。',
+      '模式 D 中从 Q×K 到缩放再到 softmax 的步骤，正是这一计算链条的教学化展开。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'softmax-attention',
+    title: '注意力 Softmax',
+    aliases: ['attention softmax', 'attention weights', '注意力权重'],
+    category: '注意力机制',
+    summary: '注意力 softmax 会把原始相关性分数转换成和为 1 的权重分布，表示当前 Query 如何在各个 Key 之间分配注意力。',
+    details: [
+      'softmax 后的结果更容易解释，因为每个数都可以看成“当前关注预算里分给某位置的比例”。',
+      '如果某一行特别尖锐，说明当前 Query 主要盯着少数几个 token；如果比较平缓，则说明它在综合更广的上下文。',
+      '模式 D 的注意力矩阵和 QKV 面板都可以把 softmax 之后的权重视作“信息流量分配图”。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'context-vector',
+    title: '上下文向量',
+    aliases: ['context vector', 'attention output', '注意力输出'],
+    category: '注意力机制',
+    summary: '上下文向量是注意力权重对所有 Value 加权求和后的结果，它代表当前 token 在这一头里汇总得到的信息。',
+    details: [
+      '这个向量不是单个 Value 的拷贝，而是多个 Value 按权重混合后的结果。',
+      '它反映了“当前 Query 在这一头里最终带走了什么信息”，会继续流向后续线性层、残差连接和下一层。',
+      '模式 D 里 Value 汇入输出的可视化，就是在帮助理解上下文向量是怎样被组装出来的。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'top-k-token',
+    title: 'Top-K 候选词',
+    aliases: ['top-k token', '候选词', '下一词候选'],
+    category: '输出解读',
+    summary: 'Top-K 候选词展示当前下一词预测中概率最高的若干 token，用来快速理解模型当前的语言倾向。',
+    details: [
+      '第一名是当前最可能输出的 token，但第二名、第三名也很有教学价值，因为它们能反映模型的犹豫方向。',
+      '如果多个候选词语义接近，通常说明模型已经抓住了大致语境；如果候选词差异很大，则说明上下文约束较弱。',
+      '模式 D 中把 Top-K 和注意力矩阵对照起来看，往往能更好解释“为什么最后会是这个词”。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'residual-connection',
+    title: '残差连接',
+    aliases: ['residual connection', 'skip connection', '残差'],
+    category: 'Transformer 结构',
+    summary: '残差连接会把子层的输入直接加回输出，帮助信息保留和深层训练稳定。',
+    details: [
+      '在 Transformer 中，注意力输出和前馈网络输出通常都不是孤立使用，而是要和原输入通过残差相加。',
+      '这样做可以避免信息在多层传递中被完全覆盖，也能缓解深层网络优化困难的问题。',
+      '即使模式 D 当前重点不在完整残差展开，理解它也有助于知道“这一层的输出并不是凭空生成，而是在原表示上逐步修正”。'
+    ],
+    mode: 'D'
+  },
+  {
+    id: 'layernorm',
+    title: 'LayerNorm',
+    aliases: ['layer norm', 'layer normalization', '层归一化'],
+    category: 'Transformer 结构',
+    summary: 'LayerNorm 会在特征维度上对表示做归一化，让不同 token 的数值分布更稳定。',
+    details: [
+      '它不会改变 token 序列长度，但会调整每个位置向量内部的尺度和偏移。',
+      '在 Transformer 中，LayerNorm 常与残差连接配合使用，帮助训练更稳定、数值更可控。',
+      '从教学角度看，它可以理解为“在进入下一步计算前，先把当前表示重新整理到更容易处理的范围内”。'
+    ],
+    mode: 'D'
+  }
+];
+
 export const TEACHING_TERMS = [
   ...MODE_A_TEACHING_TERMS,
   ...MODE_B_TEACHING_TERMS,
   ...MODE_C_TEACHING_TERMS,
+  ...MODE_D_TEACHING_TERMS,
   ...MODE_E_TEACHING_TERMS,
   ...MODE_F_TEACHING_TERMS
 ];
