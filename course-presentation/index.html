@@ -21,7 +21,7 @@
         </div>
         <div class="card">
           <div class="label">CORE LINE</div>
-          <p>围绕成员 A 的完整链路展开：A 模式前向传播实验室、真实 forward、3D 网络展示、登录记录、LLM 助手。</p>
+          <p>围绕成员 A 的完整链路展开：A 模式前向传播实验室、帮助文档、大模型助手、AI 博物馆和 3D 化显示。</p>
         </div>
       </div>
       <aside class="notes">开场强调这不是普通展示页，而是把神经网络结构、真实计算和教学解释串起来的 Web 工程项目。</aside>
@@ -157,432 +157,140 @@
       <aside class="notes">这里强调模块边界，避免把后续成员内容展开过多。</aside>
     </section>
 
-    <section class="slide" data-title="成员A全景">
-      <h2 class="title">成员 A：负责的完整闭环</h2>
-      <div class="stage3-layout split-45">
-        <div class="stage3-panel">
-          <div class="label">核心交付</div>
-          <ul class="dense-list">
-            <li>A 模式前向传播实验室：网络编辑、样本、计算、检查器。</li>
-            <li>Python forward 引擎：图执行、shape 校验、层 operator。</li>
-            <li>Spring forward 代理与历史记录：统一 API、JWT 绑定、H2 保存。</li>
-            <li>3D 网络展示：把 A 模式结果转成 Three.js 网络场景。</li>
-            <li>LLM 助手与教学浮标：把实验上下文转成可解释问答。</li>
-          </ul>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">工程目标</div>
-          <div class="flow-vertical">
-            <span>用户搭网络</span>
-            <span>输入图像变 tensor</span>
-            <span>真实 forward 执行</span>
-            <span>逐层解释和可视化</span>
-            <span>快照保存 / 3D / LLM 复用</span>
-          </div>
-        </div>
-      </div>
-      <div class="takeaway"><b>完成度</b><span>成员 A 的交付不是单点页面，而是从前端状态、后端代理、Python 计算到结果复用的端到端链路。</span></div>
-      <aside class="notes">成员 A 不是只写了一个页面，而是完成了从 UI 到计算到持久化的闭环。</aside>
-    </section>
-
-    <section class="slide" data-title="A模式界面截图">
-      <h2 class="title">A 模式工作台：高密度但可控的实验界面</h2>
+    <section class="slide" data-title="成员A模块-界面">
+      <h2 class="title">成员 A 模块：Mode A 前向传播实验室</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/screenshots/mode-a.png" alt="A 模式页面截图">
-          <figcaption>真实截图：/mode-a 工作台</figcaption>
+          <figcaption>Mode A 工作台：围绕网络结构、样本输入、逐层结果和实验记录组织。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">界面分区</div>
-          <div class="stage3-metric"><b>左侧</b><span>样本输入、预处理、模板选择</span></div>
-          <div class="stage3-metric"><b>中间</b><span>网络层编辑、连接关系、运行入口</span></div>
-          <div class="stage3-metric"><b>右侧</b><span>当前层 shape、公式、特征图、Top-K</span></div>
-          <div class="stage3-metric"><b>浮层</b><span>历史记录、卷积核对比、图片查看器、LLM 助手</span></div>
-        </div>
-      </div>
-      <aside class="notes">强调三栏工作台如何承载输入、网络和结果检查。</aside>
-    </section>
-
-    <section class="slide" data-title="A模式数据模型">
-      <h2 class="title">A 模式数据模型：页面显示只是结构化数据的投影</h2>
-      <div class="stage3-layout">
-        <div class="stage3-panel">
-          <div class="label">NETWORK GRAPH</div>
-          <pre class="code-block"><code>NetworkLayer[]  // input, conv2d, pool2d, flatten, dense, output
-Connection[]    // { from, to }</code></pre>
-          <p>用户拖拽、增删和修改参数，本质都是更新 layers 和 connections。</p>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">TENSOR CONTRACT</div>
-          <pre class="code-block"><code>ForwardTensor {
-  kind: "tensor3d",
-  shape: [H, W, C],
-  values: number[]
-}</code></pre>
-          <p>前后端统一用 shape + values 表示真实输入和每层输出。</p>
-        </div>
-      </div>
-      <div class="stage3-panel compact">
-        <div class="label">FORWARD RESULT</div>
-        <p>ForwardPassResult 同时承载 layerResults、shapePath、validationIssues、finalTopK 和 visualization，右侧检查器、3D 展示和 LLM 上下文都复用它。</p>
-      </div>
-      <div class="takeaway"><b>数据建模</b><span>页面交互围绕 layers、connections 和 tensor contract 展开，避免让显示组件直接承担计算逻辑。</span></div>
-      <aside class="notes">这一页说明为什么代码可维护：UI 不是散乱状态，而是围绕共享模型组织。</aside>
-    </section>
-
-    <section class="slide" data-title="A模式主链路">
-      <h2 class="title">A 模式主链路：从图像输入到逐层结果</h2>
-      <div class="pipeline">
-        <div class="pipe-node">选择样本 / 上传图片</div>
-        <div class="pipe-node">ImageData → Tensor</div>
-        <div class="pipe-node">layers + connections</div>
-        <div class="pipe-node">POST /api/forward</div>
-        <div class="pipe-node">Python execute_forward_graph()</div>
-        <div class="pipe-node">ForwardPassResult</div>
-        <div class="pipe-node">检查器 / 3D / LLM / 保存</div>
-      </div>
-      <div class="stage3-layout">
-        <div class="card"><div class="label">前端职责</div><p>准备输入、维护结构、控制异步请求、渲染结果。</p></div>
-        <div class="card"><div class="label">Spring 职责</div><p>统一 API、代理 Python、处理错误、保存记录。</p></div>
-        <div class="card"><div class="label">Python 职责</div><p>执行真实张量计算，返回每层可解释结果。</p></div>
-      </div>
-      <div class="takeaway"><b>主链路</b><span>同一份 ForwardPassResult 同时服务页面检查器、3D 网络、历史快照和 LLM 上下文，降低重复计算和状态不一致风险。</span></div>
-      <aside class="notes">这是全场最重要的数据流图，后面的所有工程亮点都围绕它展开。</aside>
-    </section>
-
-    <section class="slide" data-title="输入预处理">
-      <h2 class="title">输入预处理：把浏览器图片变成模型 tensor</h2>
-      <div class="stage3-layout split-55">
-        <div class="stage3-panel">
-          <div class="label">处理流程</div>
-          <ol class="dense-list ordered">
-            <li>内置样本或 FileReader 上传图片。</li>
-            <li>浏览器解码为 ImageData，并限制最大边长。</li>
-            <li>按 input 层配置 resize、颜色模式、invert、normalize。</li>
-            <li>生成 prepared.tensor，作为 Python forward 的真实输入。</li>
-          </ol>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">关键函数</div>
-          <pre class="code-block small"><code>createForwardInputAssetFromImageData()
-imageDataToRgbTensor()
-resizeTensorNearest()
-normalizeValues()
-rebuildInputAsset()</code></pre>
-          <p>前端负责“准备和标准化”，不在 DOM 中进行数值计算。</p>
-        </div>
-      </div>
-      <div class="takeaway"><b>输入契约</b><span>浏览器端只负责把图片标准化为 tensor，真正的层计算仍交给 Python forward 服务。</span></div>
-      <aside class="notes">讲清楚输入 tensor 是从哪里来的，避免老师误以为只是展示图片。</aside>
-    </section>
-
-    <section class="slide" data-title="Python Forward">
-      <h2 class="title">Python Forward 引擎：真实执行每一层</h2>
-      <div class="stage3-layout split-55">
-        <div class="stage3-panel">
-          <div class="label">执行步骤</div>
-          <pre class="code-block"><code>execute_forward_graph()
-  -> build_execution_graph()
-  -> topological_sort()
-  -> validate_layer_params()
-  -> execute_operator()
-  -> compute_tensor_stats()
-  -> build_layer_visualization()</code></pre>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">支持层类型</div>
-          <div class="tag-grid">
-            <span>Input</span><span>Conv2D</span><span>Pool2D</span><span>Flatten</span>
-            <span>Dense</span><span>Activation</span><span>Dropout</span><span>Output</span>
-          </div>
-          <p class="callout">卷积层使用 NumPy 的滑动窗口和张量乘法思路，池化负责降采样，全连接层完成向量空间映射，输出层生成类别概率。</p>
-        </div>
-      </div>
-      <div class="takeaway"><b>计算边界</b><span>Python 引擎按图拓扑执行每层 operator，前端展示的 shape、统计值和错误提示都来自真实计算结果。</span></div>
-      <aside class="notes">这里强调“真实计算”而不是模拟动画。可以提到 shape 校验和 validationIssues。</aside>
-    </section>
-
-    <section class="slide" data-title="卷积层实现">
-      <h2 class="title">Conv2D 实现：局部感受野、参数校验与特征图输出</h2>
-      <div class="stage3-layout">
-        <div class="stage3-panel">
-          <div class="label">数学背景</div>
-          <p>卷积层用局部感受野扫描图像。每个 kernel 学习一种局部模式，例如边缘、纹理或颜色组合；输出通道数代表要提取多少组特征。</p>
-          <pre class="code-block"><code>out_h = floor((H + 2P - D*(K-1) - 1) / S) + 1</code></pre>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">项目实现</div>
+          <div class="label">模块定位</div>
           <ul class="dense-list">
-            <li>前端允许修改 kernel、stride、padding、dilation、activation。</li>
-            <li>Python 校验参数组合是否合法，避免输出尺寸为负。</li>
-            <li>右侧检查器展示公式、shape、特征图和统计值。</li>
-            <li>卷积核对比功能可临时替换 kernel，观察同一输入下的输出差异。</li>
+            <li>Mode A 面向前向传播教学，重点不是只给出分类结果，而是让用户看到输入如何经过每一层变成最终输出。</li>
+            <li>页面主线是：选择样本或上传图片 → 搭建网络结构 → 执行 forward → 查看 shape、特征图、Top-K 和解释信息。</li>
+            <li>前端工作台、Spring 代理和 Python NumPy 计算服务共同形成端到端闭环，支持真实计算和结果回溯。</li>
           </ul>
+          <div class="label" style="margin-top:20px">功能能力</div>
+          <div class="stage3-metric"><b>实验工作台</b><span>支持网络层编辑、样本输入、逐层检查器和卷积核对比。</span></div>
+          <div class="stage3-metric"><b>真实 forward</b><span>通过后端代理调用 Python 计算服务，返回可解释的逐层计算结果。</span></div>
+          <div class="stage3-metric"><b>历史记录</b><span>登录后可保存完整实验快照，后续恢复网络、输入和结果状态。</span></div>
+          <div class="stage3-metric"><b>3D 显示</b><span>可把当前 A 模式网络和结果发送到 3D 网络视图中展示。</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>层级解释</b><span>Conv2D 页面把深度学习中的局部感受野、输出尺寸公式和特征图可视化统一到同一层检查器中。</span></div>
-      <aside class="notes">用 Conv2D 连接深度学习概念和项目实现：参数、shape、特征图。</aside>
+      <aside class="notes">这一页介绍用户看到的界面和 Mode A 的模块价值。</aside>
     </section>
 
-    <section class="slide" data-title="异步请求控制">
-      <h2 class="title">工程亮点 1：forward 请求竞争与防抖</h2>
+    <section class="slide" data-title="成员A模块-链路">
+      <h2 class="title">成员 A 模块：Mode A 数据链路与交付价值</h2>
       <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">问题</div>
-          <p>用户在调整网络参数时可能连续触发 forward。如果旧请求比新请求晚返回，就会覆盖新的结果；如果每个输入都立即请求，又会造成后端压力。</p>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">处理策略</div>
-          <table class="stage3-table compact-table">
-            <tbody>
-              <tr><td>forwardRequestSeq</td><td>丢弃迟到的旧响应</td></tr>
-              <tr><td>forwardInFlight</td><td>标记当前计算正在进行</td></tr>
-              <tr><td>forwardRerunRequested</td><td>计算中又修改参数，结束后补跑一次</td></tr>
-              <tr><td>forwardDebounceTimer</td><td>降低连续输入触发频率</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="takeaway"><b>交互稳定性</b><span>连续改参数时，序号、in-flight 标记和补跑机制共同保证最终展示的是最新实验状态。</span></div>
-      <aside class="notes">这是 Web 工程能力点：不是按钮发请求这么简单，而是处理真实交互里的异步竞争。</aside>
-    </section>
-
-    <section class="slide" data-title="特征图性能优化">
-      <h2 class="title">工程亮点 2：特征图渲染从 DOM 网格改为 Canvas 图片</h2>
-      <div class="stage3-layout">
-        <div class="stage3-panel">
-          <div class="label">早期问题</div>
-          <p>如果把 tensor 的每个像素渲染成 HTML 小格子，稍大的特征图就会产生大量 DOM 节点，布局和重绘成本很高。</p>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">现在方案</div>
-          <pre class="code-block"><code>tensor values
-  -> Canvas ImageData
-  -> data URL
-  -> &lt;img&gt; preview</code></pre>
-          <p>多通道 tensor 默认只展示部分通道，完整通道放入弹窗，兼顾解释性和性能。</p>
-        </div>
-      </div>
-      <div class="takeaway"><b>渲染优化</b><span>把数值矩阵转为 Canvas/ImageData 后再展示，减少 DOM 节点数量，支撑多通道特征图的快速预览。</span></div>
-      <aside class="notes">强调从 DOM 网格到 Canvas 图片的性能收益。</aside>
-    </section>
-
-    <section class="slide" data-title="Spring Forward代理">
-      <h2 class="title">Spring Forward 代理：统一入口和部署边界</h2>
-      <div class="stage3-layout split-55">
-        <div class="stage3-panel">
-          <div class="label">为什么需要代理</div>
+          <div class="label">数据流</div>
           <ul class="dense-list">
-            <li>前端只访问 Spring，避免直接暴露 Python 服务。</li>
-            <li>本地和 Docker 环境中 Python 地址不同，用配置项切换。</li>
-            <li>统一处理 Python 服务不可用、超时、HTTP 错误。</li>
+            <li>用户在 Mode A 中完成样本选择、网络搭建和参数调整。</li>
+            <li>前端将图片和网络结构整理成统一请求，由 Spring 转发到 Python forward 服务。</li>
+            <li>Python 返回逐层 shape、特征图、Top-K 和错误提示，页面再用于检查器展示、历史保存和结果复用。</li>
+            <li>登录用户可以保存完整实验快照，后续恢复网络、输入和结果状态。</li>
           </ul>
         </div>
         <div class="stage3-panel">
-          <div class="label">接口</div>
-          <table class="stage3-table compact-table">
-            <tbody>
-              <tr><td>GET /api/forward/health</td><td>检查 Python 服务</td></tr>
-              <tr><td>POST /api/forward</td><td>转发 forward 请求</td></tr>
-            </tbody>
-          </table>
-          <pre class="code-block small"><code>deepvision.forward.base-url
-DEEPVISION_FORWARD_BASE_URL=http://python-forward:5000</code></pre>
+          <div class="label">页面能力</div>
+          <div class="stage3-metric"><b>层检查器</b><span>展示当前层输入输出 shape、公式说明、统计值和特征图。</span></div>
+          <div class="stage3-metric"><b>输出结果</b><span>在同一页面查看预测排名、层级形状变化和异常提示。</span></div>
+          <div class="stage3-metric"><b>实验快照</b><span>保存网络结构、连接关系、计算结果和输入图片信息。</span></div>
+          <div class="stage3-metric"><b>结果复用</b><span>同一份实验结果可继续用于检查器、历史记录、助手和 3D 页面。</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>服务边界</b><span>前端不直接访问 Python，Spring 作为统一网关处理配置、超时和异常，部署时也更容易迁移到容器环境。</span></div>
-      <aside class="notes">这里联系 Docker 部署，说明容器内服务名和本地地址的差异。</aside>
+      <div class="takeaway"><b>Mode A 价值</b><span>成员 A 在 Mode A 中完成的是可操作、可计算、可解释、可保存的前向传播实验闭环。</span></div>
+      <aside class="notes">Mode A 第二页聚焦数据链路和页面功能。</aside>
     </section>
 
-    <section class="slide" data-title="历史记录">
-      <h2 class="title">历史记录：保存的是实验快照，不是零散字段</h2>
-      <div class="stage3-layout">
-        <div class="stage3-panel">
-          <div class="label">Snapshot 内容</div>
-          <pre class="code-block"><code>{
-  selectedTemplateId,
-  selectedSampleId,
-  selectedLayerId,
-  layers,
-  connections,
-  forwardResult,
-  uploadedImageUrl
-}</code></pre>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">持久化设计</div>
-          <ul class="dense-list">
-            <li>JWT 识别当前用户，记录按用户隔离。</li>
-            <li>previewImageDataUrl 落盘，通过 /uploads/** 静态映射访问。</li>
-            <li>完整实验状态序列化为 snapshotJson，回溯时恢复页面状态。</li>
-          </ul>
-        </div>
-      </div>
-      <div class="takeaway"><b>持久化策略</b><span>历史记录以完整 snapshot 为核心，列表字段只做索引和展示；回溯时恢复的是实验现场。</span></div>
-      <aside class="notes">强调快照思路，说明它比存网络名、参数表更灵活。</aside>
-    </section>
-
-    <section class="slide" data-title="登录与安全">
-      <h2 class="title">登录与安全：公开体验和个人记录分离</h2>
-      <div class="stage3-layout split-55">
-        <div class="stage3-panel">
-          <div class="label">Auth Flow</div>
-          <div class="flow-vertical">
-            <span>register/login</span>
-            <span>BCrypt password hash</span>
-            <span>JwtService.issue()</span>
-            <span>ApiClient 自动携带 Bearer token</span>
-            <span>JwtAuthFilter 写入 SecurityContext</span>
-          </div>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">业务边界</div>
-          <p>A 模式 forward 可以公开体验；保存、读取、删除历史记录必须绑定当前登录用户，避免不同用户实验记录互相可见。</p>
-          <p class="callout">这体现了课程项目中“可演示”和“有基本安全边界”的平衡。</p>
-        </div>
-      </div>
-      <div class="takeaway"><b>安全边界</b><span>forward 体验保持公开，个人实验记录通过 JWT 和用户查询条件隔离，兼顾演示便利与数据归属。</span></div>
-      <aside class="notes">讲清楚 BCrypt 和 JWT 即可，不需要深入密码学。</aside>
-    </section>
-
-    <section class="slide" data-title="3D网络展示">
-      <h2 class="title">3D 网络展示：消费 A 模式快照，不重复计算</h2>
+    <section class="slide" data-title="成员A-3D显示">
+      <h2 class="title">成员 A 扩展：3D 化显示</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/screenshots/network-3d.png" alt="3D 网络展示截图">
-          <figcaption>真实截图：/network-3d 3D 网络视图</figcaption>
+          <figcaption>3D 网络展示：消费 A 模式快照，展示结构和结果摘要。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">数据传递</div>
-          <pre class="code-block small"><code>Network3dPayload
-├─ layers / connections
-├─ shapeHints / layerShapes
-├─ layerSnapshots
-├─ shapePath
-├─ finalTopK
-└─ inputImageUrl</code></pre>
-          <p>通过 sessionStorage 传递大对象，避免把图片和层快照塞进 URL。</p>
+          <div class="label">页面作用</div>
+          <ul class="dense-list">
+            <li>把 Mode A 中的网络层、连接关系、shape 路径和输出摘要转成可旋转观察的空间网络。</li>
+            <li>3D 页面不重新计算 forward，而是复用 A 模式已经生成的结果快照。</li>
+            <li>用户可以从二维实验工作台切换到三维视角，观察网络结构和层间关系。</li>
+          </ul>
+          <div class="label" style="margin-top:20px">结构呈现</div>
+          <p>页面以层节点、连接线、shape 标记和结果摘要组织 3D 网络，强化“网络如何逐层流动”的直观感受。</p>
         </div>
       </div>
-      <div class="takeaway"><b>可视化复用</b><span>3D 页面读取 A 模式生成的 payload，只负责空间化表达，不重新运行 forward，保证职责清晰。</span></div>
-      <aside class="notes">如果截图为空，讲时可以用 A 模式里打开 3D 的演示替代。</aside>
+      <aside class="notes">3D 化显示页聚焦截图、网络结构和结果复用。</aside>
     </section>
 
-    <section class="slide" data-title="LLM助手">
-      <h2 class="title">LLM 助手：不是通用聊天，而是实验上下文问答</h2>
-      <div class="stage3-layout">
+    <section class="slide" data-title="成员A-帮助文档">
+      <h2 class="title">成员 A 扩展：帮助文档与教学入口</h2>
+      <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">前端上下文</div>
+          <div class="label">功能定位</div>
           <ul class="dense-list">
-            <li>当前网络层数、参数量、选中层参数。</li>
-            <li>shapePath、当前层输入输出摘要、Top-K。</li>
-            <li>最多 4 张输入/输出/特征图图片。</li>
+            <li>帮助文档集中展示平台术语、实验概念和各模式会遇到的关键知识点。</li>
+            <li>右下角教学浮标可以切换术语高亮，点击高亮术语跳转到对应文档条目。</li>
+            <li>Mode A 中的卷积、池化、全连接、softmax、前向传播等概念都能与文档内容关联。</li>
           </ul>
         </div>
         <div class="stage3-panel">
-          <div class="label">后端代理</div>
-          <pre class="code-block"><code>POST /api/llm/chat
-POST /api/llm/chat/stream
-
-SSE events: delta / done / error</code></pre>
-          <p>API Key 只在 Spring 后端环境变量中配置，不暴露给浏览器。</p>
+          <div class="label">界面组成</div>
+          <div class="stage3-metric"><b>文档目录</b><span>按概念分类组织，方便快速定位术语。</span></div>
+          <div class="stage3-metric"><b>术语条目</b><span>每个条目包含定义、解释和相关实验场景。</span></div>
+          <div class="stage3-metric"><b>浮标入口</b><span>在实验页面中直接打开，不需要返回首页查找。</span></div>
+          <div class="stage3-metric"><b>术语高亮</b><span>把页面中的关键概念变成可点击的学习入口。</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>AI 接入方式</b><span>LLM 被设计为实验辅助层：前端提供上下文，后端保管 API Key 并通过 SSE 返回流式回答。</span></div>
-      <aside class="notes">这里可以现场问“解释当前卷积层为什么输出这个 shape”。</aside>
+      <div class="takeaway"><b>帮助文档</b><span>帮助文档和教学浮标把术语解释接入实验界面，用户不需要离开平台就能查看概念说明。</span></div>
+      <aside class="notes">帮助文档页聚焦文档、教学浮标和术语跳转。</aside>
     </section>
 
-    <section class="slide" data-title="教学浮标">
-      <h2 class="title">教学浮标：把术语解释接到实验界面里</h2>
-      <div class="stage3-layout split-45">
+    <section class="slide" data-title="成员A-大模型助手">
+      <h2 class="title">成员 A 扩展：大模型助手</h2>
+      <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">组件设计</div>
-          <table class="stage3-table compact-table">
-            <tbody>
-              <tr><td>TeachingTermDirective</td><td>标记术语并响应点击/键盘</td></tr>
-              <tr><td>TeachingSearchService</td><td>Signal 管理高亮开关</td></tr>
-              <tr><td>TeachingSearchFab</td><td>右下角浮标入口</td></tr>
-              <tr><td>teaching-glossary</td><td>维护术语解释数据</td></tr>
-            </tbody>
-          </table>
+          <div class="label">功能定位</div>
+          <ul class="dense-list">
+            <li>大模型助手以右下角浮窗形式存在，用户可以在实验过程中随时提问。</li>
+            <li>助手会结合当前网络结构、选中层、shape 变化、预测结果和可视化内容生成解释。</li>
+            <li>回答以逐步输出的方式呈现，交互体验接近真实对话而不是一次性静态说明。</li>
+          </ul>
         </div>
         <div class="stage3-panel">
-          <div class="label">教学价值</div>
-          <p>用户在 A 模式里看到“卷积、池化、softmax、反向传播”等词，不需要离开实验状态，就能打开对应教学说明。</p>
-          <p class="callout">主业务状态不被打断，学习辅助作为轻量覆盖层存在。</p>
+          <div class="label">界面组成</div>
+          <div class="stage3-metric"><b>AI 浮窗</b><span>包含消息列表、输入框、上下文开关和快捷问题。</span></div>
+          <div class="stage3-metric"><b>实验上下文</b><span>把当前页面状态带入回答，使解释贴近正在观察的结果。</span></div>
+          <div class="stage3-metric"><b>快捷提问</b><span>围绕层作用、shape 变化和结果解释提供常用问题。</span></div>
+          <div class="stage3-metric"><b>安全接入</b><span>模型访问由后端统一处理，前端只呈现问答体验。</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>学习辅助</b><span>术语解释作为轻量覆盖层接入，不改变 A 模式主状态，也不打断用户正在进行的实验。</span></div>
-      <aside class="notes">这是课程项目的教学属性，不是纯工程工具。</aside>
+      <div class="takeaway"><b>大模型助手</b><span>助手把实验过程中的数据和可视化结果转成可追问的解释，增强平台的互动教学能力。</span></div>
+      <aside class="notes">大模型助手页聚焦浮窗、实验上下文和逐步输出。</aside>
     </section>
 
-    <section class="slide" data-title="AI博物馆">
-      <h2 class="title">AI 博物馆：展示型 3D 页面与多人 presence</h2>
+    <section class="slide" data-title="成员A-AI博物馆">
+      <h2 class="title">成员 A 扩展：AI 博物馆</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/screenshots/ai-museum.png" alt="AI 博物馆截图">
-          <figcaption>真实截图：/ai-museum 第一人称展馆</figcaption>
+          <figcaption>AI 博物馆：第一人称 3D 展馆与在线状态展示。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">实现思路</div>
+          <div class="label">功能定位</div>
           <ul class="dense-list">
-            <li>Three.js + PointerLockControls 创建第一人称长廊。</li>
-            <li>MuseumExhibit[] 结构化定义展品、年份、说明、位置。</li>
-            <li>Spring WebSocket 维护 room 和 participant。</li>
-            <li>join / pose / leave 广播远端 avatar 状态。</li>
+            <li>AI 博物馆是项目的沉浸式展示入口，用第一人称长廊介绍 AI 发展史内容。</li>
+            <li>页面使用 3D 场景组织展品，让课程项目不只停留在表单和图表界面。</li>
+            <li>多人在线状态让不同用户可以同时进入展馆，看到彼此的参观位置。</li>
           </ul>
+          <div class="label" style="margin-top:20px">页面组成</div>
+          <p>展馆包含里程碑展品、第一人称移动控制、展品详情面板和远端用户位置同步。</p>
         </div>
       </div>
-      <div class="takeaway"><b>展示扩展</b><span>AI 博物馆展示项目的 3D 场景组织和实时 WebSocket 状态同步能力，可作为沉浸式展示入口。</span></div>
-      <aside class="notes">这是成员 A 的加分展示项。不要抢 A 模式主线太多时间。</aside>
-    </section>
-
-    <section class="slide" data-title="部署方案">
-      <h2 class="title">部署方案：三服务容器化</h2>
-      <div class="stage3-layout">
-        <div class="stage3-panel">
-          <div class="label">docker-compose</div>
-          <pre class="code-block"><code>frontend        Angular build + Nginx
-spring-backend  Auth / Records / LLM / Forward Proxy
-python-forward  Flask + NumPy forward</code></pre>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">关键配置</div>
-          <table class="stage3-table compact-table">
-            <tbody>
-              <tr><td>DEEPVISION_FORWARD_BASE_URL</td><td>Spring 访问 Python</td></tr>
-              <tr><td>DEEPVISION_JWT_SECRET</td><td>JWT 签名密钥</td></tr>
-              <tr><td>DEEPVISION_DB_URL</td><td>H2 文件数据库</td></tr>
-              <tr><td>ARK_API_KEY</td><td>LLM 后端代理密钥</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="takeaway"><b>部署闭环</b><span>三服务容器化后，前端、业务 API 和计算服务可以独立演进，环境变量负责连接不同运行环境。</span></div>
-      <aside class="notes">高级 Web 技术课程可以强调部署链路：Nginx 代理、容器内服务名、数据卷。</aside>
-    </section>
-
-    <section class="slide" data-title="演示路径">
-      <h2 class="title">端到端演示链路</h2>
-      <div class="stage3-layout split-45">
-        <div class="stage3-panel">
-          <div class="label">RUNBOOK</div>
-          <ol class="dense-list ordered">
-            <li>打开首页，进入 A 模式。</li>
-            <li>选择 CNN 模板和内置样本。</li>
-            <li>修改卷积核或 stride，观察 shape 和特征图变化。</li>
-            <li>打开 3D 网络展示。</li>
-            <li>登录后保存实验记录，再回溯。</li>
-            <li>打开 LLM 助手，询问当前层的作用。</li>
-          </ol>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">重点说法</div>
-          <p>每一步都对应一段数据流：layers/connections、prepared tensor、POST /api/forward、ForwardPassResult、snapshot。</p>
-        </div>
-      </div>
-      <div class="takeaway"><b>演示策略</b><span>演示按“进入 A 模式 → 修改网络 → forward → 3D → 保存 → LLM 解释”推进，完整覆盖业务和工程实现。</span></div>
-      <aside class="notes">这页可以作为上台前的演示检查清单。</aside>
+      <aside class="notes">AI 博物馆页聚焦第一人称展馆、展品和多人在线状态。</aside>
     </section>
 
     <section class="slide" data-title="成员B模块">
@@ -735,7 +443,7 @@ python-forward  Flask + NumPy forward</code></pre>
         <p class="big-statement">用结构化网络数据驱动真实 forward 计算，再把同一份结果复用到检查器、3D 展示、历史记录和 LLM 解释中。</p>
       </div>
       <div class="takeaway"><b>最终结论</b><span>项目从“可看”提升到“可操作、可计算、可解释、可保存”，体现了 Web 工程和深度学习教学场景的结合。</span></div>
-      <aside class="notes">结束时回到主线，不要散成很多功能点。</aside>
+      <aside class="notes">结束时回到主线：项目从页面展示扩展为完整教学平台。</aside>
     </section>
   </main>
 
