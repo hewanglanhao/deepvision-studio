@@ -596,26 +596,126 @@ python-forward  Flask + NumPy forward</code></pre>
       <aside class="notes">成员 B 模块保留结构页，后续可替换为真实截图和训练链路。</aside>
     </section>
 
-    <section class="slide" data-title="成员C模块">
-      <h2 class="title">成员 C 模块：CNN 可解释性</h2>
-      <div class="placeholder-grid">
-        <div class="placeholder">CNN Explainer 交互界面</div>
-        <div class="placeholder">资源迁移与 Angular 集成</div>
-        <div class="placeholder">解释器封装 / 组件桥接</div>
-        <div class="placeholder">静态资源 / 交互解释 / 性能</div>
+    <section class="slide" data-title="成员C模块-界面">
+      <h2 class="title">成员 C 模块：Mode C 界面与教学目标</h2>
+      <div class="stage3-layout split-60">
+        <figure class="screenshot-frame">
+          <img src="assets/screenshots/mode-c-overview.png" alt="Mode C 总览界面截图">
+          <figcaption>Mode C 总览界面：展示输入样例、CNN 拓扑结构、多层特征图和统一平台入口。</figcaption>
+        </figure>
+        <div class="stage3-panel">
+          <div class="label">模块定位</div>
+          <ul class="dense-list">
+            <li>Mode C 面向 CNN 教学解释，不只展示预测类别，而是重点解释卷积网络内部的特征提取过程。</li>
+            <li>页面主线是：输入样例 → 网络拓扑 → 层级激活 → 局部卷积过程 → 输出层与 Grad-CAM 解释。</li>
+            <li>最终目标不是“复刻外部网站”，而是把解释器纳入平台统一架构，成为可维护、可扩展的 Angular 模块。</li>
+          </ul>
+          <div class="label" style="margin-top:20px">当前可演示能力</div>
+          <div class="stage3-metric"><b>Overview</b><span>重建了层级拓扑、输入样例、Top-5 概率和输出层解释入口。</span></div>
+          <div class="stage3-metric"><b>Intermediate</b><span>卷积层支持 patch、kernel、product、按通道累加的逐步教学演示。</span></div>
+          <div class="stage3-metric"><b>非线性层</b><span>ReLU 和 Pool 层支持随鼠标聚焦到对应位置，解释逐格映射关系。</span></div>
+          <div class="stage3-metric"><b>扩展能力</b><span>已接入 AI 助手、教学问号入口，并完成 Grad-CAM 可演示能力接入。</span></div>
+        </div>
       </div>
-      <aside class="notes">成员 C 模块保留结构页，后续可替换为解释器截图和集成细节。</aside>
+      <aside class="notes">这一页先讲用户看到了什么，再讲它为什么不是普通的分类页面，而是一个教学解释页面。截图如果能包含 overview 和一部分细节区，会更好讲。</aside>
     </section>
 
-    <section class="slide" data-title="成员D模块">
-      <h2 class="title">成员 D 模块：Transformer / 反向传播 / 协作展示</h2>
-      <div class="placeholder-grid">
-        <div class="placeholder">模块主界面</div>
-        <div class="placeholder">核心公式 / 可视化映射</div>
-        <div class="placeholder">状态管理 / 交互逻辑</div>
-        <div class="placeholder">实时协作 / 复杂模型解释</div>
+    <section class="slide" data-title="成员C模块-实现">
+      <h2 class="title">成员 C 模块：重构路径与工程难点</h2>
+      <div class="stage3-layout split-55">
+        <div class="stage3-panel">
+          <div class="label">重构路径</div>
+          <ol class="dense-list ordered">
+            <li>先以嵌入方式验证 CNN Explainer 可在平台内运行，再逐步拆掉外部依赖。</li>
+            <li>从 Overview 开始重建 Angular 原生骨架，再逐层补回卷积、ReLU、池化和输出层的解释视图。</li>
+            <li>把用户状态、AI 助手、教学入口和平台统一样式接进 Mode C，完成模块化收口。</li>
+          </ol>
+        </div>
+        <div class="stage3-panel">
+          <div class="label">工程难点</div>
+          <ul class="dense-list">
+            <li>原项目是 Svelte 加静态资源驱动，无法直接复用为 Angular 组件，只能按功能拆解后重建。</li>
+            <li>需要把总览拓扑和局部教学弹层解耦，同时保持真实推理数据和页面交互同步。</li>
+            <li>卷积层演示不是静态插图，而是基于真实通道、真实 kernel 和真实输出位置组织逐步动画。</li>
+          </ul>
+        </div>
       </div>
-      <aside class="notes">成员 D 模块保留结构页，后续可替换为算法可视化和交互细节。</aside>
+      <div class="stage3-layout" style="margin-top:28px">
+        <figure class="screenshot-frame">
+          <img src="assets/screenshots/mode-c-conv-detail.png" alt="Mode C 卷积层逐步解释截图">
+          <figcaption>Mode C 卷积层解释视图：按通道展示中间结果、偏置与目标输出单元，支持逐步讲解卷积累加过程。</figcaption>
+        </figure>
+        <div class="stage3-panel">
+          <div class="label">模块价值</div>
+          <ul class="dense-list">
+            <li>这部分工作的价值不是“把别人项目嵌进来”，而是把外部解释器改造成平台内统一架构下的教学组件。</li>
+            <li>Mode C 现在既有可视化总览，也能下钻到单层、单通道、单 patch 的局部计算过程。</li>
+            <li>它和 Mode A、Mode D 共用用户体系、教学入口和 AI 辅助能力，体现了平台化复用而不是单页 demo。</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="notes">这一页重点讲“为什么难”和“为什么值得”。如果老师问和原始 CNN Explainer 的关系，可以回答为参考其教学目标，但实现已经重构到平台自己的 Angular 架构中。</aside>
+    </section>
+
+    <section class="slide" data-title="成员D模块-界面">
+      <h2 class="title">成员 D 模块：Mode D 界面与解释主线</h2>
+      <div class="stage3-layout split-60">
+        <figure class="screenshot-frame">
+          <img src="assets/screenshots/mode-d-overview.png" alt="Mode D 主界面截图">
+          <figcaption>Mode D 主界面：包含输入文本、下一词 Top-K 结果和单层单头注意力矩阵。</figcaption>
+        </figure>
+        <div class="stage3-panel">
+          <div class="label">模块定位</div>
+          <ul class="dense-list">
+            <li>Mode D 面向 Transformer 教学，不做大模型训练，而是聚焦“下一词预测为什么这样产生”的解释链路。</li>
+            <li>页面主线是：输入文本 → token 序列 → Top-K 候选词 → 注意力矩阵 → QKV 逐步可视化。</li>
+            <li>相比只给出一张 attention heatmap，当前版本更强调把 Query、Key、Value 与最终输出之间的关系讲清楚。</li>
+          </ul>
+          <div class="label" style="margin-top:20px">当前可演示能力</div>
+          <div class="stage3-metric"><b>推理链</b><span>浏览器端 Transformer 运行时已打通，能够取到 token、logits 和 attention 张量。</span></div>
+          <div class="stage3-metric"><b>可视化</b><span>支持 Top-K 概率展示、层/头切换、注意力矩阵观察和自动解释报告。</span></div>
+          <div class="stage3-metric"><b>QKV 教学</b><span>补齐了 Query × Key、缩放、softmax、Value 汇入输出的逐步演示。</span></div>
+          <div class="stage3-metric"><b>平台接入</b><span>已同步接入登录状态、AI 助手、教学问号入口和静态资源外置方案。</span></div>
+        </div>
+      </div>
+      <aside class="notes">这一页建议先讲用户能看到什么，再顺势说明为什么它和普通注意力热图不同，因为这里把 Top-K、当前聚焦单元和 QKV 放到了一条解释链里。</aside>
+    </section>
+
+    <section class="slide" data-title="成员D模块-实现">
+      <h2 class="title">成员 D 模块：QKV 教学与工程实现</h2>
+      <div class="stage3-layout split-55">
+        <div class="stage3-panel">
+          <div class="label">QKV 教学结构</div>
+          <ul class="dense-list">
+            <li>不是只画出注意力矩阵，而是把 Query × Key、缩放、softmax、Value 汇入输出的链路逐步展开。</li>
+            <li>让用户能把“某个格子为什么亮”和“它最终如何影响输出 token”联系起来理解。</li>
+            <li>这种设计更适合课程答辩，因为它既能讲公式，也能讲交互和最终效果。</li>
+          </ul>
+        </div>
+        <div class="stage3-panel">
+          <div class="label">工程难点</div>
+          <ul class="dense-list">
+            <li>浏览器端 Transformer 运行时需要处理 tokenizer、ONNX Runtime、注意力张量提取和静态资源分发问题。</li>
+            <li>教学可视化不等于直接把张量打印出来，还需要把高维 attention 和 QKV 过程压缩成人能看懂的交互界面。</li>
+            <li>资源较大，因此又做了“源码保留、模型资源单独同步”的改造，降低仓库体积和协作成本。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="stage3-layout" style="margin-top:28px">
+        <figure class="screenshot-frame">
+          <img src="assets/screenshots/mode-d-qkv-detail.png" alt="Mode D QKV 逐步解释截图">
+          <figcaption>Mode D QKV 教学视图：展示 Query、Key、softmax 权重以及 Value 如何汇入当前 token 的输出。</figcaption>
+        </figure>
+        <div class="stage3-panel">
+          <div class="label">模块价值</div>
+          <ul class="dense-list">
+            <li>Mode D 的核心贡献是把 Transformer 的预测结果与内部依据放到同一页面里，用教学化方式串起来。</li>
+            <li>不是只演示 attention matrix，而是把 Top-K、当前聚焦单元和 QKV 信息流一起解释。</li>
+            <li>这一模块也复用了平台统一的 AI 与教学体系，说明平台不仅能承载 CNN，也能扩展到 Transformer 解释场景。</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="notes">这一页讲完以后，老师基本就能理解 Mode D 不只是“又一个页面”，而是把 Transformer 教学、浏览器端推理和平台化接入结合在一起。</aside>
     </section>
 
     <section class="slide" data-title="总结">
