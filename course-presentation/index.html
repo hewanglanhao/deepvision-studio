@@ -427,31 +427,183 @@
       <aside class="notes">这一页讲完以后，老师基本就能理解 Mode D 不只是"又一个页面"，而是把 Transformer 教学、浏览器端推理和平台化接入结合在一起。</aside>
     </section>
 
-    <section class="slide" data-title="成员D模块-E和F">
-      <h2 class="title">成员 D：模式 E 反向传播可视化 + 模式 F RNN</h2>
+    <section class="slide" data-title="成员D-E模式-引擎">
+      <h2 class="title">模式 E：反向传播引擎与子步骤动画</h2>
+      <div class="stage3-layout split-55">
+        <div class="stage3-panel">
+          <div class="label">纯前端 MLP 引擎（零依赖）</div>
+          <ul class="dense-list">
+            <li>手写矩阵运算：dot、transpose、hadamard、softmax — 无任何数值库依赖</li>
+            <li>完整实现 Dense 层、ReLU/Sigmoid/Tanh 激活函数的正向和反向传播</li>
+            <li>CrossEntropy / MSE 损失 + Softmax 合并梯度优化</li>
+            <li>SGD / Momentum / Adam 三种优化器，每种都有独立的动量/二阶矩状态</li>
+          </ul>
+          <figure class="screenshot-frame" style="margin-top:12px">
+            <img src="assets/screenshots/mode-e-overview.png" alt="Mode E 主界面截图">
+            <figcaption>Mode E 主界面：神经元权重连线图 + 控制面板 + 浮层图表</figcaption>
+          </figure>
+        </div>
+        <div class="stage3-panel">
+          <div class="label">逐层子步骤动画状态机</div>
+          <pre class="code-block small"><code>idle → forward-0-1 → forward-1-2 → ... → loss
+     → backward-2-1 → backward-1-0
+     → update-1 → update-2 → done</code></pre>
+          <ul class="dense-list">
+            <li>每个子步骤手动推进（用户点击"继续"），进度条实时显示</li>
+            <li>蓝色脉冲 = 前向数据流、橙色脉冲 = 反向梯度流、绿色脉冲 = 参数更新</li>
+            <li>流动光点沿权重边线动画移动，直观展示数据传递方向</li>
+          </ul>
+          <figure class="screenshot-frame" style="margin-top:12px">
+            <img src="assets/screenshots/mode-e-step.png" alt="Mode E 单步动画截图">
+            <figcaption>子步骤动画：活动层对高亮、权重数值显示、流动光点沿边移动</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="takeaway"><b>教学价值</b><span>不是瞬间跳过训练过程，而是把每一步拆成逐层可视化的教学演示，让"反向传播"四个字变成能看到的动画。</span></div>
+      <aside class="notes">先讲引擎架构（自己写矩阵运算，不依赖任何库），再讲动画状态机设计。</aside>
+    </section>
+
+    <section class="slide" data-title="成员D-E模式-连线图">
+      <h2 class="title">模式 E：神经元连线图与决策边界</h2>
       <div class="stage3-layout split-50">
         <div class="stage3-panel">
-          <div class="label">模式 E · 反向传播沙盒</div>
+          <div class="label">神经元权重连线图</div>
           <ul class="dense-list">
-            <li>纯 TypeScript 实现 MLP 前向/反向传播引擎（零外部依赖）</li>
-            <li>SGD / Momentum / Adam 三种优化器可切换</li>
-            <li>逐层子步骤动画：前向 → 损失 → 反向 → 更新，手动推进</li>
-            <li>50×50 决策边界每 25 步更新，叠加在数据散点图上</li>
-            <li>浮层图表面板：损失曲线对比、曲线自动保存、单条删除</li>
+            <li>SVG 绘制每层神经元节点 + 层间全连接权重边，连线颜色=阶段，粗细=幅度</li>
+            <li>点击神经元：显示选中高亮环 + 详情面板列出该神经元所有入边/出边的权重和偏置</li>
+            <li>悬停连线：弹出白色浮层显示权重值 / 梯度值 / 变化前后的数值</li>
+            <li>子步骤动画时当前计算的层对有彩色外圈高亮标注</li>
+          </ul>
+          <figure class="screenshot-frame" style="margin-top:12px">
+            <img src="assets/screenshots/mode-e-neuron.png" alt="Mode E 神经元连线图截图">
+            <figcaption>选中神经元显示高亮环，详情面板列出该神经元的入边权重和偏置</figcaption>
+          </figure>
+        </div>
+        <div class="stage3-panel">
+          <div class="label">决策边界与图表系统</div>
+          <ul class="dense-list">
+            <li>50×50 网格实时计算分类结果，半透明色块叠加在散点图上</li>
+            <li>每 25 步更新，数据点坐标根据实际范围动态映射（解决溢出问题）</li>
+            <li>左侧浮层面板：数据集散点图 + 损失曲线对比 + 当前预测</li>
+            <li>点击图表弹出居中放大弹窗（支持曲线单条删除）</li>
+          </ul>
+          <figure class="screenshot-frame" style="margin-top:12px">
+            <img src="assets/screenshots/mode-e-boundary.png" alt="Mode E 决策边界截图">
+            <figcaption>决策边界从随机到清晰，点图叠加半透明分类色块</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="takeaway"><b>交互闭环</b><span>点击神经元 → 详情面板列出权重 → 悬停连线 → 看到具体数值 → 选网络调参数 → 观察决策边界变化。</span></div>
+      <aside class="notes">重点演示：点击神经元查看入边权重详情、悬停连线显示数值、决策边界从随机到清晰。</aside>
+    </section>
+
+    <section class="slide" data-title="成员D-E模式-曲线">
+      <h2 class="title">模式 E：损失曲线对比</h2>
+      <div class="stage3-layout split-50">
+        <div class="stage3-panel">
+          <div class="label">优化器 / 激活函数对比</div>
+          <ul class="dense-list">
+            <li>跑完指定步数自动保存平滑平均损失曲线，标签标注优化器+激活函数组合</li>
+            <li>可对比不同优化器（SGD/Momentum/Adam）和不同激活函数（ReLU/Sigmoid/Tanh）的收敛效果</li>
+            <li>8 色调色板自动分配、颜色不重复、支持单条删除</li>
+            <li>灰色虚线=单步原始损失、彩色实线=不同配置的平滑平均损失</li>
+            <li>曲线自动标注最终准确率，点击弹出居中放大视图</li>
+          </ul>
+          <figure class="screenshot-frame" style="margin-top:12px">
+            <img src="assets/screenshots/mode-e-loss.png" alt="Mode E 损失曲线对比截图">
+            <figcaption>多条曲线叠加对比不同优化器和激活函数的收敛效果</figcaption>
+          </figure>
+        </div>
+        <div class="stage3-panel">
+          <div class="label">控制面板</div>
+          <ul class="dense-list">
+            <li>三个预设网络可切换（XOR/同心圆/高斯团）</li>
+            <li>激活函数：ReLU / Sigmoid / Tanh 一键切换</li>
+            <li>优化器：SGD / Momentum / Adam，均挂载教学术语高亮</li>
+            <li>学习率滑块 + 训练步数 + 播放速度 全部可调</li>
+            <li>12 个教学术语接入共享教学文档，点击"?"即可跳转</li>
+          </ul>
+          <figure class="screenshot-frame" style="margin-top:12px">
+            <img src="assets/screenshots/mode-e-activation.png" alt="Mode E 控制面板截图">
+            <figcaption>控制面板：激活函数 / 优化器 / 学习率 / 步数 / 速度全可调</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="takeaway"><b>对比实验</b><span>同一数据集 → 切优化器跑一轮 → 自动保存曲线 → 切激活函数再跑 → 多条曲线叠加对比，直观感受不同配置的收敛差异。</span></div>
+      <aside class="notes">损失曲线对比是模式 E 的核心对比实验功能，可在答辩中现场演示：SGD vs Adam、ReLU vs Sigmoid 的收敛差异一目了然。</aside>
+    </section>
+
+    <section class="slide" data-title="成员D-F模式-主界面">
+      <h2 class="title">模式 F：RNN 引擎、数据集与时间展开</h2>
+      <div class="stage3-layout split-50">
+        <div class="stage3-panel">
+          <div class="label">RNN 引擎与数据集</div>
+          <ul class="dense-list">
+            <li>纯 TypeScript 实现 Tanh RNN + BPTT，手动管理 W_xh / W_hh / W_hy 权重矩阵</li>
+            <li>前向：h_t = tanh(W_xh·x_t + W_hh·h_{t-1} + b_h)，最后步 softmax 分类</li>
+            <li>BPTT 从最后步沿时间轴回传，累积各步对三个权重矩阵的梯度</li>
+            <li>SGD / Momentum / Adam 可切换</li>
+          </ul>
+          <div class="label" style="margin-top:16px">三个序列分类任务</div>
+          <table class="stage3-table" style="margin:0">
+            <thead><tr><th>数据集</th><th>任务</th></tr></thead>
+            <tbody>
+              <tr><td>延迟记忆</td><td>记住第一步 bit，延迟 3 步后分类</td></tr>
+              <tr><td>XOR 记忆</td><td>前两步各给 bit，判断是否相同</td></tr>
+              <tr><td>交替检测</td><td>检测前两步是否交替变化</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="stage3-panel">
+          <div class="label">时间展开可视化</div>
+          <ul class="dense-list">
+            <li>每个时间步一个 Cell 方框，箭头串联隐状态传递路径</li>
+            <li>隐状态条形图：蓝=正向激活、红=负向激活</li>
+            <li>每个 Cell 标注 softmax 输出概率分布</li>
+            <li>控制面板：预设切换 + 优化器 + 学习率 + 步数/速度调节</li>
+          </ul>
+          <figure class="screenshot-frame" style="margin-top:12px">
+            <img src="assets/screenshots/mode-f-overview.png" alt="Mode F 主界面截图">
+            <figcaption>RNN 时间展开图 + 控制面板 + 损失曲线 — 全部在主界面可见</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="takeaway"><b>核心价值</b><span>手写 RNN 前向/反向 + 时间展开可视化 — 让"记忆"变成隐状态在时间步之间传递的数值。</span></div>
+      <aside class="notes">主界面截一张全貌图就能讲完引擎、数据集和时间展开三个要点。</aside>
+    </section>
+
+    <section class="slide" data-title="成员D-F模式-详情">
+      <h2 class="title">模式 F：权重矩阵、隐状态与训练监控</h2>
+      <div class="stage3-layout split-50">
+        <div class="stage3-panel">
+          <div class="label">详情面板</div>
+          <ul class="dense-list">
+            <li>权重矩阵形状一览：W_xh、W_hh、W_hy 及各偏置向量的维度</li>
+            <li>梯度范数实时显示，颜色深浅反映梯度健康程度</li>
+            <li>隐状态向量逐时间步展开：每个维度以彩色条形图展示正/负激活</li>
+            <li>每时间步输出概率分布：各分类的 softmax 概率百分比</li>
           </ul>
         </div>
         <div class="stage3-panel">
-          <div class="label">模式 F · RNN 循环神经网络</div>
+          <div class="label">训练监控</div>
           <ul class="dense-list">
-            <li>Tanh RNN + BPTT 引擎（约 180 行纯 TS）</li>
-            <li>时间展开图：每个时间步展示隐状态条形图 + 输出概率</li>
-            <li>三个序列分类任务：延迟记忆 / XOR 记忆 / 交替检测</li>
+            <li>单步 / 连续训练模式可选，连续模式到达设定步数自动停止</li>
+            <li>实时损失曲线 + 整体准确率每 25 步评估一次</li>
+            <li>当前迭代状态：预测类别、真实类别、损失值</li>
+            <li>三个预设数据集各 200 个 4 步序列样本，切换预设自动重置</li>
           </ul>
         </div>
       </div>
-      <div class="takeaway"><b>教学闭环</b><span>12 个教学术语（优化器/激活函数/RNN）接入共享教学文档；E/F 均接入 AI 浮层助手；控制面板支持激活函数、优化器、学习率、步数实时调节。</span></div>
-      <aside class="notes">成员 D 的额外贡献：从零实现两个纯前端教学引擎（MLP 反向传播和 RNN BPTT），不依赖任何后端。通过子步骤动画状态机、决策边界渲染、损失曲线对比等功能实现深度学习的可视化教学。</aside>
+      <figure class="screenshot-frame" style="margin-top:20px">
+        <img src="assets/screenshots/mode-f-detail.png" alt="Mode F 详情面板截图">
+        <figcaption>详情面板：权重矩阵形状 + 梯度范数 + 隐状态向量 + 每步输出概率 + 当前迭代状态</figcaption>
+      </figure>
+      <div class="takeaway"><b>教学闭环</b><span>看时间展开图理解架构 → 看详情面板追踪数据流动 → 看损失曲线监控训练。</span></div>
+      <aside class="notes">第二张图截详情面板，展示权重、梯度、隐状态和输出概率四个教学模块。</aside>
     </section>
+      </div>
+      <div class="takeaway"><b>教学价值</b><span>三个逐步递进的数据集，从简单记忆到 XOR 逻辑再到变化检测，覆盖 RNN 的核心应用场景。</span></div>
+      <aside class="notes">讲清三个数据集的递进关系：记忆 → 组合 → 检测变化，每个都考验 RNN 不同的能力维度。</aside>
     </section>
 
     <section class="slide" data-title="总结">

@@ -424,8 +424,8 @@ body.overview .slide {
 .screenshot-frame img {
   display: block;
   width: 100%;
-  height: 650px;
-  object-fit: cover;
+  max-height: 650px;
+  object-fit: contain;
   object-position: top left;
   background: repeating-linear-gradient(0deg, #f6fbff, #f6fbff 19px, #d7e9f7 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, #d7e9f7 20px);
 }
