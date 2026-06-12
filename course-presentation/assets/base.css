@@ -32,7 +32,7 @@ body.overview {
   display: none;
   width: 1920px;
   height: 1080px;
-  padding: 78px 96px;
+  padding: 150px 96px 78px;
   overflow: hidden;
   gap: 24px;
 }
@@ -40,7 +40,7 @@ body.overview {
 .slide.active {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 body.overview .deck {
@@ -70,7 +70,7 @@ body.overview .slide {
   position: absolute;
   left: 96px;
   right: 96px;
-  top: 82px;
+  top: 72px;
   margin: 0;
   color: #071f38;
   font-family: var(--font-sans);
