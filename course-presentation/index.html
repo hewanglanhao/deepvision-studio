@@ -73,7 +73,8 @@
           <tr><td>AI 博物馆</td><td>第一人称 AI 发展史长廊，多人在线参观</td><td>Three.js + WebSocket</td><td>可演示</td></tr>
           <tr><td>LLM 助手</td><td>结合当前实验上下文进行问答，支持流式输出</td><td>SSE + 后端 LLM 代理</td><td>可演示</td></tr>
           <tr><td>教学浮标</td><td>术语高亮和教学文档跳转</td><td>Angular Directive + Signal</td><td>可演示</td></tr>
-          <tr><td>B/C/D 模式</td><td>训练、CNN explainer、Transformer/反向传播等</td><td>模块化扩展</td><td>待整合</td></tr>
+          <tr><td>E 模式</td><td>反向传播可视化：MLP 引擎、子步骤动画、决策边界、优化器对比</td><td>纯前端 TS 引擎</td><td><b>已完成闭环</b></td></tr>
+          <tr><td>F 模式</td><td>RNN 循环神经网络：Tanh RNN + BPTT、时间展开、序列分类</td><td>纯前端 TS 引擎</td><td><b>可演示</b></td></tr>
         </tbody>
       </table>
       <div class="evidence-row">
@@ -150,7 +151,7 @@
           <tr><td>成员 A</td><td>整体框架、A 模式、forward、登录记录、3D、LLM、教学浮标、AI 博物馆、Docker</td><td><b>核心链路完成</b></td><td>数据流、服务分层、可视化、持久化</td></tr>
           <tr><td>成员 B</td><td>训练实验、数据集、训练任务、实验对比</td><td>模块接入中</td><td>训练任务、指标曲线、checkpoint</td></tr>
           <tr><td>成员 C</td><td>CNN 可解释性、资源迁移与解释器</td><td>模块接入中</td><td>CNN explainer、可解释可视化</td></tr>
-          <tr><td>成员 D</td><td>Transformer、反向传播或协作展示相关模块</td><td>模块接入中</td><td>注意力、反向传播、协作交互</td></tr>
+          <tr><td>成员 D</td><td>反向传播可视化 (E) + RNN 循环神经网络 (F) + 12 条教学术语</td><td>已完成闭环</td><td>MLP 反向传播引擎、BPTT、决策边界、优化器对比</td></tr>
         </tbody>
       </table>
       <div class="takeaway"><b>边界说明</b><span>成员 A 提供平台基础能力和 A 模式完整样板，其他模块可以沿用同一套路由、服务、可视化和后端接口组织方式。</span></div>
@@ -608,14 +609,29 @@ python-forward  Flask + NumPy forward</code></pre>
     </section>
 
     <section class="slide" data-title="成员D模块">
-      <h2 class="title">成员 D 模块：Transformer / 反向传播 / 协作展示</h2>
-      <div class="placeholder-grid">
-        <div class="placeholder">模块主界面</div>
-        <div class="placeholder">核心公式 / 可视化映射</div>
-        <div class="placeholder">状态管理 / 交互逻辑</div>
-        <div class="placeholder">实时协作 / 复杂模型解释</div>
+      <h2 class="title">成员 D：模式 E 反向传播可视化 + 模式 F RNN</h2>
+      <div class="stage3-layout split-50">
+        <div class="stage3-panel">
+          <div class="label">模式 E · 反向传播沙盒</div>
+          <ul class="dense-list">
+            <li>纯 TypeScript 实现 MLP 前向/反向传播引擎（零外部依赖）</li>
+            <li>SGD / Momentum / Adam 三种优化器可切换</li>
+            <li>逐层子步骤动画：前向 → 损失 → 反向 → 更新，手动推进</li>
+            <li>50×50 决策边界每 25 步更新，叠加在数据散点图上</li>
+            <li>浮层图表面板：损失曲线对比、曲线自动保存、单条删除</li>
+          </ul>
+        </div>
+        <div class="stage3-panel">
+          <div class="label">模式 F · RNN 循环神经网络</div>
+          <ul class="dense-list">
+            <li>Tanh RNN + BPTT 引擎（约 180 行纯 TS）</li>
+            <li>时间展开图：每个时间步展示隐状态条形图 + 输出概率</li>
+            <li>三个序列分类任务：延迟记忆 / XOR 记忆 / 交替检测</li>
+          </ul>
+        </div>
       </div>
-      <aside class="notes">成员 D 模块保留结构页，后续可替换为算法可视化和交互细节。</aside>
+      <div class="takeaway"><b>教学闭环</b><span>12 个教学术语（优化器/激活函数/RNN）接入共享教学文档；E/F 均接入 AI 浮层助手；控制面板支持激活函数、优化器、学习率、步数实时调节。</span></div>
+      <aside class="notes">成员 D 的核心贡献：从零实现两个纯前端教学引擎（MLP 反向传播和 RNN BPTT），不依赖任何后端。通过子步骤动画状态机、决策边界渲染、损失曲线对比等功能实现深度学习的可视化教学。</aside>
     </section>
 
     <section class="slide" data-title="总结">
