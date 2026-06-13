@@ -722,10 +722,15 @@ public class TrainingDatasetService {
       for (Path labelDir : labelDirs) {
         String label = labelDir.getFileName().toString();
         try (var files = Files.list(labelDir)) {
-          List<Path> images = files
+          List<Path> availableImages = files
               .filter(Files::isRegularFile)
               .filter(path -> isLocalPreviewImage(path.getFileName().toString()))
               .sorted()
+              .toList();
+          List<Path> realImages = availableImages.stream()
+              .filter(path -> !isLightweightPlaceholder(path.getFileName().toString()))
+              .toList();
+          List<Path> images = (realImages.isEmpty() ? availableImages : realImages).stream()
               .limit(PREVIEW_IMAGES_PER_CLASS)
               .toList();
           for (Path image : images) {
@@ -763,6 +768,10 @@ public class TrainingDatasetService {
       return false;
     }
     return IMAGE_EXTENSIONS.contains(filename.substring(dot + 1).toLowerCase(Locale.ROOT));
+  }
+
+  private boolean isLightweightPlaceholder(String filename) {
+    return filename.toLowerCase(Locale.ROOT).contains("_lite_");
   }
 
   private boolean isIgnoredZipEntry(String entryName) {
