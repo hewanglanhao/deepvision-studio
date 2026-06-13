@@ -704,7 +704,13 @@
           </div>
         </div>
 
-        <a class="side-action-link experiments" routerLink="/training/experiments">
+        <a
+          class="side-action-link experiments"
+          routerLink="/training/experiments"
+          target="_blank"
+          rel="noopener"
+          title="在新标签页打开实验对比"
+        >
           <span class="side-action-icon" aria-hidden="true">↗</span>
           <span class="side-action-copy">
             <strong>实验对比</strong>
@@ -713,7 +719,13 @@
           <span class="side-action-arrow" aria-hidden="true">→</span>
         </a>
 
-        <a class="side-action-link inference" routerLink="/training/inference">
+        <a
+          class="side-action-link inference"
+          routerLink="/training/inference"
+          target="_blank"
+          rel="noopener"
+          title="在新标签页打开单样本推理"
+        >
           <span class="side-action-icon" aria-hidden="true">◎</span>
           <span class="side-action-copy">
             <strong>单样本推理</strong>
@@ -1184,7 +1196,13 @@
                 <span>选择刚保存的 checkpoint 和一条数据，观察模型逐层激活并查看预测结果。</span>
               </div>
               <div class="nudge-actions">
-                <a class="btn-primary btn-sm" routerLink="/training/inference">立即体验</a>
+                <a
+                  class="btn-primary btn-sm"
+                  routerLink="/training/inference"
+                  target="_blank"
+                  rel="noopener"
+                  title="在新标签页打开单样本推理"
+                >立即体验</a>
                 <button class="btn-ghost btn-sm" type="button" (click)="dismissSingleInferencePrompt()">稍后再说</button>
               </div>
             </div>

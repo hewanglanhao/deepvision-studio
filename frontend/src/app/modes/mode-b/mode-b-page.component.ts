@@ -387,7 +387,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.applyTemplate();
+    const runtimeState = this.trainingSvc.state$.value;
+    const hasExistingTraining = !!this.trainingSvc.currentBackendJobId || runtimeState.status !== 'idle';
+    this.applyTemplate(hasExistingTraining);
     this.subs.add(this.route.data.subscribe(data => {
       const routedMode = data['mode'] as AppMode | undefined;
       if (routedMode && routedMode !== this.mode) {
@@ -1429,7 +1431,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   // ── Template ─────────────────────────────────────────
-  applyTemplate(): void {
+  applyTemplate(preserveTrainingRuntime = false): void {
     const tpl = this.selectedTemplate;
     if (!tpl) return;
     this.layers = tpl.layers.map((d, i) => ({
@@ -1441,7 +1443,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.rebuildTopology();
     this.rebuildInputAsset();
     this.runForward();
-    if (this.trainingStatus !== 'running' && this.trainingStatus !== 'paused') {
+    if (!preserveTrainingRuntime && this.trainingStatus !== 'running' && this.trainingStatus !== 'paused') {
       this.trainingSvc.prepare(this.trainingConfig, this.layers);
     }
   }
@@ -2106,7 +2108,6 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
         config: this.trainingConfig
       });
       this.trainingBackendNotice = '训练任务已启动，指标将实时更新。';
-      this.collaborationJoinId = this.trainingSvc.currentBackendJobId;
       this.scrollToTrainingStatus();
     } catch (err) {
       this.trainingDatasetError = err instanceof Error ? err.message : '启动后端训练失败。';

@@ -37,9 +37,14 @@ class ImageClassificationDataset(Dataset):
         if not self.classes:
             raise ValueError(f"No class folders found under {root}")
         for class_index, label in enumerate(self.classes):
-            for path in sorted((root / label).rglob("*")):
-                if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
-                    self.samples.append((path, class_index))
+            image_paths = [
+                path
+                for path in sorted((root / label).rglob("*"))
+                if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+            ]
+            real_image_paths = [path for path in image_paths if "_lite_" not in path.name.lower()]
+            for path in real_image_paths or image_paths:
+                self.samples.append((path, class_index))
         if not self.samples:
             raise ValueError(f"No image files found under {root}")
 
