@@ -11,7 +11,7 @@ DeepVision Studio 是一个面向深度学习教学的可视化实验平台，�
 - 以架构与功能模块为主线，说明系统为什么这样设计。
 - 每个成员的贡献都区分“人工主导”和“AI 辅助”，AI 不作为独立作者，而是归属到具体成员的研发过程。
 - 对工程中可能遇到的关键问题给出合理复盘，包括问题背景、解决策略与代码落点。
-- 保留 B/C/D/E 模式、训练协作、解释器等后续章节模板，当前版本重点完成成员 A 王龄锋负责内容。
+- 按成员实际负责范围记录 A/B/C/D/E/F 模式、训练协作、解释器与部署模块，具体描述以仓库当前代码为准。
 
 ## 2. 项目概览
 
@@ -25,16 +25,21 @@ DeepVision Studio：深度学习算法可视化仿真平台。
 | --- | --- | --- |
 | 首页与模式入口 | 统一进入 A/B/C/D/E、教学文档与 AI 博物馆 | `frontend/src/app/shell/home` |
 | A 模式：前向传播实验室 | 编辑 CNN 风格网络、选择样本、执行真实前向传播、观察每层输出 | `frontend/src/app/modes/mode-a` |
+| B 模式：模型训练工作台 | 数据集管理、结构编辑、真实 PyTorch 训练、指标与反向传播观察 | `frontend/src/app/modes/mode-b`，`backend/spring/src/main/java/com/deepvision/studio/training`，`backend/python-training` |
+| B 模式实验对比 | 按数据集检索历史 checkpoint，对比结构、超参数、训练曲线与结果状态 | `frontend/src/app/modes/mode-b/experiment-compare` |
+| B 模式单样本推理 | 从已完成 checkpoint 选择样本，执行真实推理并展示逐层激活 | `frontend/src/app/modes/mode-b/single-inference` |
+| B 模式训练协作 | 独立聊天室、在线成员、训练状态旁观、日志同步与智能助手 | `frontend/src/app/modes/mode-b/training-collaboration`，`backend/spring/src/main/java/com/deepvision/studio/training/TrainingCollaborationHandler.java` |
 | AI 博物馆 | 第一人称漫游 AI 发展史长廊，支持多人联机同馆参观 | `frontend/src/app/modes/ai-museum`，`backend/spring/src/main/java/com/deepvision/studio/museum` |
 | 3D 网络显示 | 将网络层、shape、特征图快照映射为 Three.js 3D 场景 | `frontend/src/app/shared/network-3d` |
 | 登录注册 | 用户注册、登录、JWT 会话恢复 | `frontend/src/app/core/auth`，`backend/spring/src/main/java/com/deepvision/studio/auth` |
 | A 模式历史记录 | 保存网络快照、预览图、参数统计，并支持回溯 | `frontend/src/app/shared/forward`，`backend/spring/src/main/java/com/deepvision/studio/forward` |
 | LLM 浮标 | 页面上下文问答、图像上下文、流式输出 | `frontend/src/app/shared/llm`，`backend/spring/src/main/java/com/deepvision/studio/llm` |
 | 教学帮助浮标 | 术语高亮、术语检索、教学文档跳转 | `frontend/src/app/shared/teaching`，`frontend/src/app/shell/teaching` |
-| 后端网关 | Spring Boot 统一承接认证、持久化、LLM、forward 代理 | `backend/spring` |
+| 后端网关 | Spring Boot 统一承接认证、持久化、LLM、forward 代理、训练任务与 WebSocket | `backend/spring` |
 | Swagger/OpenAPI 文档 | Spring REST 接口分组、请求/响应模型和 JWT 说明 | `backend/spring/src/main/java/com/deepvision/studio/common/OpenApiConfig.java` |
 | Python forward 服务 | 使用 NumPy 执行真实前向传播计算 | `backend/python-forward` |
-| Docker 部署 | 前端 Nginx、Spring 后端、Python forward 三容器编排 | `docker-compose.yml`，`frontend/Dockerfile`，`backend/spring/Dockerfile`，`backend/python-forward/Dockerfile` |
+| Python training worker | 使用 PyTorch 加载数据、构建网络、训练、测试、保存 checkpoint，并输出结构化事件 | `backend/python-training/training_worker.py` |
+| Docker 部署 | 前端 Nginx、Spring 后端、Python forward 三容器编排；训练 worker 随 Spring 镜像安装并按任务启动 | `docker-compose.yml`，`frontend/Dockerfile`，`backend/spring/Dockerfile`，`backend/python-forward/Dockerfile` |
 
 ## 3. 总体架构设计
 
@@ -49,27 +54,36 @@ Browser
   | - 页面路由
   | - 网络编辑
   | - 2D/3D 可视化
+  | - 训练控制、实验对比、单样本推理
+  | - WebSocket 指标流与协作聊天室
   | - LLM/帮助浮标
   v
 Spring Boot Backend
   | - Auth / JWT / H2
   | - A 模式历史记录
+  | - 数据集元信息与私有文件访问
+  | - 训练任务编排与 checkpoint 元信息
+  | - 训练流 / 协作流 WebSocket
   | - LLM 代理与 SSE
   | - Python forward 代理
-  v
-Python Flask Forward Service
-  | - 图执行顺序
-  | - shape 校验
-  | - Conv/Pool/Dense/Activation/Dropout/Output
-  | - 张量统计与可视化数据
+  |
+  +--------------------------+
+  |                          |
+  v                          v
+Python Flask Forward      Python PyTorch Training Worker
+  | - A 模式图执行          | - 数据加载与划分
+  | - NumPy 前向计算        | - 动态构建训练网络
+  | - shape 校验            | - 训练/验证/测试
+  | - 张量可视化数据        | - 反向传播统计与 checkpoint
 ```
 
 这样拆分的原因：
 
 - Angular 适合承载复杂交互、局部状态和可视化组件。
 - Spring Boot 负责认证、安全、接口、数据库、异常处理、部署配置。
-- Python/NumPy 更适合实现张量计算，避免在 Java 或 TypeScript 中重复造低效的数值计算逻辑。
+- Python/NumPy 负责 A 模式前向计算，Python/PyTorch 负责 B 模式训练和 checkpoint 推理，避免在 Java 或 TypeScript 中重复实现数值计算与自动求导。
 - Spring 作为唯一业务入口代理 Python 服务，前端不直接访问 Python，部署时容器网络和安全边界更清晰。
+- B 模式训练 worker 不是常驻 HTTP 服务。Spring 为每个训练任务生成 `request.json` 和 `control.json`，再通过 `ProcessBuilder` 启动 Python 子进程，并把标准输出中的 JSON 事件转发到 WebSocket。
 
 ### 3.2 前端架构
 
@@ -91,6 +105,9 @@ Python Flask Forward Service
 | `/login`、`/register` | 登录注册 |
 | `/mode-a` | A 模式前向传播实验室 |
 | `/mode-b` | 训练模式 |
+| `/training/experiments` | B 模式实验对比 |
+| `/training/inference` | B 模式单样本推理 |
+| `/training/collaboration` | B 模式训练协作聊天室 |
 | `/mode-c` | CNN 解释器 |
 | `/mode-d` | Transformer 下一词预测与注意力解释器 |
 | `/mode-e` | 反向传播可视化 |
@@ -108,14 +125,48 @@ Spring Boot 后端按业务域划分包：
 | `auth` | 用户、登录注册、JWT、UserDetails |
 | `common` | 安全配置、CORS、静态资源映射、健康检查、统一异常 |
 | `forward` | A 模式 forward 代理、历史记录、预览图保存 |
-| `training` | 训练数据集、任务、检查点、WebSocket 协作 |
+| `training` | 训练数据集、任务编排、检查点、单样本推理、训练指标 WebSocket 与协作聊天室 |
 | `llm` | 大模型聊天代理与 SSE 流式输出 |
 | `museum` | AI 博物馆在线状态 WebSocket |
 | `common/OpenApiConfig` | Spring REST API 的 OpenAPI 元信息和 JWT Bearer 鉴权说明 |
 
 数据库当前使用 H2 文件数据库，配置在 `backend/spring/src/main/resources/application.yml`。实体设计基于 JPA，后续可替换为 MySQL/PostgreSQL。
 
-### 3.4 Mode C / Mode D 的接入方式
+### 3.4 Mode B 的接入方式
+
+Mode B 是项目中跨层最多的业务模块，覆盖 Angular 页面、Spring 任务编排、H2 元信息、文件系统数据、PyTorch worker 和两类 WebSocket。其主链路如下：
+
+```text
+Angular Mode B
+  -> GET/POST /api/training/datasets/** 管理训练数据
+  -> POST /api/training/start 提交数据划分、网络层和超参数
+  -> Spring 创建 training-jobs/<jobId>/request.json、control.json
+  -> Spring 启动 python-training/training_worker.py
+  -> Python 加载 datasets/**，构建 PyTorch 模型并训练
+  -> stdout 输出 metric/backprop/test_result/control/error JSON
+  -> Spring 缓存并通过 /api/training/stream WebSocket 推送
+  -> Angular 更新训练状态、曲线、日志和反向传播面板
+  -> Python 保存 checkpoint.pt
+  -> Spring 将 checkpoint 路径及实验元信息写入 H2
+```
+
+Mode B 的存储采用“数据库保存可检索元信息，文件系统保存大文件”的方式：
+
+| 存储位置 | 内容 | 原因 |
+| --- | --- | --- |
+| H2 `training_datasets` | 数据集名称、类型、所有者、样本数、类别数、预览与告警 JSON | 支持按用户筛选和快速展示，不把大体积样本写入数据库 |
+| `datasets/builtin/**` | 内置图片和 CSV 文件 | 供预览和 Python worker 直接读取 |
+| `datasets/upload/<datasetId>/**` | 用户上传的 CSV、图片、标签列和类别数辅助文件 | 保持原始训练文件结构，便于 PyTorch Dataset 加载 |
+| H2 `training_checkpoints` | 用户、数据集、网络层、超参数、划分、曲线、指标、权重文件路径 | 支持实验检索、对比和权限隔离 |
+| `training-jobs/<jobId>/checkpoint.pt` | PyTorch `state_dict`、网络层、配置、类别数和模型签名 | 二进制权重体积较大，文件存储更适合直接由 PyTorch 加载 |
+
+训练指标流和协作流分开设计：
+
+- `/api/training/stream` 只允许持有 JWT 且拥有该训练任务的用户订阅。
+- `/api/training/collaboration` 负责房间、聊天、在线成员和 `@智能助手`。
+- `/api/training/collaboration/stream` 只向已经加入房间的参与者转发训练事件，使旁观者不获得暂停、停止等任务控制权限。
+
+### 3.5 Mode C / Mode D 的接入方式
 
 成员 C 负责的 `Mode C` 与 `Mode D` 没有沿用模式 A 的 “Angular -> Spring -> Python” 推理链，而是采用了**浏览器端原生推理 + 平台共享能力接入**的方式：
 
@@ -169,7 +220,7 @@ Mode D
 | 成员 | 代号 | 主要职责 | 人工/AI 比例说明 |
 | --- | --- | --- | --- |
 | 王龄锋 | 成员 A | 项目初始化、整体网站设计、A 模式、登录注册、H2 数据库、LLM 浮标、帮助浮标、Spring/forward 服务、Docker 部署与云端部署 | 人工主导架构与核心逻辑，AI 辅助 UI 细化、接口样板和文档整理；云端部署由人工完成，无 AI 参与 |
-| 李子涵 | 成员 B | 训练实验、训练数据集、训练任务、实验对比、训练运行时 | 待补充 |
+| 李子涵 | 成员 B | B 模式训练工作台、数据集与数据库、PyTorch 训练链、checkpoint、实验对比、单样本推理、训练协作聊天室及相关页面样式 | 人工确定模块边界、数据结构、接口契约和调试验收；AI 辅助生成部分组件/DTO/WebSocket 样板、可视化草稿和报错排查建议，最终由人工整合修改 |
 | 肖羽平 | 成员 C | 模块 C（CNN 卷积过程解释）与模块 D（Transformer 注意力/QKV 解释）、第三方解释器迁移、浏览器端推理接入、平台共享能力复用 | 人工确定模块边界、状态结构、推理链路和交互形式；AI 辅助生成局部组件样板、部分可视化实现参考、报错排查与文档整理，最终代码由人工集成调试与验收 |
 | 赵红林 | 成员 D | Transformer/反向传播/协作或展示相关模块 | 待补充 |
 
@@ -561,19 +612,417 @@ http://localhost:4200/api/health
 
 后续重构时，渲染方案改为保留张量数组，展示阶段一次性写入 Canvas，再转换成图片地址交给 `<img>` 渲染；多通道特征图默认只展示前几个通道，完整通道通过弹窗查看。
 
-## 6. 成员 B：李子涵开发内容（预留）
+## 6. 成员 B：李子涵开发内容
 
-> 后续补充训练实验、训练数据集、训练任务、实验对比、训练协作等内容。
+### 6.1 负责范围概述
 
-建议补充结构：
+成员 B 负责 B 模式从数据准备到训练后分析的完整业务链。该模块不是只在前端模拟曲线，而是由 Spring 创建训练任务，调用 PyTorch worker 读取真实数据、执行训练与测试，再把结构化指标推送回 Angular。
 
-- 负责模块概述
-- 训练任务架构
-- 数据集上传与内置数据集
-- WebSocket/SSE 训练进度
-- checkpoint 与实验对比
-- 工程难点
-- 人工与 AI 使用比例说明
+| 模块 | 主要代码路径 | 具体内容 |
+| --- | --- | --- |
+| B 模式训练工作台 | `frontend/src/app/modes/mode-b/` | 数据集选择、数据划分、网络编辑、超参数、训练控制、指标曲线、测试结果、反向传播教学面板和 checkpoint 操作 |
+| 前端训练运行时 | `frontend/src/app/shared/training/training-runtime.service.ts` | REST 请求、训练 WebSocket、状态流、日志、曲线历史、反向传播快照、checkpoint 测试和单样本推理 |
+| 前端数据集服务 | `frontend/src/app/shared/training/training-dataset-api.service.ts` | 数据集列表、详情、Multipart 上传、删除、私有预览 URL 归一化 |
+| 训练协作客户端 | `frontend/src/app/shared/training/training-collaboration.service.ts` | 房间连接、在线成员、消息历史、流式机器人消息和房间列表 |
+| 实验对比页面 | `frontend/src/app/modes/mode-b/experiment-compare/` | 按数据集聚合历史训练，展示指标、曲线、网络结构、层参数与 3D 入口 |
+| 单样本推理页面 | `frontend/src/app/modes/mode-b/single-inference/` | 选择已完成 checkpoint、加载样本、执行推理、播放逐层激活 |
+| 训练协作页面 | `frontend/src/app/modes/mode-b/training-collaboration/` | 独立窗口聊天室、训练状态、进度、日志、成员列表和 `@智能助手` |
+| Spring 训练域 | `backend/spring/src/main/java/com/deepvision/studio/training/` | 数据集、任务、checkpoint、REST DTO、训练流 WebSocket 和协作房间 |
+| PyTorch worker | `backend/python-training/training_worker.py` | 数据加载、动态建模、训练/验证/测试、梯度统计、checkpoint 与逐层激活 |
+| 数据集准备脚本 | `backend/spring/scripts/download_builtin_datasets.py` | 下载和整理内置数据集文件，生成 Spring 与 Python 共用的目录结构 |
+| 数据与部署配置 | `backend/spring/src/main/resources/application.yml`，`docker-compose.yml`，`backend/spring/Dockerfile` | H2、数据集目录、任务目录、Python 路径、上传大小和持久化卷 |
+
+### 6.2 B 模式前端结构与状态管理
+
+B 模式主组件为 `ModeBPageComponent`。页面把训练配置、运行状态和训练后操作组织在同一工作台中：
+
+| 页面区域 | 主要交互 |
+| --- | --- |
+| 左侧训练数据 | 浏览内置数据集和当前用户上传的数据集，导入或删除数据集，选择预设任务，打开实验对比、单样本推理和聊天室 |
+| 数据划分 | 编辑 train/validation/test 百分比，前端即时检查范围和总和 |
+| 网络结构编辑器 | 选择 MLP、CNN、Residual CNN、CSV MLP、二分类和回归模板；增加、删除、启用或修改网络层 |
+| 训练超参数 | 配置 batch size、epoch、学习率、优化器、scheduler、衰减和损失函数 |
+| 当前训练状态 | 显示 epoch、batch、损失、准确率、学习率、梯度范数、耗时、ETA，并提供暂停、继续、停止和重置 |
+| 反向传播教学面板 | 以网络节点展示每层梯度与更新量，点击节点查看 `grad_norm`、`update_norm` 曲线和真实梯度直方图 |
+| 指标与结果 | 展示损失、准确率、学习率、梯度曲线、权重概览、测试样本预测和 checkpoint |
+
+页面状态主要来自两个来源：
+
+- 配置态保存在 `ModeBPageComponent`，包括当前数据集、网络层、连接关系、数据划分和超参数。
+- 运行态集中在根级 `TrainingRuntimeService` 的 `BehaviorSubject` 中，包括 `state$`、`history$`、`logs$`、`testResult$` 和 `backprop$`。
+
+根级服务使用户在 Angular 单页应用内离开 B 模式再返回时，仍可读取同一训练任务的状态和 WebSocket 连接。用户身份变化时，服务会关闭旧连接并清空任务、日志、测试结果和反向传播快照，避免不同账号之间复用前端状态。当前活动任务本身保存在 Spring 进程内存中，因此浏览器整页刷新或 Spring 重启后的任务恢复，不等同于 checkpoint 的持久化恢复。
+
+训练开始前，页面执行两类校验：
+
+1. 数据校验：是否有标签、划分比例是否为 100%、训练集比例是否大于 0。
+2. 模型校验：输入层和输出层是否存在、输出单元数是否匹配类别数、表格数据是否误用了卷积/池化/残差层、回归任务是否使用单输出与 MSE、逐层 shape 是否有效。
+
+`startTraining()` 只有在校验通过后才调用后端；任务创建成功后页面平滑滚动到“当前训练状态”，训练结束后提示用户继续尝试单样本推理。
+
+### 6.3 数据集管理与数据库设计
+
+#### 6.3.1 内置数据集
+
+Spring 启动时由 `TrainingDatasetService.registerBuiltinDatasets()` 注册数据集元信息。当前代码包含：
+
+| 数据集 ID | 类型 | 任务 |
+| --- | --- | --- |
+| `mnist-1000` | 灰度图像 | 10 类手写数字分类 |
+| `cifar10-500` | RGB 图像 | CIFAR-10 全量分类 |
+| `cifar10-5000` | RGB 图像 | CIFAR-10 5000 张课堂快速训练 |
+| `iris` | CSV 表格 | 3 类鸢尾花分类 |
+| `points-2d` | 二维点 | 二分类 |
+| `house-price-regression` | 合成表格 | 单输出回归 |
+
+元信息会写入 H2，但真实图片和 CSV 位于 `datasets/builtin/**`。图片预览优先读取本地各类别样本；若资源尚未准备完成，则使用后端生成的轻量 SVG 占位预览。
+
+#### 6.3.2 用户上传与校验
+
+上传入口为 `POST /api/training/datasets/imports`，使用 Multipart 接收文件。上传必须登录，保存后的 `owner_username` 用于列表、详情、文件读取和删除时的所有权检查。
+
+| 上传类型 | 文件约定 | 主要校验 |
+| --- | --- | --- |
+| CSV | 单个 `.csv`；用户必须指定标签列和类别数 | 至少 10 行、表头与每行列数一致、标签列存在、至少 2 个实际类别、配置类别数不能小于实际类别数、至少一个可用特征 |
+| ZIP 图片集 | 单个 `.zip`；图片放在类别目录下，如 `cat/001.jpg` | 路径不能越界、忽略 `__MACOSX` 等系统文件、最多 5000 张、图片可解码、至少 2 类且每类至少 2 张 |
+| 多图片 | 多个常见图片文件；文件名以类别开头，如 `cat_001.jpg` | 不能混入 CSV/ZIP、图片可解码、类别与每类样本数满足要求 |
+
+CSV worker 会把数值列直接转为浮点数，把非数值特征做简单 one-hot 编码，并忽略常见 ID/姓名列。标签列名和用户配置的类别数分别写入：
+
+```text
+datasets/upload/<datasetId>/label-column.txt
+datasets/upload/<datasetId>/class-count.txt
+```
+
+当前上传 CSV 实现面向分类任务，因此要求至少两个类别；回归演示使用内置 `house-price-regression` 数据集。
+
+#### 6.3.3 `training_datasets` 实体
+
+实体定义在 `TrainingDataset.java`：
+
+| 字段组 | 字段 | 用途 |
+| --- | --- | --- |
+| 标识与归属 | `id`、`source`、`kind`、`ownerUsername` | 区分内置/上传、图像/表格/点数据，并隔离用户数据 |
+| 基本统计 | `name`、`description`、`sampleCount`、`classCount`、`inputShape` | 数据集列表和结构校验 |
+| 训练建议 | `recommendedSplit`、`trainRatio`、`valRatio`、`testRatio`、`hasLabels` | 初始化数据划分和训练可用性 |
+| JSON 元信息 | `labelsJson`、`labelDistributionJson`、`imagePreviewJson`、`tablePreviewJson`、`pointPreviewJson`、`warningsJson` | 保持不同数据类型的预览结构可扩展 |
+| 时间 | `createdAt`、`updatedAt` | 记录数据集元信息生命周期 |
+
+删除操作只允许删除当前用户自己的上传数据集；内置数据集会被后端拒绝。删除时先递归删除 `datasets/upload/<datasetId>`，再删除 H2 记录。
+
+### 6.4 网络模板、维度校验与真实模型构建
+
+B 模式复用 `SimEngine.templates()` 和统一的 `NetworkLayer` 数据结构。当前支持：
+
+- 图像输入和 CSV 向量输入。
+- `Conv2D`、`Pool2D`、`ResidualBlock`、`Flatten`、`Dense`、`Activation`、`Dropout` 和 `Output`。
+- CSV MLP、二分类 MLP、回归 MLP、普通 MLP、经典 CNN、Residual CNN 等模板。
+
+前端使用 `SimEngine.inferLayerOutputShape()` 推导每层 shape。对于残差块，除卷积主分支输出外，还检查 shortcut 是否需要 1x1 projection；如果关闭投影后空间尺寸或通道数不同，Python `ResidualBlock.forward()` 会在相加前比较 shape，并返回明确的维度不匹配错误。
+
+Python worker 的 `build_model()` 把前端层描述映射为 PyTorch 模块：
+
+| 前端层 | PyTorch 实现 |
+| --- | --- |
+| `conv2d` | `nn.LazyConv2d`，随后按配置附加激活函数 |
+| `pool2d` | `nn.MaxPool2d` 或 `nn.AvgPool2d` |
+| `residual` | 两层卷积、激活和可选 `1x1 LazyConv2d` shortcut |
+| `flatten` | 自定义 `AutoFlatten` |
+| `dense` | `nn.LazyLinear` 与可选激活 |
+| `dropout` | `nn.Dropout` |
+| `output` | `nn.LazyLinear`；交叉熵模式下保留 logits，不额外执行 softmax |
+
+`LazyConv2d` 和 `LazyLinear` 允许 worker 根据第一条真实样本初始化输入维度，但不会替代前端的数据类型检查。例如 CSV 样本是 `[featureCount]` 向量，不能直接送入卷积层。
+
+训练任务还支持：
+
+- 损失：交叉熵、二元交叉熵配置和 MSE 回归。
+- 优化器：Adam、AdamW、RMSProp、SGD、Momentum、Nesterov、Adagrad、Adadelta。
+- 调度器：无调度、StepLR、CosineAnnealingLR。
+
+### 6.5 Spring 训练任务编排
+
+训练入口为 `POST /api/training/start`。请求结构由 `TrainingDtos.StartTrainingRequest` 定义：
+
+| 字段 | 内容 |
+| --- | --- |
+| `datasetId` | 内置或当前用户可见的数据集 ID |
+| `split` | `train`、`val`、`test` 比例 |
+| `layers` | 完整网络层 JSON |
+| `connections` | 前端连接关系 |
+| `config` | batch size、epoch、学习率、优化器、scheduler、衰减和损失函数 |
+
+`TrainingJobService.start()` 的执行流程：
+
+```text
+校验登录用户与数据集可见性
+  -> 校验监督标签和数据划分
+  -> 计算 totalEpochs / totalBatches
+  -> 生成 jobId 和模型 SHA-256 signature
+  -> 创建 training-jobs/<jobId>/
+  -> 写入 request.json 与 control.json
+  -> ProcessBuilder 启动 training_worker.py
+  -> 读取合并后的 stdout/stderr
+  -> 解析逐行 JSON 并更新任务状态
+```
+
+每个任务目录包含：
+
+| 文件 | 作用 |
+| --- | --- |
+| `request.json` | 数据集路径、网络结构、连接、超参数、划分、checkpoint 路径和模型签名 |
+| `control.json` | Spring 写入 `running`、`paused` 或 `stopped`，Python 每个 batch 检查 |
+| `checkpoint.pt` | 训练结束后由 PyTorch 保存的模型状态 |
+
+暂停和继续不是终止并重建进程，而是通过 `control.json` 让 worker 在 batch 边界等待；停止会写入停止状态并销毁 Python 进程；重置会清空当前内存指标并重新启动同一任务。
+
+### 6.6 WebSocket 指标流与反向传播观察
+
+训练 worker 使用 `emit()` 向标准输出打印单行 JSON。Spring 只解析以 JSON 表示的训练事件，非结构化诊断文本不会作为指标广播。
+
+| 事件类型 | 主要字段 | 前端用途 |
+| --- | --- | --- |
+| `metric` | epoch、batch、loss、valLoss、accuracy、valAccuracy、lr、耗时、ETA、gradientNorm、weightMean、weightStd | 当前状态和四条历史曲线 |
+| `backprop` | phase、全局梯度/更新范数、每层统计、预测解释 | 反向传播网络节点、曲线、直方图和诊断 |
+| `test_result` | 测试损失、测试准确率、样本预测 | 测试集效果和自动保存 checkpoint |
+| `control` | running/paused/stopped/completed | 同步任务生命周期 |
+| `error` | 原始异常文本 | 训练日志和停止状态 |
+
+`TrainingStreamHandler` 从查询参数读取 `jobId` 和 JWT，调用 `requireOwnedJob()` 校验任务所有者。连接建立后，Spring 会先补发内存中最近最多 240 条事件，再继续推送新事件，因此同一 SPA 中临时离开页面再返回时可以恢复近期视图。
+
+PyTorch 反向传播数据来自真实 batch：
+
+1. 前向计算后发出 `forward` 事件。
+2. 计算损失后发出 `loss` 事件。
+3. `loss.backward()` 后统计每层 `gradNorm`、`gradMean`、`gradMax`、14 桶梯度直方图、`weightNorm` 和参数量。
+4. `optimizer.step()` 前后比较参数快照，计算 `updateNorm`。
+5. 每个 epoch 验证完成后补充验证阶段快照。
+
+为了控制传输量，完整阶段事件主要采集每个 epoch 的第一个 batch，epoch 结束后再推送汇总指标。前端为每层保留最近 80 个反向传播采样点，点击节点后在弹窗中展示：
+
+- `grad_norm` 随采样 step 变化。
+- `update_norm` 随采样 step 变化。
+- 梯度值区间与参数数量组成的直方图。
+- 梯度过小、偏小、正常、偏大、过大的分级提示。
+
+训练主图中的损失、准确率、学习率和梯度曲线来自真实 `metric` 事件。权重分布概览没有传输完整参数数组，而是根据 worker 返回的真实 `weightMean` 和 `weightStd` 生成近似分布，用于控制 WebSocket 消息体；弹窗中的梯度直方图则由真实梯度张量计算。
+
+### 6.7 Checkpoint 与实验对比
+
+#### 6.7.1 权重与元信息保存
+
+Python 通过 `torch.save()` 把以下内容写入 `checkpoint.pt`：
+
+- `modelStateDict`
+- `layers`
+- `datasetId`
+- `config`
+- `classCount`
+- `modelSignature`
+
+Spring 收到 `test_result` 后自动调用 `saveCheckpoint()`，将可检索元信息写入 H2 的 `training_checkpoints`。数据库不直接保存 `.pt` 二进制文件，只保存 `checkpointPath`。
+
+| 元信息 | 对应字段 |
+| --- | --- |
+| 用户与任务 | `user_id`、`jobId`、`name`、`createdAt` |
+| 数据集 | `datasetId`、`datasetName` |
+| 模型标识 | `modelSignature`、`checkpointPath`、`networkDescription` |
+| 可重建配置 | `layersJson`、`configJson`、`splitJson` |
+| 训练过程 | `metricHistoryJson`、`status`、`epoch`、`totalEpochs` |
+| 最终结果 | train/val/test loss、accuracy、测试样本数、`testResultJson` |
+
+checkpoint 查询通过 `TrainingCheckpointRepository` 限定当前用户名。测试、样本列表和单样本推理同样使用 `findByIdAndUserUsername()`，避免用户通过修改 ID 读取其他账号的模型。
+
+#### 6.7.2 实验对比页面
+
+实验对比路由为 `/training/experiments`。页面先加载当前用户的 checkpoint，再按 `datasetId` 聚合：
+
+- 数据集训练次数、最佳测试准确率和最近训练时间。
+- 每次训练的 train/validation/test 指标。
+- 优化器、学习率、batch、epoch、损失函数和数据划分。
+- 网络结构文本、可点击网络节点和完整层参数。
+- 损失、准确率、学习率和梯度范数历史曲线。
+- 通过共享 `NetworkOverviewComponent` 展示网络，并把结构写入本地存储后打开 `/network-3d`。
+
+页面对 `stopped`、epoch 未跑满和缺少历史曲线的旧记录分别显示状态说明，避免把不完整记录当作正常完成实验比较。
+
+### 6.8 单样本推理与逐层激活
+
+单样本推理路由为 `/training/inference`，只列出未停止且 `epoch >= totalEpochs` 的 checkpoint。
+
+运行流程：
+
+```text
+选择 checkpoint
+  -> GET /api/training/checkpoints/{id}/samples?limit=72
+  -> Python 只加载限定数量的预览样本
+  -> 用户选择一条图片或表格记录
+  -> POST /api/training/checkpoints/{id}/infer
+  -> Python 加载 checkpoint.pt 和原训练结构
+  -> 对该样本逐模块前向传播
+  -> 返回 prediction + activations
+  -> Angular 按层播放激活网络
+```
+
+图片样本返回受控资源 URL；表格样本返回原始表头、原始行、编码后特征预览和特征名。页面默认展示一部分原始字段，点击后用弹窗查看完整行，避免把 one-hot 后的向量误当作用户原始 CSV。
+
+每层激活包含：
+
+| 字段 | 说明 |
+| --- | --- |
+| `layerId`、`layerName`、`layerType`、`order` | 与原网络结构对应 |
+| `shape` | 去掉 batch 维后的输出形状 |
+| `stats` | min、max、mean、nonZeroRatio |
+| `preview` | 图像层最多 6 个下采样通道；向量层最多 40 个值 |
+| `topValues` | 绝对值最大的若干激活位置 |
+
+前端按约 950 ms 自动切换活动层，也允许用户点击节点停止自动播放并查看指定层。checkpoint 列表使用滚动选择，鼠标悬停时在列表右侧弹出超参数、数据划分、指标和网络层摘要。
+
+### 6.9 多人协作聊天室
+
+训练协作页面以新浏览器标签打开，不改变原 B 模式页面。B 模式支持两种入口：
+
+- 基于当前训练任务创建聊天室。
+- 读取现有房间列表并加入已经存在的聊天室；不存在的房间不会跳转。
+
+聊天室使用两个 WebSocket：
+
+| WebSocket | 职责 |
+| --- | --- |
+| `/api/training/collaboration` | 房间创建/加入、聊天消息、最近 60 条历史、在线成员和系统通知 |
+| `/api/training/collaboration/stream` | 对已经加入房间的 clientId 推送训练指标、反向传播、测试结果和日志 |
+
+`TrainingCollaborationHandler` 在最后一个会话离开时删除内存房间，因此空房间自动销毁。房间只保存内存消息，不写入 H2。
+
+用户输入 `@` 时，前端显示“智能助手”选择框；发送以 `@智能助手` 开头的问题后，Spring 读取当前训练状态和最近聊天上下文，调用 `LlmChatClient.stream()`。机器人先广播空的流式消息，再用 `chat_update` 持续替换文本，所有房间成员看到同一回复过程。
+
+聊天室训练区复用 `TrainingRuntimeService.observeCollaborationJob()`，展示 epoch、batch、loss、validation loss、accuracy、validation accuracy、学习率、梯度范数、进度、耗时、ETA 和训练日志。协作观察流是只读的，任务暂停、停止等控制仍留在任务拥有者的 B 模式页面。
+
+### 6.10 REST 接口与主要数据结构
+
+#### 6.10.1 主要 REST 接口
+
+| 方法 | 路径 | 作用 | 用户边界 |
+| --- | --- | --- | --- |
+| `GET` | `/api/training/datasets` | 内置数据集加当前用户上传数据集 | 未登录只返回内置数据 |
+| `GET` | `/api/training/datasets/{datasetId}` | 数据集详情 | 上传数据集校验 owner |
+| `POST` | `/api/training/datasets/imports` | 导入 CSV/ZIP/图片 | 必须登录 |
+| `DELETE` | `/api/training/datasets/{datasetId}` | 删除上传数据集 | 仅 owner，内置不可删 |
+| `GET` | `/api/training/datasets/{datasetId}/files/**` | 读取私有上传文件 | 校验 owner 与安全相对路径 |
+| `POST` | `/api/training/start` | 创建真实训练任务 | 必须登录 |
+| `GET` | `/api/training/{jobId}/status` | 查询任务状态 | 仅任务 owner |
+| `POST` | `/api/training/{jobId}/pause|resume|stop|reset` | 控制 worker | 仅任务 owner |
+| `GET` | `/api/training/checkpoints` | 查询当前用户 checkpoint | 必须登录，可按 datasetId 过滤 |
+| `POST` | `/api/training/checkpoints/{id}/test` | 重新运行测试集 | 仅 checkpoint owner |
+| `GET` | `/api/training/checkpoints/{id}/samples` | 获取有限样本预览 | 仅 checkpoint owner，且训练完成 |
+| `POST` | `/api/training/checkpoints/{id}/infer` | 单样本推理和逐层激活 | 仅 checkpoint owner，且训练完成 |
+| `GET` | `/api/training/collaboration/rooms` | 查询当前内存房间 | 用于加入已有房间 |
+
+`SecurityConfig` 当前对 `/api/training/**` 做统一放行，以便 WebSocket 握手和部分公开查询进入 Controller；需要身份的业务操作在 `TrainingDatasetService` 和 `TrainingJobService` 内再次检查 `Principal`、JWT subject、owner 或 checkpoint 用户。训练拥有者流的 WebSocket 还会单独校验 token。
+
+#### 6.10.2 前后端共享数据含义
+
+| 类型 | 定义位置 | 用途 |
+| --- | --- | --- |
+| `NetworkLayer`、`TrainingConfig`、`TrainingDatasetDetail` | `frontend/src/app/shared/simulation/sim-models.ts` | 网络、训练配置和数据集详情 |
+| `TrainingRuntimeState`、`MetricPoint` | 同上 | 当前训练状态和历史曲线点 |
+| `TrainingBackpropSnapshot`、`BackpropLayerStat` | `training-runtime.service.ts` | 真实反向传播事件 |
+| `TrainingCheckpointSummary` | `training-runtime.service.ts` / `TrainingDtos.java` | checkpoint 列表、实验对比和推理选择 |
+| `InferenceSampleItem`、`SingleInferenceResult` | 同上 | 样本预览、预测和逐层激活 |
+| `CollaborationMessage`、`CollaborationRoomSummary` | `training-collaboration.service.ts` / `TrainingDtos.java` | 聊天、房间和在线状态 |
+
+### 6.11 运行与部署
+
+本地运行 B 模式需要 Angular 和 Spring。PyTorch worker 由 Spring 自动启动，不需要再手动启动一个训练 HTTP 服务，但必须配置可用 Python 环境：
+
+```powershell
+$env:DEEPVISION_TRAINING_PYTHON="C:\path\to\python.exe"
+$env:DEEPVISION_TRAINING_WORKER_SCRIPT="..\python-training\training_worker.py"
+$env:DEEPVISION_DATASET_ROOT=".\datasets"
+$env:DEEPVISION_TRAINING_JOBS_ROOT=".\training-jobs"
+```
+
+Python 依赖定义在 `backend/python-training/requirements.txt`，主要为 `torch` 和 `Pillow`。
+
+Docker 部署时，`backend/spring/Dockerfile` 在 Spring 运行镜像中安装 CPU 版 PyTorch，并复制 `backend/python-training`。因此容器拓扑仍是前端、Spring、Python forward 三个容器，但 Spring 容器内部还会为每个 B 模式任务创建训练子进程。
+
+需要持久化的卷：
+
+| 卷 | 内容 |
+| --- | --- |
+| `spring-data` | H2 用户、数据集元信息、checkpoint 元信息 |
+| `spring-datasets` | 内置和上传训练数据 |
+| `spring-training-jobs` | `request.json`、`control.json`、`checkpoint.pt` 和临时 checkpoint 推理任务 |
+| `spring-uploads` | A 模式等其他上传资源 |
+
+Nginx 对 `/api/` 开启 WebSocket Upgrade 并设置较长读取超时，同时把 `client_max_body_size` 调整为 220 MB。Spring Multipart 默认限制为单文件 200 MB、请求 220 MB。
+
+### 6.12 工程难点与解决方式
+
+#### 6.12.1 前端网络描述与 PyTorch 模型必须一致
+
+- 问题背景：用户在 Angular 中自由组合输入层、卷积、残差、全连接和输出层，Python 必须按同一结构训练。
+- 为什么难：图像和 CSV 的张量维度不同，残差 shortcut 还要求主分支和旁路 shape 完全一致。
+- 解决方式：统一 `NetworkLayer` JSON 契约；前端先做逐层 shape 和任务类型校验，worker 再用真实样本初始化 Lazy 层，并在残差相加前做运行时 shape 检查。
+- 体现的工程能力：跨语言数据契约、前后端双层校验和错误定位。
+
+#### 6.12.2 用户数据集格式不可控
+
+- 问题背景：课程平台允许上传 CSV、图片和 ZIP，但用户文件可能缺列、标签为空、目录错误、图片损坏或包含系统隐藏文件。
+- 为什么难：校验过松会在训练阶段才报错，校验过严又会拒绝可修复的数据。
+- 解决方式：上传阶段校验结构性错误；缺失值、类别不均衡和尺寸不一致作为 warnings；CSV 由用户明确选择标签列和类别数；ZIP 忽略 macOS 元数据并防止路径穿越。
+- 体现的工程能力：输入边界设计、异常分级、文件安全和可用性平衡。
+
+#### 6.12.3 长时间训练与页面实时更新
+
+- 问题背景：普通 HTTP 请求不适合持续返回 epoch、反向传播阶段和测试结果。
+- 为什么难：需要处理任务控制、断开重连、事件顺序、用户隔离和前端状态一致性。
+- 解决方式：Spring 用子进程标准输出接收 JSON 事件，训练状态保存在并发 Map，最近事件用有界队列缓存，再通过 WebSocket 推送；Angular 用 RxJS `BehaviorSubject` 统一驱动多个页面。
+- 体现的工程能力：进程编排、事件流设计、并发容器和响应式状态管理。
+
+#### 6.12.4 Checkpoint 不能只保存权重
+
+- 问题背景：只有 `.pt` 文件无法解释它使用了哪个数据集、网络和超参数，也无法在实验对比页检索。
+- 为什么难：二进制权重适合文件加载，实验元信息又需要关系查询和用户隔离。
+- 解决方式：采用文件与 H2 混合存储；`.pt` 保存 PyTorch 状态，H2 保存路径、结构、配置、划分、曲线和指标，并使用模型签名关联结构。
+- 体现的工程能力：结构化数据与大文件的存储取舍、可追溯实验设计。
+
+#### 6.12.5 真实梯度可视化的数据量控制
+
+- 问题背景：每个 batch、每一层、每个参数都传输梯度会产生很大的消息体并拖慢训练。
+- 为什么难：教学界面既要显示真实信息，又不能把完整张量持续发送到浏览器。
+- 解决方式：传输每层范数、均值、最大值、参数量和固定桶数直方图；阶段快照主要采样每个 epoch 的第一个 batch，曲线只保留有界历史。
+- 体现的工程能力：可观测性粒度、网络开销和教学信息量之间的权衡。
+
+#### 6.12.6 协作房间同时承载聊天和训练观察
+
+- 问题背景：聊天室参与者需要看到同一训练状态，但不能获得任务控制权。
+- 为什么难：聊天消息和训练指标的数据频率、权限和生命周期不同。
+- 解决方式：拆分聊天 WebSocket 与只读训练流 WebSocket；使用 `clientId` 确认观察者已经加入房间；最后一人离开时删除房间；机器人回答通过增量更新广播。
+- 体现的工程能力：实时协作协议、权限边界和资源生命周期管理。
+
+#### 6.12.7 本地与云端文件路径不同
+
+- 问题背景：本地使用 Windows 路径，Docker/云端使用 Linux 卷路径，数据集预览和 checkpoint 又必须跨组件访问。
+- 为什么难：把绝对路径写死会导致迁移后图片、数据集或 worker 脚本找不到。
+- 解决方式：将数据库、数据集、训练任务、Python 解释器和 worker 脚本全部抽成环境变量；前端对相对资源 URL 统一拼接 API base URL；Docker 使用命名卷固定容器路径。
+- 体现的工程能力：配置外置、跨平台路径处理和部署资源同步。
+
+### 6.13 人工与 AI 的分工说明
+
+成员 B 的开发中，AI 参与了代码量较大的训练业务模块的局部实现，但没有作为独立成员或独立决策者。
+
+| 工作类型 | 人工负责 | AI 辅助方式 | 最终处理 |
+| --- | --- | --- | --- |
+| 需求与模块边界 | 确定 B 模式覆盖数据上传、真实训练、checkpoint、对比、推理和协作，而不是停留在曲线模拟 | 辅助拆分页面与服务清单 | 人工结合课程目标和现有 A 模式架构确定范围 |
+| 数据结构与接口 | 确定 `NetworkLayer`、训练请求、数据集元信息、checkpoint 元信息和 WebSocket 事件字段 | 生成部分 DTO、接口和 TypeScript interface 样板 | 人工统一字段、补充用户隔离并联调前后端 |
+| PyTorch 训练与可视化 | 确定数据加载、动态建模、训练/验证/测试、梯度范数、更新量和激活数据的采集方式 | 提供 PyTorch API、梯度统计和图表实现参考 | 人工调试维度、损失函数、残差块、CSV 编码和真实输出 |
+| WebSocket 与聊天室 | 设计任务拥有者流、协作旁观流、房间生命周期和机器人 mention 交互 | 辅助生成 Handler、客户端 service 和流式消息样板 | 人工修复不存在房间跳转、空房销毁、训练日志同步和账号状态问题 |
+| 数据集与数据库 | 设计内置/上传数据集目录、H2 元信息、owner 字段和文件删除流程 | 辅助编写校验分支、JPA 样板和报错分析 | 人工处理 CSV 标签列、类别数、ZIP 隐藏文件、上传大小和云端资源路径 |
+| 页面与样式 | 确定训练工作台、实验对比、推理和聊天室的页面结构与交互优先级 | 辅助生成局部 HTML/CSS、曲线和弹窗草稿 | 人工多轮删改开发期提示、统一交互、检查内容密度和最终效果 |
+| 排错与验收 | 负责本地/云端联调、账号隔离、checkpoint 加载、图片预览和训练错误复现 | 辅助分析异常堆栈与提供排查方向 | 人工修改代码、重新运行并决定是否接受结果 |
+
+人工主导的内容包括需求目标、模块边界、核心数据契约、训练流程、用户隔离、关键 bug 修复、部署配置和答辩取舍。AI 主要用于样板生成、局部算法与可视化参考、报错分析、样式草稿和文档整理；所有进入仓库的代码和本文档内容均由人工结合实际代码复核、删改和验收。
 
 ## 7. 成员 C：肖羽平开发内容
 
