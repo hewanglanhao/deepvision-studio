@@ -92,8 +92,9 @@ Python Flask Forward Service
 | `/mode-a` | A 模式前向传播实验室 |
 | `/mode-b` | 训练模式 |
 | `/mode-c` | CNN 解释器 |
-| `/mode-d` | 反向传播/解释模块 |
-| `/mode-e` | Transformer 解释器 |
+| `/mode-d` | Transformer 下一词预测与注意力解释器 |
+| `/mode-e` | 反向传播可视化 |
+| `/mode-f` | RNN 循环神经网络解释器 |
 | `/ai-museum` | AI 博物馆 |
 | `/network-3d` | 3D 网络显示窗口 |
 | `/teaching` | 教学文档 |
@@ -114,6 +115,45 @@ Spring Boot 后端按业务域划分包：
 
 数据库当前使用 H2 文件数据库，配置在 `backend/spring/src/main/resources/application.yml`。实体设计基于 JPA，后续可替换为 MySQL/PostgreSQL。
 
+### 3.4 Mode C / Mode D 的接入方式
+
+成员 C 负责的 `Mode C` 与 `Mode D` 没有沿用模式 A 的 “Angular -> Spring -> Python” 推理链，而是采用了**浏览器端原生推理 + 平台共享能力接入**的方式：
+
+| 模式 | 推理位置 | 主要运行时 | 静态资源来源 | 与 Spring 的关系 |
+| --- | --- | --- | --- | --- |
+| `Mode C` | 浏览器端 | TensorFlow.js | `frontend/public/mode-c/cnn-explainer/**` | 不通过 Spring 执行推理；仅复用登录状态、LLM 代理与教学入口 |
+| `Mode D` | 浏览器端 | `onnxruntime-web` + `@xenova/transformers` | `frontend/public/mode-d-assets/**` | 不通过 Spring 执行推理；仅复用登录状态、LLM 代理与教学入口 |
+
+这两条模式的接入思路与模式 A/B 的区别在于：
+
+- 推理数据不经过 Spring 或 Python 服务中转，而是在 Angular 页面内部直接加载模型与样例资源。
+- 页面级状态由各自的 `StateService` 管理，负责串联样例切换、推理结果、解释视图与 AI 上下文。
+- 与后端的耦合点集中在平台共用能力：认证接口 `api/auth/**`、LLM 代理接口 `api/llm/**`，而不是单独的模式业务接口。
+- `Mode C` 的外部依赖主要是迁移后的 CNN Explainer 静态资源；`Mode D` 的外部依赖主要是 GPT-2 ONNX 分片、transformers 运行时与 onnxruntime wasm 文件，因此额外提供了资源同步脚本。
+
+从运行链路上看，二者分别形成了如下结构：
+
+```text
+Mode C
+  Angular Component
+    -> ModeCStateService
+    -> ModeCAssetsService 读取模型配置、样例和静态资源路径
+    -> ModeCInferenceService 加载 tf.js 与 model.json
+    -> 浏览器内执行 CNN 前向推理 / Grad-CAM / 通道级解释
+    -> Overview + Detail Panel 渲染结果
+
+Mode D
+  Angular Component
+    -> ModeDStateService
+    -> ModeDAssetsService 提供样例、层/头选项
+    -> ModeDInferenceService 加载 tokenizer / ONNX session / attention tensor
+    -> 浏览器内执行 next-token 推理
+    -> Top-K / Attention Matrix / QKV / Report 渲染结果
+```
+
+因此，在项目总体架构上，`Mode C` 和 `Mode D` 补充了平台中的第二类模式形态：  
+一类是依赖 Spring/Python 服务的服务端推理模式（如模式 A、模式 B）；另一类是依赖静态模型资源与浏览器端运行时的前端原生解释模式（如模式 C、模式 D）。
+
 ## 4. 小组分工与 AI 使用标注
 
 ### 4.1 标注规则
@@ -130,7 +170,7 @@ Spring Boot 后端按业务域划分包：
 | --- | --- | --- | --- |
 | 王龄锋 | 成员 A | 项目初始化、整体网站设计、A 模式、登录注册、H2 数据库、LLM 浮标、帮助浮标、Spring/forward 服务、Docker 部署与云端部署 | 人工主导架构与核心逻辑，AI 辅助 UI 细化、接口样板和文档整理；云端部署由人工完成，无 AI 参与 |
 | 李子涵 | 成员 B | 训练实验、训练数据集、训练任务、实验对比、训练运行时 | 待补充 |
-| 肖羽平 | 成员 C | CNN/可解释性相关模式、资源迁移与交互解释 | 待补充 |
+| 肖羽平 | 成员 C | 模块 C（CNN 卷积过程解释）与模块 D（Transformer 注意力/QKV 解释）、第三方解释器迁移、浏览器端推理接入、平台共享能力复用 | 人工确定模块边界、状态结构、推理链路和交互形式；AI 辅助生成局部组件样板、部分可视化实现参考、报错排查与文档整理，最终代码由人工集成调试与验收 |
 | 赵红林 | 成员 D | Transformer/反向传播/协作或展示相关模块 | 待补充 |
 
 ## 5. 成员 A：王龄锋开发内容
@@ -535,18 +575,287 @@ http://localhost:4200/api/health
 - 工程难点
 - 人工与 AI 使用比例说明
 
-## 7. 成员 C：肖羽平开发内容（预留）
+## 7. 成员 C：肖羽平开发内容
 
-> 后续补充 CNN 解释器、可视化解释、资源迁移与交互说明。
+### 7.1 负责范围概述
 
-建议补充结构：
+成员 C 主要负责模式 C 与模式 D 两个解释类模块，并补充了它们与平台统一能力的接入工作。对应代码范围如下：
 
-- 负责模块概述
-- CNN Explainer 集成或重构策略
-- 静态资源管理
-- 与 Angular 页面融合
-- 工程难点
-- 人工与 AI 使用比例说明
+| 负责内容 | 主要路径 | 说明 |
+| --- | --- | --- |
+| 模式 C：CNN 卷积过程解释 | `frontend/src/app/modes/mode-c/` | 将原始 `cnn-explainer` 重构为 Angular 原生组件，保留卷积网络总览、卷积 / ReLU / Pool 细节、Grad-CAM 和解释报告 |
+| 模式 D：Transformer 注意力 / QKV 解释 | `frontend/src/app/modes/mode-d/` | 基于浏览器端 Transformers 运行时实现下一词预测、Top-K、注意力矩阵和 QKV 教学视图 |
+| 模式 D 静态资源同步 | `scripts/sync-transformer-explainer.ps1`、`docs/mode-d-assets-sync-guide.md` | 将大模型 tokenizer、ONNX 分片和前端资源从外部源码目录同步到平台公共静态目录 |
+| 平台共享能力复用 | `frontend/src/app/shared/llm/`、`frontend/src/app/shared/teaching/`、`frontend/src/app/core/auth/` | 为模式 C、D 接入统一顶栏、登录状态、AI 助手和教学文档入口 |
+
+这部分工作的重点不是单纯嵌入第三方 demo，而是在不破坏现有 Angular 架构的前提下，把解释器重构为平台内可维护、可扩展、可与统一组件协作的教学模块。
+
+### 7.2 模式 C：CNN 卷积过程解释
+
+#### 7.2.1 模块定位
+
+模式 C 面向卷积神经网络基础教学，目标是在真实推理结果基础上，展示输入样例如何经过卷积层、激活层、池化层和输出层得到分类结论。与模式 A 的“可编辑网络 + 后端计算”不同，模式 C 采用浏览器端原生推理，重点放在解释视图而不是网络编辑。
+
+#### 7.2.2 前端结构与主要代码路径
+
+| 层级 | 主要路径 | 作用 |
+| --- | --- | --- |
+| 页面入口 | `frontend/src/app/modes/mode-c/mode-c-page.component.ts` | 负责顶栏、登录状态、AI 助手、教学入口和解释器容器装配 |
+| 页面模板 | `frontend/src/app/modes/mode-c/mode-c-page.component.html` | 定义平台页面骨架，挂载统一头部与解释器工作区 |
+| 解释器壳组件 | `frontend/src/app/modes/mode-c/explainer/components/shell/mode-c-explainer-shell.component.ts` | 负责样本切换、总览区域、细节面板和解释报告的页面组织 |
+| 总览视图 | `frontend/src/app/modes/mode-c/explainer/components/overview/mode-c-overview.component.ts` | 展示各层拓扑、通道预览、层间连线、交互选中状态和局部 overlay |
+| 细节面板 | `frontend/src/app/modes/mode-c/explainer/components/detail-panels/mode-c-detail-panel.component.ts` | 根据层类型切换卷积、ReLU、池化、输出层等解释界面 |
+| 状态服务 | `frontend/src/app/modes/mode-c/explainer/services/mode-c-state.service.ts` | 管理当前样本、当前层、当前通道、Grad-CAM 开关和解释文本所需状态 |
+| 推理服务 | `frontend/src/app/modes/mode-c/explainer/services/mode-c-inference.service.ts` | 加载 tf.js 模型，执行前向推理，生成 overview / detail / Grad-CAM 所需数据 |
+| 模型与资源服务 | `frontend/src/app/modes/mode-c/explainer/services/mode-c-model.service.ts`、`mode-c-assets.service.ts` | 提供模型加载、样本图片、标签和静态资源路径封装 |
+| 数据结构 | `frontend/src/app/modes/mode-c/explainer/models/mode-c.types.ts` | 统一定义层摘要、通道预览、细节运行时、预测结果和 Grad-CAM 数据 |
+
+#### 7.2.3 运行流程
+
+```text
+用户进入 /mode-c
+  -> ModeCPageComponent 挂载统一顶栏、AI 助手、教学浮标
+  -> ModeCExplainerShellComponent 初始化默认样本
+  -> ModeCInferenceService 加载 /mode-c/cnn-explainer/assets/data/model.json
+  -> 浏览器端 tf.js 执行推理，产出各层激活、输出概率和 Grad-CAM 中间结果
+  -> ModeCStateService 保存当前样本、层和通道状态
+  -> Overview 展示全局拓扑，Detail Panel 展示选中层的局部解释
+```
+
+其中浏览器端运行时依赖由 `frontend/public/mode-c/cnn-explainer/vendor/tf.min.js` 提供，样本、模型、标签和补充静态文件位于 `frontend/public/mode-c/cnn-explainer/assets/`。
+
+#### 7.2.4 核心数据结构
+
+| 数据结构 | 定义位置 | 用途 |
+| --- | --- | --- |
+| `ModeCNetworkLayer` | `mode-c.types.ts` | 描述 overview 中每一层的名称、类型、shape、显示顺序等元信息 |
+| `ModeCLayerActivationSummary` | `mode-c.types.ts` | 记录层级摘要信息，供总览卡片和层描述使用 |
+| `ModeCLayerChannelPreview` | `mode-c.types.ts` | 存放每一层各通道的预览图、取值范围和选中展示所需字段 |
+| `ModeCLayerDetailRuntime` | `mode-c.types.ts` | 承载细节面板当前层的运行时数据，根据层类型分发给卷积 / ReLU / Pool / Output 视图 |
+| `ModeCConvChannelExample` | `mode-c.types.ts` | 表示卷积层单个输入通道到目标输出位置的 patch、kernel、product 和中间和 |
+| `ModeCGradCamResult` | `mode-c.types.ts` | 存储 Grad-CAM 热力图、叠加图和对应类别 |
+| `ModeCSamplePrediction` | `mode-c.types.ts` | 表示 Top-K 预测、概率和最终分类标签 |
+
+#### 7.2.5 具体实现逻辑
+
+1. 总览拓扑
+
+- `ModeCOverviewComponent` 按 `ModeCNetworkLayer[]` 渲染输入层、卷积层、激活层、池化层和输出层。
+- 每一层的通道图来自 `ModeCLayerChannelPreview`，不是静态示意图，而是推理后生成的真实激活预览。
+- 组件内部维护局部交互状态，用于控制当前选中层、当前通道和是否展开细节。
+
+2. 卷积过程解释
+
+- `ModeCInferenceService` 在生成细节运行时时，会截取当前输出位置对应的输入 patch、卷积核和逐元素乘积结果。
+- 卷积细节不是只显示最终值，而是拆成“输入通道 -> 中间响应 -> 偏置 -> 目标输出单元”的解释链路。
+- 为了保证数值与真实模型一致，卷积示例直接基于推理时提取到的张量计算，而不是使用手写演示数据。
+
+3. ReLU 与池化解释
+
+- ReLU 细节面板根据鼠标选中的像素位置同步显示输入值、`max(0, x)` 结果和输出值。
+- Pool 细节面板展示当前池化窗口覆盖的局部区域，并列出参与最大值比较的候选数值。
+
+4. 输出层与 Grad-CAM
+
+- 输出层显示真实 Top-K 分类结果，而不是固定示意标签。
+- `ModeCInferenceService` 基于目标卷积层特征图和输出类别梯度生成 `ModeCGradCamResult`，再与样本图进行叠加，形成热力图解释。
+- 早期实现中 output 与 softmax 结果曾与原项目不一致，后续通过对齐 flatten 顺序、预处理方式和 logits 计算链路修正。
+
+#### 7.2.6 页面结构、交互设计与状态管理
+
+模式 C 页面采用“统一顶栏 + 中央解释器工作区 + 右下角共享浮标”的结构：
+
+- 顶栏复用平台统一头部，只保留返回首页、当前模式、登录状态及用户入口。
+- 中央区域分为 overview 与 detail panel 两部分，overview 占据主要空间，detail panel 放在下方承接当前层的教学解释。
+- 右下角复用 LLM AI 助手与教学问号入口，但它们不直接参与卷积推理，只消费模式 C 当前上下文。
+
+状态流主要分为两层：
+
+- `ModeCStateService` 管理跨组件共享的样本、层、通道、预测和 Grad-CAM 结果。
+- 具体面板组件维护局部 hover、播放步进、overlay 显示等 UI 状态，避免将所有临时交互都堆积到页面根组件。
+
+#### 7.2.7 与平台其他模块的接入关系
+
+模式 C 没有新增专用 Spring 业务接口，也没有使用 WebSocket。它与平台的主要接入点是：
+
+| 接入项 | 代码路径 | 说明 |
+| --- | --- | --- |
+| 登录状态 | `frontend/src/app/core/auth/auth.service.ts` | 顶栏读取当前用户信息，决定显示登录 / 注册入口还是用户状态 |
+| AI 助手 | `frontend/src/app/shared/llm/` | 将当前样本、当前层、预测结果等整理为上下文，调用 Spring 代理的 LLM 接口 |
+| 教学入口 | `frontend/src/app/shared/teaching/` | 通过右下角问号浮标跳转教学文档页 |
+| 样式对齐 | `frontend/src/app/shared/components/platform-topbar.component.ts` | 保持与模式 A、模式 B 相同的平台顶栏和页面节奏 |
+
+### 7.3 模式 D：Transformer 注意力 / QKV 解释
+
+#### 7.3.1 模块定位
+
+模式 D 面向 Transformer 基础教学，目标是在浏览器中完成最小可用的真实推理，并把“下一词预测 - 注意力矩阵 - QKV 交互解释”组织成可演示的教学视图。该模块不是完整大模型对话系统，而是围绕单条输入文本做结构化解释。
+
+#### 7.3.2 前端结构与主要代码路径
+
+| 层级 | 主要路径 | 作用 |
+| --- | --- | --- |
+| 页面入口 | `frontend/src/app/modes/mode-d/mode-d-page.component.ts` | 负责模式 D 页面骨架、顶栏、AI 助手和教学入口 |
+| 页面模板 | `frontend/src/app/modes/mode-d/mode-d-page.component.html` | 组织解释器工作区和共享浮标 |
+| 解释器壳组件 | `frontend/src/app/modes/mode-d/explainer/components/shell/mode-d-explainer-shell.component.ts` | 汇总输入区、Top-K、注意力矩阵、QKV 面板和解释报告 |
+| 输入面板 | `frontend/src/app/modes/mode-d/explainer/components/input-panel/mode-d-input-panel.component.ts` | 负责示例切换、输入文本、层 / 头选择与重新推理入口 |
+| 注意力矩阵 | `frontend/src/app/modes/mode-d/explainer/components/attention-matrix/mode-d-attention-matrix.component.ts` | 展示单层单头注意力矩阵及当前高亮单元 |
+| QKV 面板 | `frontend/src/app/modes/mode-d/explainer/components/qkv-panel/mode-d-qkv-panel.component.ts` | 演示 Query / Key / Value、缩放点积和 value 汇入输出 |
+| 报告面板 | `frontend/src/app/modes/mode-d/explainer/components/report-panel/mode-d-report-panel.component.ts` | 根据推理结果生成中文说明性解释 |
+| 状态服务 | `frontend/src/app/modes/mode-d/explainer/services/mode-d-state.service.ts` | 管理文本、token、Top-K、注意力矩阵选中状态、QKV 视图和自动解释 |
+| 推理服务 | `frontend/src/app/modes/mode-d/explainer/services/mode-d-inference.service.ts` | 初始化 tokenizer、加载 ONNX 会话、执行下一词推理并提取注意力数据 |
+| 资源服务 | `frontend/src/app/modes/mode-d/explainer/services/mode-d-assets.service.ts` | 统一封装静态资源基路径 `/mode-d-assets` |
+| 数据结构 | `frontend/src/app/modes/mode-d/explainer/models/mode-d.types.ts` | 统一定义输入样例、token 分数、注意力摘要、QKV 教学数据和报告结构 |
+
+#### 7.3.3 运行流程
+
+```text
+用户进入 /mode-d
+  -> ModeDPageComponent 挂载统一顶栏、AI 助手、教学浮标
+  -> ModeDExplainerShellComponent 初始化默认样例文本
+  -> ModeDInferenceService 加载 tokenizer 与 GPT-2 ONNX 会话
+  -> 浏览器端执行下一词推理并提取 logits、token、attention 张量
+  -> ModeDStateService 计算 Top-K、当前层头矩阵、高亮单元和 QKV 解释数据
+  -> 各子组件渲染输入区、注意力矩阵、QKV 视图和文字报告
+```
+
+模式 D 不通过 Spring 调用推理接口，而是把推理链路放在浏览器端完成。Spring 后端只负责平台通用的认证和 LLM 服务代理。
+
+#### 7.3.4 核心数据结构
+
+| 数据结构 | 定义位置 | 用途 |
+| --- | --- | --- |
+| `ModeDExample` | `mode-d.types.ts` | 预置文本样例、分类标签和教学提示信息 |
+| `ModeDInferenceResult` | `mode-d.types.ts` | 浏览器端推理完成后的总体结果，包含 token、logits、attention 和下游展示字段 |
+| `ModeDTokenScore` | `mode-d.types.ts` | 表示 Top-K 候选 token 及其概率 |
+| `ModeDAttentionSummary` | `mode-d.types.ts` | 表示当前层 / 头的注意力矩阵、行列标签和高亮位置 |
+| `ModeDQkvTeachingData` | `mode-d.types.ts` | 组织 Query、Key、Value、缩放点积、softmax 权重和值汇入输出的教学数据 |
+| `ModeDReportSection` | `mode-d.types.ts` | 报告面板中使用的结构化中文解释段落 |
+
+#### 7.3.5 具体实现逻辑
+
+1. 浏览器端推理链
+
+- `ModeDInferenceService` 使用 `@xenova/transformers` 的 tokenizer 将文本编码成 token ids。
+- 模型推理由 `onnxruntime-web` 完成。为避免单文件资源过大，ONNX 模型被拆成多个分片，同步到 `frontend/public/mode-d-assets/model/` 后再在运行时合并。
+- 推理结果中，logits 从 `linear_output` 读取；注意力矩阵从以 `_attn_dropout` 结尾的输出张量中提取。
+
+2. Top-K 与注意力矩阵
+
+- `ModeDStateService` 根据最后一个位置的 logits 计算下一个 token 的 Top-K 概率列表。
+- 用户可切换层和头，矩阵组件只渲染当前层 / 当前头的注意力权重。
+- 当前高亮单元会同步驱动下方解释文本与 QKV 面板，保证所有解释围绕同一个 query-token / key-token 对展开。
+
+3. QKV 教学视图
+
+- QKV 视图不是直接照搬外部页面，而是基于当前高亮的 query 与 key 索引生成教学数据。
+- 面板中分别显示 Query、Key、Value 向量，展示 `Q x K`、缩放、softmax 权重以及 value 汇入输出的过程。
+- 为了让教学演示可读，QKV 页面默认聚焦当前选中单元，同时保留逐字段中文解释和数值条形图。
+
+4. 自动解释报告
+
+- 报告面板根据当前输入文本、Top-K、最强注意力对和 QKV 结果生成中文解释。
+- 解释报告属于前端结构化生成，不依赖后端额外推理，以保证页面离线时仍能呈现基础教学结果。
+
+#### 7.3.6 资源同步与项目结构适配
+
+模式 D 的模型资源较大，不适合长期直接作为源码目录的一部分维护，因此采用“源码与资源分离、按需同步”的方案：
+
+| 资源类型 | 目标路径 | 同步方式 |
+| --- | --- | --- |
+| tokenizer 配置 | `frontend/public/mode-d-assets/tokenizer/` | 由 `scripts/sync-transformer-explainer.ps1` 从外部 transformer 项目复制 |
+| ONNX 模型分片 | `frontend/public/mode-d-assets/model/` | 同步脚本复制并保留浏览器端加载所需目录结构 |
+| 额外元数据 | `frontend/public/mode-d-assets/` | 统一落在公共静态目录，便于 Angular 直接以 `/mode-d-assets/**` 访问 |
+
+该方案对应的维护文档为 `docs/mode-d-assets-sync-guide.md`。这样做的原因有三点：
+
+- 减少仓库主分支对大体积二进制资源的直接耦合。
+- 让模式 D 的运行依赖变成“源码 + 一次同步脚本”，便于后续迁移或替换模型。
+- 让静态资源路径保持稳定，避免组件代码依赖外部工程的原始目录结构。
+
+#### 7.3.7 与平台其他模块的接入关系
+
+模式 D 与模式 C 一样，没有新增专用 Spring 推理接口，也没有使用 WebSocket；但接入了平台统一能力：
+
+| 接入项 | 代码路径 | 说明 |
+| --- | --- | --- |
+| 登录状态 | `frontend/src/app/core/auth/auth.service.ts` | 统一显示当前用户状态和登录 / 注册入口 |
+| AI 助手 | `frontend/src/app/shared/llm/` | 基于当前文本、Top-K、最强注意力单元等上下文向 Spring 的 `/api/llm/chat` 发起请求 |
+| 教学入口 | `frontend/src/app/shared/teaching/` | 通过右下角问号浮标进入教学文档页面 |
+| 样式与页面框架 | `frontend/src/app/shared/components/platform-topbar.component.ts` | 与模式 A、模式 B 使用相同的头部和右下角浮标布局 |
+
+### 7.4 第三方解释器迁移与适配策略
+
+成员 C 负责的两个模块都涉及“参考现有解释器，但不能直接嵌入使用”的问题，不过两者的迁移方式不同：
+
+| 模块 | 原始依赖形态 | 平台内改造方式 | 原因 |
+| --- | --- | --- | --- |
+| 模式 C | `cnn-explainer`，Svelte + 静态脚本 | 以 Angular 原生组件重写页面结构和交互逻辑，保留真实模型与样本资源 | Svelte 组件生命周期、状态流和 DOM 组织无法直接复用到 Angular |
+| 模式 D | `transformer-explainer` 相关运行资源与教学思路 | 保留浏览器端 tokenizer / ONNX / attention 思路，重新实现 Angular 页面和状态管理 | 需要对齐平台样式、共享组件和教学入口，并控制资源体积与路径 |
+
+这部分工作的核心不是“套壳”，而是把外部项目中有价值的教学思路拆成平台可维护的组件、服务和静态资源方案。
+
+### 7.5 工程难点与解决方式
+
+#### 7.5.1 外部解释器与 Angular 架构不兼容
+
+- 问题背景：模式 C 和模式 D 最初都参考了外部解释器项目，但这些项目并不是为本平台 Angular 架构设计的。
+- 为什么难：如果直接 iframe 嵌入或保留原始工程，会造成样式不统一、状态无法共享、登录 / AI / 教学入口无法接入。
+- 解决方式：模式 C 采用 Angular 原生重写；模式 D 保留浏览器端推理思路，但重建页面、状态服务和资源路径。
+- 体现的工程能力：能够根据项目现状做架构取舍，而不是只追求“先跑起来”。
+
+#### 7.5.2 模式 C 解释结果必须与真实推理一致
+
+- 问题背景：卷积解释如果只用示意数据，教学上直观，但很容易与输出类别、softmax 结果和热力图不一致。
+- 为什么难：overview、卷积局部解释、输出层和 Grad-CAM 实际上共享同一套推理结果，任一环节处理顺序不一致都会导致解释失真。
+- 解决方式：将所有层摘要、通道预览、卷积细节和输出层结果统一从 `ModeCInferenceService` 的真实推理链生成，并修正 flatten 顺序、输入预处理和 logits 计算方式。
+- 体现的工程能力：能把“好看”的教学界面和“正确”的模型计算统一起来。
+
+#### 7.5.3 卷积层细节不能停留在静态示意图
+
+- 问题背景：简单的层级缩略图无法说明卷积层到底如何从输入 patch 计算到某个输出单元。
+- 为什么难：真实卷积涉及多输入通道、局部 patch、kernel 权重、偏置累加和输出位置映射，信息量大且容易把页面挤乱。
+- 解决方式：把解释拆成 overview 与 detail panel 两层；overview 保留全局拓扑，detail panel 展示单输出位置的多通道中间响应、偏置和目标输出单元。
+- 体现的工程能力：能够通过分层界面设计控制复杂度。
+
+#### 7.5.4 浏览器端 Transformer 推理链的可运行性
+
+- 问题背景：模式 D 需要在浏览器中完成 tokenizer、模型加载和 attention 提取，而不是依赖后端代算。
+- 为什么难：浏览器端对模型体积、WASM/ONNX 运行环境、资源路径和首轮初始化都更敏感，出错后也更难定位。
+- 解决方式：将推理逻辑封装到 `ModeDInferenceService`，显式管理 tokenizer、session、logits、attention 的初始化状态，并把模型资源拆分到公共静态目录后由同步脚本维护。
+- 体现的工程能力：具备对浏览器运行时限制、静态资源组织和推理链调试的处理能力。
+
+#### 7.5.5 大模型静态资源的仓库维护成本
+
+- 问题背景：模式 D 所需 tokenizer 和 ONNX 资源体积较大，直接纳入源码目录会提高仓库维护成本。
+- 为什么难：课程项目既要保证别人能复现，也要避免仓库长期被大文件拖慢。
+- 解决方式：把大资源沉到 `frontend/public/mode-d-assets/`，通过 `scripts/sync-transformer-explainer.ps1` 做同步，并配套 `docs/mode-d-assets-sync-guide.md` 说明获取和更新方式。
+- 体现的工程能力：在可运行性与可维护性之间做平衡。
+
+#### 7.5.6 AI 助手需要接入解释模块上下文
+
+- 问题背景：如果右下角 AI 助手只是通用聊天框，它无法围绕当前样本、当前层或当前注意力头给出针对性解释。
+- 为什么难：模式 C 与模式 D 的上下文字段完全不同，需要页面层负责提取、压缩和传递。
+- 解决方式：在各自页面组件中构造 context provider，只把当前样本、预测、层信息、Top-K 或注意力焦点等必要信息传给共享 LLM 组件。
+- 体现的工程能力：能够在复用共享组件的同时做页面级定制接入。
+
+### 7.6 人工与 AI 的分工说明
+
+成员 C 的工作中，AI 参与了部分高代码量模块的局部实现，但需求边界、数据契约、最终代码整合和结果验收由人工负责。
+
+| 类型 | 人工负责 | AI 参与方式 | 最终落点 |
+| --- | --- | --- | --- |
+| 模块边界与目标 | 确定模式 C 做 CNN 解释、模式 D 做 Transformer 注意力 / QKV 教学，不把它们做成独立外部 demo | 辅助列出可能功能项和迁移思路 | 人工根据课程目标和平台结构筛选功能范围 |
+| 组件与服务结构 | 确定页面组件、shell、overview、detail panel、state service、inference service 的拆分方式 | 辅助生成部分 Angular 组件 / service / interface 样板 | 人工按现有目录结构重组、重命名并接入真实状态流 |
+| 算法与可视化实现 | 明确模式 C 需要真实卷积示例、Grad-CAM；模式 D 需要 Top-K、注意力矩阵和 QKV 教学视图 | 辅助提供卷积展示、Grad-CAM、attention 读取、QKV 可视化的实现参考 | 人工按真实推理输出调试数值、修复预处理和资源加载问题 |
+| 报错排查与资源重构 | 人工定位模型资源路径、浏览器端运行错误、静态资源同步问题 | AI 辅助分析报错原因、给出排查方向和脚本草稿 | 人工验证资源路径、修正同步方案并确认浏览器端可运行 |
+| 文案与样式 | 人工决定页面保留哪些教学文本、哪些开发期提示必须删除 | AI 辅助提供中文文案、按钮替换和样式草稿 | 人工逐项删改并保证与平台已有风格一致 |
+
+更具体地说：
+
+- 人工主导部分：需求确认、模块范围控制、核心数据结构、接口契约、状态流设计、关键 bug 修复、资源同步方案、与顶栏 / 登录 / AI / 教学入口的集成。
+- AI 辅助部分：局部组件样板、接口定义草稿、部分可视化公式参考、报错排查建议、文案和文档组织。
+- 最终责任：所有提交到仓库中的模式 C / D 代码、资源路径、运行链验证和答辩叙述，均由成员 C 人工整合、删改、测试和验收。
 
 ## 8. 成员 D：赵红林开发内容
 
