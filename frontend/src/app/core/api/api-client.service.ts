@@ -32,19 +32,29 @@ export class ApiClientService {
 
     const response = await fetch(`${this.baseUrl}${path}`, { ...init, headers });
     if (!response.ok) {
-      let message = `HTTP ${response.status}`;
-      try {
-        const body = await response.json();
-        message = body?.message ?? body?.error ?? message;
-      } catch {
-        message = await response.text() || message;
-      }
-      throw new Error(message);
+      throw new Error(await this.readErrorMessage(response));
     }
 
     if (response.status === 204) {
       return undefined as T;
     }
     return response.json() as Promise<T>;
+  }
+
+  /** 响应体只能消费一次；先读取文本，再按 JSON 尝试提取后端错误信息。 */
+  private async readErrorMessage(response: Response): Promise<string> {
+    const fallback = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+    const text = await response.text();
+    if (!text.trim()) {
+      return fallback;
+    }
+    try {
+      const body = JSON.parse(text) as { message?: unknown; error?: unknown };
+      const detail = body.message ?? body.error;
+      return typeof detail === 'string' && detail.trim() ? detail : fallback;
+    } catch {
+      const plainText = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return plainText || fallback;
+    }
   }
 }

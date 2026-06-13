@@ -111,11 +111,16 @@ export class LlmChatService {
 
   /** 从失败响应中提取可读错误，便于提示 LLM 代理或模型服务的问题。 */
   private async errorMessage(response: Response): Promise<string> {
+    const fallback = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+    const text = await response.text();
+    if (!text.trim()) {
+      return fallback;
+    }
     try {
-      const body = await response.json();
-      return body?.message ?? body?.error ?? `HTTP ${response.status}`;
+      const body = JSON.parse(text);
+      return body?.message ?? body?.error ?? fallback;
     } catch {
-      return await response.text() || `HTTP ${response.status}`;
+      return text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || fallback;
     }
   }
 }
