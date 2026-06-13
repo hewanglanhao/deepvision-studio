@@ -35,6 +35,7 @@ type CollaborationInbound =
 export class TrainingCollaborationService implements OnDestroy {
   private socket: WebSocket | null = null;
   private roomJobId = '';
+  private clientId = '';
 
   readonly messages$ = new BehaviorSubject<CollaborationMessage[]>([]);
   readonly users$ = new BehaviorSubject<CollaborationUser[]>([]);
@@ -46,6 +47,10 @@ export class TrainingCollaborationService implements OnDestroy {
     return this.roomJobId;
   }
 
+  get currentClientId(): string {
+    return this.clientId;
+  }
+
   connect(jobId: string, displayName = '', createRoom = false): void {
     const room = jobId.trim();
     if (!room) return;
@@ -54,11 +59,12 @@ export class TrainingCollaborationService implements OnDestroy {
     }
     this.disconnect();
     this.roomJobId = room;
+    this.clientId = this.createClientId();
     this.messages$.next([]);
     this.users$.next([]);
     this.state$.next('connecting');
 
-    const params = new URLSearchParams({ jobId: room });
+    const params = new URLSearchParams({ jobId: room, clientId: this.clientId });
     if (this.api.token) params.set('token', this.api.token);
     if (displayName) params.set('name', displayName);
     if (createRoom) params.set('create', 'true');
@@ -97,6 +103,7 @@ export class TrainingCollaborationService implements OnDestroy {
       socket.close();
     }
     this.roomJobId = '';
+    this.clientId = '';
     this.users$.next([]);
     if (this.state$.value !== 'idle') {
       this.state$.next('closed');
@@ -145,5 +152,10 @@ export class TrainingCollaborationService implements OnDestroy {
       return this.api.baseUrl.replace(/^http/i, 'ws');
     }
     return `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
+  }
+
+  private createClientId(): string {
+    return globalThis.crypto?.randomUUID?.()
+      ?? `collab-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 }

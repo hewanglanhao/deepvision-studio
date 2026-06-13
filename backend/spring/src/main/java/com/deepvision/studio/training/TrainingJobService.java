@@ -290,7 +290,15 @@ public class TrainingJobService {
 
   public void addSession(String username, String jobId, WebSocketSession session) {
     TrainingJob job = requireOwnedJob(username, jobId);
-    sessions.computeIfAbsent(jobId, ignored -> new CopyOnWriteArraySet<>()).add(session);
+    addSession(job, session);
+  }
+
+  public void addCollaborationObserverSession(String jobId, WebSocketSession session) {
+    addSession(getJob(jobId), session);
+  }
+
+  private void addSession(TrainingJob job, WebSocketSession session) {
+    sessions.computeIfAbsent(job.jobId(), ignored -> new CopyOnWriteArraySet<>()).add(session);
     List<String> recentEvents = job.recentStreamEvents();
     if (!recentEvents.isEmpty()) {
       for (String event : recentEvents) {

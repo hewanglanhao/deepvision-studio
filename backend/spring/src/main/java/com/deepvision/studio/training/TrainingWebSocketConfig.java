@@ -20,15 +20,18 @@ public class TrainingWebSocketConfig implements WebSocketConfigurer {
 
   private final TrainingStreamHandler streamHandler;
   private final TrainingCollaborationHandler collaborationHandler;
+  private final TrainingCollaborationStreamHandler collaborationStreamHandler;
   private final MuseumPresenceHandler museumPresenceHandler;
 
   public TrainingWebSocketConfig(
       TrainingStreamHandler streamHandler,
       TrainingCollaborationHandler collaborationHandler,
+      TrainingCollaborationStreamHandler collaborationStreamHandler,
       MuseumPresenceHandler museumPresenceHandler
   ) {
     this.streamHandler = streamHandler;
     this.collaborationHandler = collaborationHandler;
+    this.collaborationStreamHandler = collaborationStreamHandler;
     this.museumPresenceHandler = museumPresenceHandler;
   }
 
@@ -37,6 +40,8 @@ public class TrainingWebSocketConfig implements WebSocketConfigurer {
     registry.addHandler(streamHandler, "/api/training/stream")
         .setAllowedOrigins(LOCAL_FRONTEND_ORIGINS);
     registry.addHandler(collaborationHandler, "/api/training/collaboration")
+        .setAllowedOrigins(LOCAL_FRONTEND_ORIGINS);
+    registry.addHandler(collaborationStreamHandler, "/api/training/collaboration/stream")
         .setAllowedOrigins(LOCAL_FRONTEND_ORIGINS);
     registry.addHandler(museumPresenceHandler, "/api/museum/presence")
         .setAllowedOrigins(LOCAL_FRONTEND_ORIGINS);

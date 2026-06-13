@@ -455,6 +455,37 @@ export class TrainingRuntimeService implements OnDestroy {
   }
 
   observeBackendJob(jobId: string): void {
+    this.beginBackendObservation(jobId, '/api/training/stream');
+  }
+
+  observeCollaborationJob(jobId: string, clientId: string): void {
+    const query = `clientId=${encodeURIComponent(clientId)}`;
+    this.beginBackendObservation(jobId, `/api/training/collaboration/stream?${query}`);
+  }
+
+  disconnectBackendObservation(): void {
+    this.clearTimer();
+    this.closeSocket();
+    this.backendJobId = '';
+    this.backendTotalEpochs = 0;
+    this.backendTotalBatches = 0;
+    this.history$.next([]);
+    this.logs$.next([]);
+    this.testResult$.next(null);
+    this.backprop$.next(null);
+    this.patchState({
+      status: 'idle',
+      currentEpoch: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+      totalEpochs: 0,
+      elapsedSeconds: 0,
+      etaSeconds: 0,
+      message: 'Training observation disconnected.'
+    });
+  }
+
+  private beginBackendObservation(jobId: string, streamPath: string): void {
     const target = jobId.trim();
     if (!target) return;
     this.clearTimer();
@@ -475,7 +506,8 @@ export class TrainingRuntimeService implements OnDestroy {
       message: `Observing backend training: ${target}`
     });
     this.log('info', `加入训练观察：${target}`);
-    this.connectWebSocket(`/api/training/stream?jobId=${encodeURIComponent(target)}`);
+    const separator = streamPath.includes('?') ? '&' : '?';
+    this.connectWebSocket(`${streamPath}${separator}jobId=${encodeURIComponent(target)}`);
   }
 
   async pause(): Promise<void> {

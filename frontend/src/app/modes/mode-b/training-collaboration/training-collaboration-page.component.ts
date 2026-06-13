@@ -58,7 +58,14 @@ export class TrainingCollaborationPageComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.subs.add(this.authSvc.user$.subscribe(user => this.authUser = user));
-    this.subs.add(this.collaborationSvc.state$.subscribe(state => this.collaborationState = state));
+    this.subs.add(this.collaborationSvc.state$.subscribe(state => {
+      this.collaborationState = state;
+      if (state === 'connected' && this.activeRoomId) {
+        this.trainingSvc.observeCollaborationJob(this.activeRoomId, this.collaborationSvc.currentClientId);
+      } else if ((state === 'closed' || state === 'error') && this.trainingSvc.currentBackendJobId) {
+        this.trainingSvc.disconnectBackendObservation();
+      }
+    }));
     this.subs.add(this.collaborationSvc.users$.subscribe(users => this.users = users));
     this.subs.add(this.collaborationSvc.messages$.subscribe(messages => this.messages = messages));
     this.subs.add(this.trainingSvc.logs$.subscribe(logs => this.trainingLogs = logs));
@@ -92,6 +99,7 @@ export class TrainingCollaborationPageComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.subs.unsubscribe();
     this.collaborationSvc.disconnect();
+    this.trainingSvc.disconnectBackendObservation();
   }
 
   async connectRoom(jobId = this.roomDraft, updateUrl = true, createRoom = false): Promise<void> {
@@ -110,7 +118,6 @@ export class TrainingCollaborationPageComponent implements OnInit, OnDestroy {
     this.error = '';
     this.activeRoomId = target;
     this.roomDraft = target;
-    this.trainingSvc.observeBackendJob(target);
     this.collaborationSvc.connect(target, this.authUser?.displayName ?? this.authUser?.username ?? '', createRoom);
     if (updateUrl) {
       void this.router.navigate([], {
@@ -181,6 +188,7 @@ export class TrainingCollaborationPageComponent implements OnInit, OnDestroy {
 
   leave(): void {
     this.collaborationSvc.disconnect();
+    this.trainingSvc.disconnectBackendObservation();
     this.activeRoomId = '';
     this.error = '';
     void this.router.navigate([], {

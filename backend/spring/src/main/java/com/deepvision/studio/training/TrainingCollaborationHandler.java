@@ -81,6 +81,14 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
         .toList();
   }
 
+  public boolean hasParticipant(String jobId, String clientId) {
+    if (jobId == null || clientId == null || clientId.isBlank()) {
+      return false;
+    }
+    return participants.values().stream()
+        .anyMatch(participant -> jobId.equals(participant.jobId()) && clientId.equals(participant.clientId()));
+  }
+
   @Override
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
     Map<String, String> query = queryParams(session.getUri());
@@ -181,13 +189,17 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
   }
 
   private Participant identifyParticipant(WebSocketSession session, Map<String, String> query, String jobId) {
+    String clientId = query.getOrDefault("clientId", "").trim();
+    if (clientId.isBlank()) {
+      clientId = session.getId();
+    }
     String token = query.getOrDefault("token", "");
     if (!token.isBlank()) {
       try {
         String username = jwtService.subject(token);
         AppUser user = users.findByUsername(username).orElse(null);
         if (user != null) {
-          return new Participant(jobId, user.getUsername(), user.getDisplayName());
+          return new Participant(jobId, user.getUsername(), user.getDisplayName(), clientId);
         }
       } catch (RuntimeException ignored) {
         // Fall back to guest identity.
@@ -197,7 +209,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     if (guestName.isBlank()) {
       guestName = "访客-" + session.getId().substring(0, Math.min(4, session.getId().length()));
     }
-    return new Participant(jobId, "guest-" + session.getId(), guestName);
+    return new Participant(jobId, "guest-" + session.getId(), guestName, clientId);
   }
 
   private void broadcastPresence(String jobId) {
@@ -423,7 +435,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     return params;
   }
 
-  private record Participant(String jobId, String username, String displayName) {}
+  private record Participant(String jobId, String username, String displayName, String clientId) {}
 
   private static final class RoomState {
     private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
