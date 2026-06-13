@@ -375,6 +375,9 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   private forwardRequestSeq = 0;
   private forwardInFlight = false;
   private forwardRerunRequested = false;
+  private trainingDatasetLoadSeq = 0;
+  private trainingDatasetDetailSeq = 0;
+  private datasetOwnerUsername: string | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -397,7 +400,6 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       }
     }));
     this.loadLocalImageSamples();
-    void this.loadTrainingDatasets();
     this.subs.add(this.trainingSvc.state$.subscribe(s => {
       const previousStatus = this.trainingStatus;
       this.trainingStatus  = s.status;
@@ -428,6 +430,20 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       if (result && this.authUser) void this.loadTrainingCheckpoints();
     }));
     this.subs.add(this.authSvc.user$.subscribe(user => {
+      const nextUsername = user?.username ?? null;
+      if (nextUsername !== this.datasetOwnerUsername) {
+        this.datasetOwnerUsername = nextUsername;
+        this.trainingDatasetDetailSeq += 1;
+        this.builtinTrainingDatasets = this.builtinTrainingDatasets.filter(item => item.source === 'builtin');
+        this.trainingCheckpoints = [];
+        this.selectedCheckpointId = null;
+        this.checkpointError = '';
+        this.resetImportedDatasetDraft();
+        if (this.trainingDatasetDetail?.source === 'upload') {
+          this.selectedTrainingDatasetId = 'mnist-1000';
+          this.trainingDatasetDetail = null;
+        }
+      }
       this.authUser = user;
       void this.loadTrainingDatasets();
       if (user && this.showRecordDrawer) {
@@ -1811,18 +1827,32 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
 
   // ── Training ──────────────────────────────────────────
   async loadTrainingDatasets(): Promise<void> {
+    const requestSeq = ++this.trainingDatasetLoadSeq;
     this.trainingDatasetLoading = true;
     this.trainingBackendNotice = '正在加载训练数据集...';
     try {
-      this.builtinTrainingDatasets = await this.trainingDatasetApi.listDatasets();
+      const datasets = await this.trainingDatasetApi.listDatasets();
+      if (requestSeq !== this.trainingDatasetLoadSeq) return;
+      this.builtinTrainingDatasets = datasets;
       this.trainingBackendNotice = '训练数据集加载完成。';
-      await this.selectTrainingDataset(this.selectedTrainingDatasetId);
+      const selectedId = datasets.some(item => item.id === this.selectedTrainingDatasetId)
+        ? this.selectedTrainingDatasetId
+        : datasets.find(item => item.source === 'builtin')?.id;
+      if (selectedId) {
+        await this.selectTrainingDataset(selectedId);
+      } else {
+        this.selectedTrainingDatasetId = '';
+        this.trainingDatasetDetail = null;
+      }
     } catch (err) {
+      if (requestSeq !== this.trainingDatasetLoadSeq) return;
       this.trainingBackendNotice = '数据集暂时加载失败，已显示备用数据。';
       this.trainingDatasetError = err instanceof Error ? err.message : '加载后端数据集失败。';
       this.selectTrainingDatasetLocal(this.selectedTrainingDatasetId);
     } finally {
-      this.trainingDatasetLoading = false;
+      if (requestSeq === this.trainingDatasetLoadSeq) {
+        this.trainingDatasetLoading = false;
+      }
     }
   }
 
@@ -1834,18 +1864,25 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
     const option = this.builtinTrainingDatasets.find(d => d.id === id);
     if (!option) return;
+    const requestSeq = ++this.trainingDatasetDetailSeq;
+    const requestUsername = this.authUser?.username ?? null;
     this.selectedTrainingDatasetId = option.id;
     this.trainingDatasetLoading = true;
     try {
-      this.trainingDatasetDetail = await this.trainingDatasetApi.getDatasetDetail(option.id);
+      const detail = await this.trainingDatasetApi.getDatasetDetail(option.id);
+      if (requestSeq !== this.trainingDatasetDetailSeq || requestUsername !== (this.authUser?.username ?? null)) return;
+      this.trainingDatasetDetail = detail;
       this.trainingDatasetError = '';
       this.trainingBackendNotice = '数据集详情已加载。';
     } catch (err) {
+      if (requestSeq !== this.trainingDatasetDetailSeq || requestUsername !== (this.authUser?.username ?? null)) return;
       this.trainingDatasetDetail = this.buildBuiltinTrainingDatasetDetail(option);
       this.trainingDatasetError = err instanceof Error ? err.message : '后端详情加载失败，已使用前端兜底数据。';
       this.trainingBackendNotice = '数据集详情加载失败，已显示备用信息。';
     } finally {
-      this.trainingDatasetLoading = false;
+      if (requestSeq === this.trainingDatasetDetailSeq) {
+        this.trainingDatasetLoading = false;
+      }
     }
     if (this.authUser) void this.loadTrainingCheckpoints();
   }
@@ -1866,6 +1903,13 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
 
   clearImportedTrainingDataset(): void {
     const importedId = this.datasetImportDraft.detail?.id;
+    this.resetImportedDatasetDraft();
+    if (this.selectedTrainingDatasetId === 'custom-upload' || this.selectedTrainingDatasetId === importedId) {
+      void this.selectTrainingDataset('mnist-1000');
+    }
+  }
+
+  private resetImportedDatasetDraft(): void {
     this.datasetImportDraft = {
       status: 'idle',
       message: '尚未导入自定义数据。',
@@ -1876,9 +1920,6 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       selectedLabelColumn: '',
       selectedClassCount: null
     };
-    if (this.selectedTrainingDatasetId === 'custom-upload' || this.selectedTrainingDatasetId === importedId) {
-      void this.selectTrainingDataset('mnist-1000');
-    }
   }
 
   async onTrainingDatasetUpload(e: Event): Promise<void> {
@@ -2111,6 +2152,11 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
 
   async startTraining(): Promise<void> {
     this.showSingleInferencePrompt = false;
+    if (!this.authUser) {
+      this.openAuthModal('login');
+      this.trainingDatasetError = '请先登录后再开始训练。';
+      return;
+    }
     if (!this.trainingDatasetDetail) {
       this.trainingDatasetError = '请先选择或导入一个训练数据集。';
       return;

@@ -5,8 +5,9 @@
  * runtime used by mode B.
  */
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { ApiClientService } from '@core/api/api-client.service';
+import { AuthService } from '@core/auth/auth.service';
 import { SimEngine } from '@shared/simulation/sim-engine';
 import {
   MetricPoint,
@@ -244,6 +245,8 @@ export class TrainingRuntimeService implements OnDestroy {
   private backendJobId = '';
   private backendTotalEpochs = 0;
   private backendTotalBatches = 0;
+  private activeUsername = '';
+  private readonly authSubscription: Subscription;
 
   readonly state$ = new BehaviorSubject<TrainingRuntimeState>({
     status: 'idle',
@@ -277,7 +280,18 @@ export class TrainingRuntimeService implements OnDestroy {
   };
   private layers: NetworkLayer[] = [];
 
-  constructor(private api: ApiClientService) {}
+  constructor(
+    private api: ApiClientService,
+    private auth: AuthService
+  ) {
+    this.activeUsername = this.auth.currentUser?.username ?? '';
+    this.authSubscription = this.auth.user$.subscribe(user => {
+      const username = user?.username ?? '';
+      if (username === this.activeUsername) return;
+      this.activeUsername = username;
+      this.clearClientSession();
+    });
+  }
 
   get currentBackendJobId(): string {
     return this.backendJobId;
@@ -530,14 +544,49 @@ export class TrainingRuntimeService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.authSubscription.unsubscribe();
     this.clearTimer();
     this.closeSocket();
+  }
+
+  private clearClientSession(): void {
+    this.clearTimer();
+    this.closeSocket();
+    this.backendJobId = '';
+    this.backendTotalEpochs = 0;
+    this.backendTotalBatches = 0;
+    this.history$.next([]);
+    this.logs$.next([]);
+    this.testResult$.next(null);
+    this.backprop$.next(null);
+    this.patchState({
+      status: 'idle',
+      currentEpoch: 0,
+      currentLr: this.config.learningRate,
+      latestLoss: 1.7,
+      latestValLoss: 1.78,
+      latestAccuracy: 0.2,
+      latestValAccuracy: 0.18,
+      latestGradientNorm: 1.2,
+      latestWeightMean: 0,
+      latestWeightStd: 0.16,
+      elapsedSeconds: 0,
+      etaSeconds: 0,
+      currentBatch: 0,
+      totalBatches: 0,
+      totalEpochs: this.config.totalEpochs,
+      message: 'Ready.'
+    });
   }
 
   private connectWebSocket(streamUrl: string): void {
     this.closeSocket();
     const wsUrl = this.normalizeWebSocketUrl(streamUrl);
-    const socket = new WebSocket(wsUrl);
+    const token = this.api.token;
+    const authenticatedUrl = token
+      ? `${wsUrl}${wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+      : wsUrl;
+    const socket = new WebSocket(authenticatedUrl);
     this.socket = socket;
     socket.onopen = () => this.log('info', `训练指标流已连接：${this.backendJobId}`);
     socket.onmessage = event => this.handleBackendMetric(event.data);

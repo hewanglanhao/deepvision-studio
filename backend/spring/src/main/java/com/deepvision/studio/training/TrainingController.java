@@ -201,44 +201,44 @@ public class TrainingController {
 
   @GetMapping("/{jobId}/weights/histogram")
   @Operation(summary = "Get weight histogram for a training job")
-  public WeightHistogramResponse histogram(@PathVariable String jobId) {
-    return jobService.histogram(jobId);
+  public WeightHistogramResponse histogram(Principal principal, @PathVariable String jobId) {
+    return jobService.histogram(username(principal), jobId);
   }
 
   @GetMapping("/{jobId}/status")
   @Operation(summary = "Get training job status")
-  public TrainingStatusResponse status(@PathVariable String jobId) {
-    return jobService.status(jobId);
+  public TrainingStatusResponse status(Principal principal, @PathVariable String jobId) {
+    return jobService.status(username(principal), jobId);
   }
 
   @PostMapping("/{jobId}/pause")
   @Operation(summary = "Pause a training job")
-  public TrainingControlResponse pause(@PathVariable String jobId) {
-    return jobService.pause(jobId);
+  public TrainingControlResponse pause(Principal principal, @PathVariable String jobId) {
+    return jobService.pause(username(principal), jobId);
   }
 
   @PostMapping("/{jobId}/resume")
   @Operation(summary = "Resume a paused training job")
-  public TrainingControlResponse resume(@PathVariable String jobId) {
-    return jobService.resume(jobId);
+  public TrainingControlResponse resume(Principal principal, @PathVariable String jobId) {
+    return jobService.resume(username(principal), jobId);
   }
 
   @PostMapping("/{jobId}/stop")
   @Operation(summary = "Stop a training job")
-  public TrainingControlResponse stop(@PathVariable String jobId) {
-    return jobService.stop(jobId);
+  public TrainingControlResponse stop(Principal principal, @PathVariable String jobId) {
+    return jobService.stop(username(principal), jobId);
   }
 
   @PostMapping("/{jobId}/reset")
   @Operation(summary = "Reset a training job")
-  public TrainingControlResponse reset(@PathVariable String jobId) {
-    return jobService.reset(jobId);
+  public TrainingControlResponse reset(Principal principal, @PathVariable String jobId) {
+    return jobService.reset(username(principal), jobId);
   }
 
   @PostMapping("/{jobId}/save")
   @Operation(summary = "Save a training checkpoint")
   public TrainingControlResponse save(Principal principal, @PathVariable String jobId) {
-    return jobService.save(jobId);
+    return jobService.save(username(principal), jobId);
   }
 
   @ExceptionHandler(IllegalArgumentException.class)

@@ -95,6 +95,7 @@ public class TrainingJobService {
   }
 
   public TrainingStartResponse start(StartTrainingRequest request, String username) {
+    requireUser(username);
     TrainingDatasetDetail dataset = datasetService.getDetail(request.datasetId(), username);
     validateSplit(request.split());
     if (!dataset.hasLabels()) {
@@ -124,8 +125,20 @@ public class TrainingJobService {
     return getJob(jobId).toStatus();
   }
 
+  public TrainingStatusResponse status(String username, String jobId) {
+    return requireOwnedJob(username, jobId).toStatus();
+  }
+
   public WeightHistogramResponse histogram(String jobId) {
     TrainingJob job = getJob(jobId);
+    return histogram(job);
+  }
+
+  public WeightHistogramResponse histogram(String username, String jobId) {
+    return histogram(requireOwnedJob(username, jobId));
+  }
+
+  private WeightHistogramResponse histogram(TrainingJob job) {
     TrainingMetricMessage metric = job.latestMetric();
     double mean = metric == null ? 0 : metric.weightMean();
     double std = metric == null ? 0.16 : Math.max(0.02, metric.weightStd());
@@ -135,44 +148,84 @@ public class TrainingJobService {
       int count = (int) Math.round(80 * Math.exp(-0.5 * Math.pow(i / 2.1, 2))) + Math.max(0, job.epoch());
       bins.add(new HistogramBin(String.format(java.util.Locale.US, "%.2f", value), count));
     }
-    return new WeightHistogramResponse(jobId, job.epoch(), bins);
+    return new WeightHistogramResponse(job.jobId(), job.epoch(), bins);
   }
 
   public TrainingControlResponse pause(String jobId) {
     TrainingJob job = getJob(jobId);
+    return pause(job);
+  }
+
+  public TrainingControlResponse pause(String username, String jobId) {
+    return pause(requireOwnedJob(username, jobId));
+  }
+
+  private TrainingControlResponse pause(TrainingJob job) {
     writeControl(job, "paused");
     job.setStatus("paused");
-    return new TrainingControlResponse(jobId, job.status(), "Training paused.");
+    return new TrainingControlResponse(job.jobId(), job.status(), "Training paused.");
   }
 
   public TrainingControlResponse resume(String jobId) {
     TrainingJob job = getJob(jobId);
+    return resume(job);
+  }
+
+  public TrainingControlResponse resume(String username, String jobId) {
+    return resume(requireOwnedJob(username, jobId));
+  }
+
+  private TrainingControlResponse resume(TrainingJob job) {
     writeControl(job, "running");
     if ("paused".equals(job.status())) {
       job.setStatus("running");
     }
-    return new TrainingControlResponse(jobId, job.status(), "Training resumed.");
+    return new TrainingControlResponse(job.jobId(), job.status(), "Training resumed.");
   }
 
   public TrainingControlResponse stop(String jobId) {
     TrainingJob job = getJob(jobId);
+    return stop(job);
+  }
+
+  public TrainingControlResponse stop(String username, String jobId) {
+    return stop(requireOwnedJob(username, jobId));
+  }
+
+  private TrainingControlResponse stop(TrainingJob job) {
     writeControl(job, "stopped");
     job.destroyProcess();
     job.setStatus("stopped");
-    return new TrainingControlResponse(jobId, job.status(), "Training stopped.");
+    return new TrainingControlResponse(job.jobId(), job.status(), "Training stopped.");
   }
 
   public TrainingControlResponse reset(String jobId) {
     TrainingJob job = getJob(jobId);
+    return reset(job);
+  }
+
+  public TrainingControlResponse reset(String username, String jobId) {
+    return reset(requireOwnedJob(username, jobId));
+  }
+
+  private TrainingControlResponse reset(TrainingJob job) {
     writeControl(job, "stopped");
     job.destroyProcess();
     job.reset();
     startPythonWorker(job);
-    return new TrainingControlResponse(jobId, job.status(), "Training reset.");
+    return new TrainingControlResponse(job.jobId(), job.status(), "Training reset.");
   }
 
   public TrainingControlResponse save(String jobId) {
     TrainingJob job = getJob(jobId);
+    return save(job);
+  }
+
+  public TrainingControlResponse save(String username, String jobId) {
+    return save(requireOwnedJob(username, jobId));
+  }
+
+  private TrainingControlResponse save(TrainingJob job) {
     if (job.username() == null || job.username().isBlank()) {
       throw new IllegalArgumentException("Please login before saving checkpoints.");
     }
@@ -180,7 +233,7 @@ public class TrainingJobService {
       throw new IllegalArgumentException("Checkpoint can be saved after test set evaluation completes.");
     }
     TrainingCheckpoint checkpoint = saveCheckpoint(job, job.testResult());
-    return new TrainingControlResponse(jobId, job.status(), "Checkpoint saved: " + checkpoint.getName());
+    return new TrainingControlResponse(job.jobId(), job.status(), "Checkpoint saved: " + checkpoint.getName());
   }
 
   public List<TrainingCheckpointSummary> listCheckpoints(String username, String datasetId) {
@@ -235,8 +288,8 @@ public class TrainingJobService {
     }
   }
 
-  public void addSession(String jobId, WebSocketSession session) {
-    TrainingJob job = getJob(jobId);
+  public void addSession(String username, String jobId, WebSocketSession session) {
+    TrainingJob job = requireOwnedJob(username, jobId);
     sessions.computeIfAbsent(jobId, ignored -> new CopyOnWriteArraySet<>()).add(session);
     List<String> recentEvents = job.recentStreamEvents();
     if (!recentEvents.isEmpty()) {
@@ -461,6 +514,15 @@ public class TrainingJobService {
     if (username == null || username.isBlank()) {
       throw new IllegalArgumentException("Please login first.");
     }
+  }
+
+  private TrainingJob requireOwnedJob(String username, String jobId) {
+    requireUser(username);
+    TrainingJob job = getJob(jobId);
+    if (job.username() == null || !job.username().equals(username)) {
+      throw new IllegalArgumentException("Training job not found.");
+    }
+    return job;
   }
 
   private TrainingCheckpoint saveCheckpoint(TrainingJob job, JsonNode testResult) {
@@ -751,14 +813,18 @@ public class TrainingJobService {
   }
 
   static String jobIdFromSession(WebSocketSession session) {
+    return queryParamFromSession(session, "jobId");
+  }
+
+  static String queryParamFromSession(WebSocketSession session, String name) {
     URI uri = session.getUri();
     if (uri == null || uri.getQuery() == null) {
       return null;
     }
     for (String part : uri.getQuery().split("&")) {
       String[] pair = part.split("=", 2);
-      if (pair.length == 2 && Objects.equals(pair[0], "jobId")) {
-        return pair[1];
+      if (pair.length == 2 && Objects.equals(pair[0], name)) {
+        return java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
       }
     }
     return null;

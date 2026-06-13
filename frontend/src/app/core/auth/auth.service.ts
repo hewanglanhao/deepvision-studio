@@ -1,16 +1,27 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { AuthRequest, AuthResponse, AuthUser } from '@core/auth/auth.models';
 import { ApiClientService } from '@core/api/api-client.service';
 
 @Injectable({ providedIn: 'root' })
-export class AuthService {
+export class AuthService implements OnDestroy {
   private readonly userKey = 'deepvision.auth.user';
   private readonly userSubject = new BehaviorSubject<AuthUser | null>(this.readStoredUser());
+  private readonly storageListener = (event: StorageEvent): void => {
+    if (event.key === this.userKey) {
+      this.userSubject.next(this.readStoredUser());
+    }
+  };
   readonly user$ = this.userSubject.asObservable();
 
   /** 注入 API 客户端，认证服务通过它发送登录请求并把 JWT 写入所有后续请求。 */
-  constructor(private api: ApiClientService) {}
+  constructor(private api: ApiClientService) {
+    window.addEventListener('storage', this.storageListener);
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('storage', this.storageListener);
+  }
 
   /** 返回当前登录用户，页面据此判断能否保存或读取个人的 forward 推理记录。 */
   get currentUser(): AuthUser | null {
