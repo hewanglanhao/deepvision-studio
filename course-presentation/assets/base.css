@@ -259,6 +259,28 @@ body.overview .slide {
   font-size: 21px;
 }
 
+.code-block.micro {
+  padding: 17px 19px;
+  font-size: 17px;
+  line-height: 1.38;
+}
+
+.code-caption {
+  margin-top: 14px !important;
+  color: #315779 !important;
+  font-size: 18px !important;
+  line-height: 1.4 !important;
+}
+
+.compact-list {
+  font-size: 21px;
+  line-height: 1.42;
+}
+
+.compact-list li {
+  margin-bottom: 10px;
+}
+
 .timeline-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -343,6 +365,26 @@ body.overview .slide {
   grid-template-columns: repeat(7, 1fr);
   gap: 14px;
   margin: 30px 0 44px;
+}
+
+.member-b-pipeline {
+  grid-template-columns: repeat(5, 1fr);
+  margin: 12px 0 24px;
+}
+
+.member-b-pipeline .pipe-node {
+  min-height: 132px;
+}
+
+.member-b-pipeline .pipe-node b {
+  display: block;
+  margin-bottom: 10px;
+  color: #1f6aa5;
+  font-size: 18px;
+}
+
+.member-b-pipeline .pipe-node span {
+  display: block;
 }
 
 .pipe-node {
@@ -436,6 +478,31 @@ body.overview .slide {
   color: #315779;
   font-family: var(--font-mono);
   font-size: 18px;
+}
+
+.member-b-slide .screenshot-frame img {
+  height: 610px;
+  max-height: 610px;
+  object-fit: cover;
+  object-position: top left;
+}
+
+.member-b-slide .screenshot-frame.tall-shot img {
+  object-position: center top;
+}
+
+.member-b-slide .stage3-metric {
+  grid-template-columns: 130px 1fr;
+  padding: 13px 0;
+  font-size: 20px;
+}
+
+.member-b-slide .compact-table {
+  font-size: 19px;
+}
+
+.member-b-slide .compact-table td {
+  padding: 13px 15px;
 }
 
 .placeholder-grid {

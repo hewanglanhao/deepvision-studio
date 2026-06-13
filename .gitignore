@@ -76,3 +76,5 @@ transformer-explainer-upstream/
 *.gz
 *.zip
 gh-2.DCrB1VOc.js
+
+.tmp
