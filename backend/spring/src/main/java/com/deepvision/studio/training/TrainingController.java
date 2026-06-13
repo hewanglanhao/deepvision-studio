@@ -21,12 +21,17 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.Principal;
 import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -59,10 +64,11 @@ public class TrainingController {
   @GetMapping("/datasets")
   @Operation(summary = "List training datasets")
   public List<TrainingDatasetOption> listDatasets(
+      Principal principal,
       @Parameter(description = "Optional source filter, such as builtin or upload")
       @RequestParam(value = "source", required = false) String source
   ) {
-    return datasetService.listDatasets(source);
+    return datasetService.listDatasets(source, username(principal));
   }
 
   @GetMapping("/datasets/builtin")
@@ -75,17 +81,39 @@ public class TrainingController {
   @Operation(summary = "Get dataset detail")
   @ApiResponse(responseCode = "200", description = "Dataset detail")
   @ApiResponse(responseCode = "400", description = "Dataset not found")
-  public TrainingDatasetDetail datasetDetail(@PathVariable String datasetId) {
-    return datasetService.getDetail(datasetId);
+  public TrainingDatasetDetail datasetDetail(Principal principal, @PathVariable String datasetId) {
+    return datasetService.getDetail(datasetId, username(principal));
   }
 
   @DeleteMapping("/datasets/{datasetId}")
   @Operation(summary = "Delete an uploaded dataset")
   @ApiResponse(responseCode = "204", description = "Dataset deleted")
   @ApiResponse(responseCode = "400", description = "Dataset cannot be deleted or does not exist")
-  public ResponseEntity<Void> deleteDataset(@PathVariable String datasetId) {
-    datasetService.deleteUploadedDataset(datasetId);
+  public ResponseEntity<Void> deleteDataset(Principal principal, @PathVariable String datasetId) {
+    datasetService.deleteUploadedDataset(datasetId, username(principal));
     return ResponseEntity.noContent().build();
+  }
+
+  @GetMapping("/datasets/{datasetId}/files/**")
+  @Operation(summary = "Get a private uploaded dataset file")
+  @ApiResponse(responseCode = "200", description = "Dataset file")
+  @ApiResponse(responseCode = "400", description = "Dataset file is invalid or not visible")
+  public ResponseEntity<Resource> uploadedDatasetFile(
+      Principal principal,
+      @PathVariable String datasetId,
+      jakarta.servlet.http.HttpServletRequest request
+  ) throws IOException {
+    String prefix = "/api/training/datasets/" + datasetId + "/files/";
+    String uri = request.getRequestURI();
+    int offset = uri.indexOf(prefix);
+    String relativePath = offset < 0 ? "" : uri.substring(offset + prefix.length());
+    Path file = datasetService.uploadDatasetFile(datasetId, java.net.URLDecoder.decode(relativePath, java.nio.charset.StandardCharsets.UTF_8), username(principal));
+    String contentType = Files.probeContentType(file);
+    MediaType mediaType = contentType == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(contentType);
+    return ResponseEntity.ok()
+        .contentType(mediaType)
+        .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
+        .body(new FileSystemResource(file));
   }
 
   @GetMapping(value = "/datasets/{datasetId}/preview/{index}", produces = "image/svg+xml")
@@ -104,11 +132,12 @@ public class TrainingController {
   @ApiResponse(responseCode = "400", description = "Files or import options are invalid")
   @ApiResponse(responseCode = "413", description = "Uploaded files exceed configured size limits")
   public DatasetImportResponse importDataset(
+      Principal principal,
       @RequestParam("files") MultipartFile[] files,
       @RequestParam(value = "labelColumn", required = false) String labelColumn,
       @RequestParam(value = "classCount", required = false) Integer classCount
   ) {
-    return datasetService.importDataset(files, labelColumn, classCount);
+    return datasetService.importDataset(files, labelColumn, classCount, username(principal));
   }
 
   @PostMapping("/start")
@@ -216,5 +245,9 @@ public class TrainingController {
   ResponseEntity<DatasetErrorResponse> trainingBadRequest(IllegalArgumentException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new DatasetErrorResponse("BAD_REQUEST", ex.getMessage()));
+  }
+
+  private String username(Principal principal) {
+    return principal == null ? null : principal.getName();
   }
 }

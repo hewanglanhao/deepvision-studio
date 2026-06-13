@@ -95,7 +95,7 @@ public class TrainingJobService {
   }
 
   public TrainingStartResponse start(StartTrainingRequest request, String username) {
-    TrainingDatasetDetail dataset = datasetService.getDetail(request.datasetId());
+    TrainingDatasetDetail dataset = datasetService.getDetail(request.datasetId(), username);
     validateSplit(request.split());
     if (!dataset.hasLabels()) {
       throw new IllegalArgumentException("Dataset has no labels and cannot be used for supervised training.");
@@ -469,7 +469,7 @@ public class TrainingJobService {
     if (!Files.exists(job.checkpointFile())) {
       throw new IllegalArgumentException("Checkpoint file is not available yet.");
     }
-    TrainingDatasetDetail dataset = datasetService.getDetail(job.request().datasetId());
+    TrainingDatasetDetail dataset = datasetService.getDetail(job.request().datasetId(), job.username());
     try {
       String layersJson = objectMapper.writeValueAsString(job.request().layers() == null ? List.of() : job.request().layers());
       String configJson = objectMapper.writeValueAsString(job.request().config());

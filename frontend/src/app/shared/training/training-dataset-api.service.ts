@@ -15,7 +15,10 @@ export class TrainingDatasetApiService {
 
   async listDatasets(source?: string, signal?: AbortSignal): Promise<TrainingDatasetOption[]> {
     const query = source ? `?source=${encodeURIComponent(source)}` : '';
-    const response = await fetch(`${this.api.baseUrl}${this.basePath}${query}`, { signal });
+    const response = await fetch(`${this.api.baseUrl}${this.basePath}${query}`, {
+      headers: this.authHeaders(),
+      signal
+    });
     return this.readJson<TrainingDatasetOption[]>(response);
   }
 
@@ -24,7 +27,10 @@ export class TrainingDatasetApiService {
   }
 
   async getDatasetDetail(datasetId: string, signal?: AbortSignal): Promise<TrainingDatasetDetail> {
-    const response = await fetch(`${this.api.baseUrl}${this.basePath}/${encodeURIComponent(datasetId)}`, { signal });
+    const response = await fetch(`${this.api.baseUrl}${this.basePath}/${encodeURIComponent(datasetId)}`, {
+      headers: this.authHeaders(),
+      signal
+    });
     return this.normalizeDatasetDetail(await this.readJson<TrainingDatasetDetail>(response));
   }
 
@@ -42,6 +48,7 @@ export class TrainingDatasetApiService {
 
     const response = await fetch(`${this.api.baseUrl}${this.basePath}/imports`, {
       method: 'POST',
+      headers: this.authHeaders(),
       body: form,
       signal
     });
@@ -52,6 +59,7 @@ export class TrainingDatasetApiService {
   async deleteDataset(datasetId: string, signal?: AbortSignal): Promise<void> {
     const response = await fetch(`${this.api.baseUrl}${this.basePath}/${encodeURIComponent(datasetId)}`, {
       method: 'DELETE',
+      headers: this.authHeaders(),
       signal
     });
     if (!response.ok) {
@@ -75,6 +83,14 @@ export class TrainingDatasetApiService {
       return url;
     }
     return `${this.api.baseUrl}${url.startsWith('/') ? url : '/' + url}`;
+  }
+
+  private authHeaders(): Headers {
+    const headers = new Headers();
+    if (this.api.token) {
+      headers.set('Authorization', `Bearer ${this.api.token}`);
+    }
+    return headers;
   }
 
   private async readJson<T>(response: Response): Promise<T> {

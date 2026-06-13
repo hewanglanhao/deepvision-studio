@@ -429,6 +429,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(this.authSvc.user$.subscribe(user => {
       this.authUser = user;
+      void this.loadTrainingDatasets();
       if (user && this.showRecordDrawer) {
         this.loadForwardRecords();
       }
@@ -1885,6 +1886,21 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     const files = Array.from(input.files ?? []);
     input.value = '';
     if (!files.length) return;
+    if (!this.authUser) {
+      this.openAuthModal('login');
+      this.datasetImportDraft = {
+        status: 'error',
+        message: '请先登录后再上传训练数据集。游客可以继续使用内置默认数据集。',
+        files: [],
+        detectedKind: null,
+        detail: null,
+        csvHeaders: [],
+        selectedLabelColumn: '',
+        selectedClassCount: null
+      };
+      this.trainingDatasetError = this.datasetImportDraft.message;
+      return;
+    }
 
     this.datasetImportDraft = {
       status: 'idle',
@@ -1951,6 +1967,16 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   async confirmCsvDatasetImport(): Promise<void> {
+    if (!this.authUser) {
+      this.openAuthModal('login');
+      this.trainingDatasetError = '请先登录后再上传训练数据集。游客可以继续使用内置默认数据集。';
+      this.datasetImportDraft = {
+        ...this.datasetImportDraft,
+        status: 'error',
+        message: this.trainingDatasetError
+      };
+      return;
+    }
     const files = this.datasetImportDraft.files;
     const labelColumn = this.datasetImportDraft.selectedLabelColumn;
     const classCount = Number(this.datasetImportDraft.selectedClassCount);
@@ -1980,6 +2006,16 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   private async importTrainingDatasetFiles(files: File[], labelColumn?: string, classCount?: number): Promise<void> {
+    if (!this.authUser) {
+      this.openAuthModal('login');
+      this.trainingDatasetError = '请先登录后再上传训练数据集。游客可以继续使用内置默认数据集。';
+      this.datasetImportDraft = {
+        ...this.datasetImportDraft,
+        status: 'error',
+        message: this.trainingDatasetError
+      };
+      return;
+    }
     try {
       this.datasetImportDraft = {
         ...this.datasetImportDraft,

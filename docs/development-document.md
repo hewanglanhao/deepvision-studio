@@ -128,7 +128,7 @@ Spring Boot 后端按业务域划分包：
 
 | 成员 | 代号 | 主要职责 | 人工/AI 比例说明 |
 | --- | --- | --- | --- |
-| 王龄锋 | 成员 A | 项目初始化、整体网站设计、A 模式、登录注册、H2 数据库、LLM 浮标、帮助浮标、Spring/forward 服务、Docker 部署 | 人工主导架构与核心逻辑，AI 辅助 UI 细化、接口样板和文档整理 |
+| 王龄锋 | 成员 A | 项目初始化、整体网站设计、A 模式、登录注册、H2 数据库、LLM 浮标、帮助浮标、Spring/forward 服务、Docker 部署与云端部署 | 人工主导架构与核心逻辑，AI 辅助 UI 细化、接口样板和文档整理；云端部署由人工完成，无 AI 参与 |
 | 李子涵 | 成员 B | 训练实验、训练数据集、训练任务、实验对比、训练运行时 | 待补充 |
 | 肖羽平 | 成员 C | CNN/可解释性相关模式、资源迁移与交互解释 | 待补充 |
 | 赵红林 | 成员 D | Transformer/反向传播/协作或展示相关模块 | 待补充 |
@@ -153,6 +153,7 @@ Spring Boot 后端按业务域划分包：
 | LLM 浮标 | 浮动聊天窗口、页面上下文、图像上下文、流式响应 | 人工主导功能设计，AI 辅助 Markdown 渲染与 prompt 文案 |
 | 帮助文档浮标 | 术语高亮、教学文档入口、浮标交互 | 人工主导 |
 | Docker 部署 | 三服务容器、环境变量、数据卷、Nginx 代理 | 人工主导，AI 辅助命令说明 |
+| 云端部署 | 将 Docker 化项目部署到 Ubuntu 22.04 云服务器，公网通过 `http://1.117.223.242/` 访问，Nginx 对外暴露 `80` 端口并代理 `/api/**` 到 Spring；Spring 和 Python forward 仅在 Docker 网络内通信 | 人工完成，无 AI 参与 |
 
 ### 5.2 A 模式设计思路
 
@@ -469,6 +470,8 @@ http://localhost:4200/api/health
 ```
 
 前端 Nginx 同时代理 `/swagger-ui/**` 和 `/v3/api-docs/**` 到 Spring，容器环境下 Swagger UI 可通过 `http://localhost:4200/swagger-ui/index.html` 访问。
+
+云端部署由成员 A 人工完成，无 AI 参与。云服务器系统为 Ubuntu 22.04，公网入口为 `http://1.117.223.242/`，对外开放 HTTP `80` 端口；前端 Nginx 容器监听容器内 `80`，并将 `/api/**`、`/swagger-ui/**`、`/v3/api-docs/**` 等路径代理到 Docker 网络内的 `spring-backend:8080`。Spring 后端通过 Docker 服务名访问 `python-forward:5000`，H2 数据库、上传文件、训练数据集和训练任务输出通过命名数据卷持久化保存。
 
 ### 5.14 成员 A 攻克的主要难点
 

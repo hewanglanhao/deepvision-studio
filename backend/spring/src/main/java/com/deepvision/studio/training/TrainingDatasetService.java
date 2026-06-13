@@ -71,12 +71,30 @@ public class TrainingDatasetService {
   @PostConstruct
   void init() {
     registerBuiltinDatasets();
+    cleanupOrphanUploadedDatasets();
   }
 
   public List<TrainingDatasetOption> listDatasets(String source) {
-    List<TrainingDataset> rows = source == null || source.isBlank()
-        ? datasets.findAllByOrderBySourceAscNameAsc()
-        : datasets.findBySourceOrderByNameAsc(source);
+    return listDatasets(source, null);
+  }
+
+  public List<TrainingDatasetOption> listDatasets(String source, String username) {
+    String normalizedSource = source == null ? "" : source.trim();
+    String owner = username == null ? "" : username.trim();
+    List<TrainingDataset> rows;
+    if (normalizedSource.isBlank()) {
+      rows = owner.isBlank()
+          ? datasets.findBySourceOrderByNameAsc("builtin")
+          : datasets.findBySourceOrOwnerUsernameOrderBySourceAscNameAsc("builtin", owner);
+    } else if ("upload".equals(normalizedSource)) {
+      rows = owner.isBlank()
+          ? List.of()
+          : datasets.findBySourceAndOwnerUsernameOrderByNameAsc("upload", owner);
+    } else if ("builtin".equals(normalizedSource)) {
+      rows = datasets.findBySourceOrderByNameAsc("builtin");
+    } else {
+      rows = List.of();
+    }
     return rows.stream()
         .map(this::toDetail)
         .map(TrainingDatasetDetail::toOption)
@@ -88,18 +106,42 @@ public class TrainingDatasetService {
   }
 
   public TrainingDatasetDetail getDetail(String datasetId) {
-    return datasets.findById(datasetId)
-        .map(this::toDetail)
-        .orElseThrow(() -> new IllegalArgumentException("Dataset not found."));
+    return getDetail(datasetId, null);
+  }
+
+  public TrainingDatasetDetail getDetail(String datasetId, String username) {
+    TrainingDataset row = requireVisibleDataset(datasetId, username);
+    return toDetail(row);
   }
 
   public boolean exists(String datasetId) {
     return datasets.existsById(datasetId);
   }
 
+  public Path uploadDatasetFile(String datasetId, String relativePath, String username) {
+    TrainingDataset row = requireVisibleDataset(datasetId, username);
+    if (!"upload".equals(row.getSource())) {
+      throw new IllegalArgumentException("Dataset file not found.");
+    }
+    String safeRelativePath = relativePath == null ? "" : relativePath.replace('\\', '/');
+    if (safeRelativePath.isBlank() || safeRelativePath.startsWith("/") || safeRelativePath.contains("../")) {
+      throw new IllegalArgumentException("Invalid dataset file path.");
+    }
+    Path datasetDir = uploadDatasetDir(datasetId);
+    Path target = datasetDir.resolve(safeRelativePath).normalize();
+    ensureUnder(datasetDir, target);
+    if (!Files.isRegularFile(target)) {
+      throw new IllegalArgumentException("Dataset file not found.");
+    }
+    return target;
+  }
+
   public void deleteUploadedDataset(String datasetId) {
-    TrainingDataset row = datasets.findById(datasetId)
-        .orElseThrow(() -> new IllegalArgumentException("Dataset not found."));
+    deleteUploadedDataset(datasetId, null);
+  }
+
+  public void deleteUploadedDataset(String datasetId, String username) {
+    TrainingDataset row = requireVisibleDataset(datasetId, username);
     if (!"upload".equals(row.getSource())) {
       throw new IllegalArgumentException("Built-in datasets cannot be deleted.");
     }
@@ -113,6 +155,28 @@ public class TrainingDatasetService {
   }
 
   public DatasetImportResponse importDataset(MultipartFile[] files, String labelColumn, Integer requestedClassCount) {
+    return importDataset(files, labelColumn, requestedClassCount, null);
+  }
+
+  private TrainingDataset requireVisibleDataset(String datasetId, String username) {
+    TrainingDataset row = datasets.findById(datasetId)
+        .orElseThrow(() -> new IllegalArgumentException("Dataset not found."));
+    if (!"upload".equals(row.getSource())) {
+      return row;
+    }
+    String owner = row.getOwnerUsername() == null ? "" : row.getOwnerUsername().trim();
+    String currentUser = username == null ? "" : username.trim();
+    if (owner.isBlank() || currentUser.isBlank() || !owner.equals(currentUser)) {
+      throw new IllegalArgumentException("Dataset not found.");
+    }
+    return row;
+  }
+
+  public DatasetImportResponse importDataset(MultipartFile[] files, String labelColumn, Integer requestedClassCount, String username) {
+    String owner = username == null ? "" : username.trim();
+    if (owner.isBlank()) {
+      throw new IllegalArgumentException("Please login before uploading training datasets.");
+    }
     if (files == null || files.length == 0) {
       throw new IllegalArgumentException("No dataset files uploaded.");
     }
@@ -152,7 +216,7 @@ public class TrainingDatasetService {
         : csvFiles.size() == 1
         ? importCsv(csvFiles.get(0), labelColumn, requestedClassCount)
         : importImages(imageFiles);
-    datasets.save(toEntity(detail));
+    datasets.save(toEntity(detail, owner));
     return new DatasetImportResponse(detail.id(), detail);
   }
 
@@ -336,7 +400,7 @@ public class TrainingDatasetService {
         addImagePreview(
             previewsByLabel,
             label,
-            new ImagePreviewItem(originalName, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + filename)
+            new ImagePreviewItem(originalName, label, uploadDatasetFileUrl(datasetId, "images/" + sanitizePathSegment(label) + "/" + filename))
         );
       }
     } catch (IOException ex) {
@@ -435,7 +499,7 @@ public class TrainingDatasetService {
           addImagePreview(
               previewsByLabel,
               label,
-              new ImagePreviewItem(filename, label, "/datasets/upload/" + datasetId + "/images/" + sanitizePathSegment(label) + "/" + storedFilename)
+              new ImagePreviewItem(filename, label, uploadDatasetFileUrl(datasetId, "images/" + sanitizePathSegment(label) + "/" + storedFilename))
           );
         }
       }
@@ -577,12 +641,32 @@ public class TrainingDatasetService {
     datasets.save(toEntity(detail));
   }
 
+  private void cleanupOrphanUploadedDatasets() {
+    for (TrainingDataset row : datasets.findBySourceOrderByNameAsc("upload")) {
+      String owner = row.getOwnerUsername() == null ? "" : row.getOwnerUsername().trim();
+      if (!owner.isBlank()) {
+        continue;
+      }
+      try {
+        deleteDirectoryIfExists(uploadDatasetDir(row.getId()));
+      } catch (IOException ignored) {
+        // Metadata cleanup still proceeds so orphaned uploads do not remain visible.
+      }
+      datasets.delete(row);
+    }
+  }
+
   private TrainingDataset toEntity(TrainingDatasetDetail detail) {
+    return toEntity(detail, null);
+  }
+
+  private TrainingDataset toEntity(TrainingDatasetDetail detail, String ownerUsername) {
     return new TrainingDataset(
         detail.id(),
         detail.name(),
         detail.source(),
         detail.kind(),
+        ownerUsername,
         detail.description(),
         detail.sampleCount(),
         detail.classCount(),
@@ -959,6 +1043,13 @@ public class TrainingDatasetService {
     Path dir = datasetsRoot.resolve("upload").resolve(datasetId).normalize();
     ensureUnder(datasetsRoot, dir);
     return dir;
+  }
+
+  private String uploadDatasetFileUrl(String datasetId, String relativePath) {
+    String encodedPath = java.util.Arrays.stream(relativePath.replace('\\', '/').split("/"))
+        .map(part -> URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"))
+        .collect(java.util.stream.Collectors.joining("/"));
+    return "/api/training/datasets/" + URLEncoder.encode(datasetId, StandardCharsets.UTF_8).replace("+", "%20") + "/files/" + encodedPath;
   }
 
   private void ensureUnder(Path root, Path target) {

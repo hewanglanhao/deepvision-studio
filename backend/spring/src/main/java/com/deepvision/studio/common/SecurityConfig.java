@@ -60,7 +60,7 @@ public class SecurityConfig {
                 "/api/museum/**",
                 "/h2-console/**",
                 "/uploads/**",
-                "/datasets/**",
+                "/datasets/builtin/**",
                 "/v3/api-docs/**",
                 "/swagger-ui/**",
                 "/swagger-ui.html"
