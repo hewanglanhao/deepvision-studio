@@ -7,4 +7,8 @@ public interface TrainingDatasetRepository extends JpaRepository<TrainingDataset
   List<TrainingDataset> findAllByOrderBySourceAscNameAsc();
 
   List<TrainingDataset> findBySourceOrderByNameAsc(String source);
+
+  List<TrainingDataset> findBySourceAndOwnerUsernameOrderByNameAsc(String source, String ownerUsername);
+
+  List<TrainingDataset> findBySourceOrOwnerUsernameOrderBySourceAscNameAsc(String source, String ownerUsername);
 }

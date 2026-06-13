@@ -13,7 +13,8 @@ import java.time.Instant;
     name = "training_datasets",
     indexes = {
         @Index(name = "idx_training_datasets_source", columnList = "source"),
-        @Index(name = "idx_training_datasets_kind", columnList = "kind")
+        @Index(name = "idx_training_datasets_kind", columnList = "kind"),
+        @Index(name = "idx_training_datasets_owner", columnList = "owner_username")
     }
 )
 public class TrainingDataset {
@@ -29,6 +30,9 @@ public class TrainingDataset {
 
   @Column(nullable = false, length = 32)
   private String kind;
+
+  @Column(name = "owner_username", length = 160)
+  private String ownerUsername;
 
   @Column(nullable = false, length = 1000)
   private String description;
@@ -94,6 +98,7 @@ public class TrainingDataset {
       String name,
       String source,
       String kind,
+      String ownerUsername,
       String description,
       int sampleCount,
       int classCount,
@@ -114,6 +119,7 @@ public class TrainingDataset {
     this.name = name;
     this.source = source;
     this.kind = kind;
+    this.ownerUsername = ownerUsername;
     this.description = description;
     this.sampleCount = sampleCount;
     this.classCount = classCount;
@@ -135,6 +141,7 @@ public class TrainingDataset {
   public String getName() { return name; }
   public String getSource() { return source; }
   public String getKind() { return kind; }
+  public String getOwnerUsername() { return ownerUsername; }
   public String getDescription() { return description; }
   public int getSampleCount() { return sampleCount; }
   public int getClassCount() { return classCount; }

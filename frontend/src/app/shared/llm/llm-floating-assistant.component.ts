@@ -296,14 +296,29 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
       gap: 5px;
     }
 
-    .md-body :where(p, ul, ol, pre, h1, h2, h3) {
+    .md-body :where(p, ul, ol, pre, h1, h2, h3, table) {
       margin: 0;
     }
 
     .md-body :where(h1, h2, h3) {
       color: #0f172a;
-      font-size: 12px;
       line-height: 1.35;
+    }
+
+    .md-body h1 {
+      font-size: 14px;
+    }
+
+    .md-body h2 {
+      font-size: 13px;
+    }
+
+    .md-body h3 {
+      font-size: 12px;
+    }
+
+    .md-body p {
+      line-height: 1.58;
     }
 
     .md-body :where(ul, ol) {
@@ -334,6 +349,77 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
     .md-body pre code {
       padding: 0;
       background: transparent;
+    }
+
+    .md-body hr {
+      width: 100%;
+      height: 1px;
+      border: 0;
+      background: #e2e8f0;
+      margin: 2px 0;
+    }
+
+    .md-body em {
+      font-style: italic;
+    }
+
+    .md-body strong {
+      font-weight: 800;
+    }
+
+    .md-body .math {
+      font-family: 'Cambria Math', 'Times New Roman', serif;
+      font-style: italic;
+      color: #111827;
+      overflow-wrap: anywhere;
+    }
+
+    .md-body .math-display {
+      display: block;
+      overflow-x: auto;
+      padding: 7px 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 7px;
+      background: #f8fafc;
+      white-space: nowrap;
+    }
+
+    .md-body .table-wrap {
+      overflow-x: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .md-body table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 260px;
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    .md-body th,
+    .md-body td {
+      padding: 5px 6px;
+      border-bottom: 1px solid #e2e8f0;
+      border-right: 1px solid #e2e8f0;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .md-body th {
+      background: #f1f5f9;
+      color: #0f172a;
+      font-weight: 800;
+    }
+
+    .md-body tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .md-body :where(th, td):last-child {
+      border-right: 0;
     }
 
     .chat-error {
@@ -531,7 +617,7 @@ export class LlmFloatingAssistantComponent {
 
   /** 将模型返回的 Markdown 转成受控 HTML，保留代码块以便展示公式、张量形状或示例代码。 */
   renderMarkdown(markdown: string): string {
-    const escaped = this.escapeHtml(markdown);
+    const escaped = this.escapeHtml(this.normalizeMarkdown(markdown));
     const blocks = escaped.split(/```/);
     return blocks
       .map((block, index) => {
@@ -557,14 +643,38 @@ export class LlmFloatingAssistantComponent {
       }
     };
 
-    for (const rawLine of lines) {
+    for (let index = 0; index < lines.length; index += 1) {
+      const rawLine = lines[index];
       const line = rawLine.trim();
       if (!line) {
         closeList();
         continue;
       }
 
-      const heading = line.match(/^(#{1,3})\s+(.+)$/);
+      if (/^-{3,}$/.test(line)) {
+        closeList();
+        html.push('<hr>');
+        continue;
+      }
+
+      if (this.isTableRow(line)) {
+        closeList();
+        const rows: string[][] = [];
+        while (index < lines.length && this.isTableRow(lines[index].trim())) {
+          const cells = this.parseTableRow(lines[index].trim());
+          if (!this.isTableSeparator(cells)) {
+            rows.push(cells);
+          }
+          index += 1;
+        }
+        index -= 1;
+        if (rows.length) {
+          html.push(this.renderTable(rows));
+        }
+        continue;
+      }
+
+      const heading = line.match(/^(#{1,3})\s*(.+)$/);
       if (heading) {
         closeList();
         const level = Math.min(3, heading[1].length);
@@ -572,7 +682,7 @@ export class LlmFloatingAssistantComponent {
         continue;
       }
 
-      const unordered = line.match(/^[-*]\s+(.+)$/);
+      const unordered = line.match(/^[-*]\s*(.+)$/);
       if (unordered) {
         if (listType !== 'ul') {
           closeList();
@@ -583,7 +693,7 @@ export class LlmFloatingAssistantComponent {
         continue;
       }
 
-      const ordered = line.match(/^\d+\.\s+(.+)$/);
+      const ordered = line.match(/^\d+\.\s*(.+)$/);
       if (ordered) {
         if (listType !== 'ol') {
           closeList();
@@ -604,9 +714,57 @@ export class LlmFloatingAssistantComponent {
 
   /** 处理行内代码和加粗标记，让模型解释中的公式名、层名和关键参数更容易辨认。 */
   private renderInline(value: string): string {
-    return value
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const codeBlocks: string[] = [];
+    const withCodePlaceholders = value.replace(/`([^`]+)`/g, (_, code: string) => {
+      const token = `\u0000CODE${codeBlocks.length}\u0000`;
+      codeBlocks.push(`<code>${code}</code>`);
+      return token;
+    });
+
+    return withCodePlaceholders
+      .replace(/\$\$([\s\S]+?)\$\$/g, '<span class="math math-display">$1</span>')
+      .replace(/\$([^$\n]+)\$/g, '<span class="math math-inline">$1</span>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+      .replace(/\u0000CODE(\d+)\u0000/g, (_, index: string) => codeBlocks[Number(index)] ?? '');
+  }
+
+  private normalizeMarkdown(markdown: string): string {
+    return markdown
+      .replace(/\r\n/g, '\n')
+      .replace(/([^\n])\s*---\s*(?=#{1,6}|\n|$)/g, '$1\n\n---\n\n')
+      .replace(/([^\n])(\s*)(#{1,6})(?=\S)/g, '$1\n\n$3 ')
+      .replace(/^(#{1,6})(?=\S)/gm, '$1 ')
+      .replace(/([。；;：:])\s*(\d{1,2}\.\s*)/g, '$1\n$2')
+      .replace(/([。；;：:])\s*(-\s*\S)/g, '$1\n$2')
+      .replace(/([^\n])(\$\$[\s\S]+?\$\$)/g, '$1\n\n$2')
+      .replace(/(\$\$[\s\S]+?\$\$)([^\n])/g, '$1\n\n$2')
+      .replace(/\n{3,}/g, '\n\n');
+  }
+
+  private isTableRow(line: string): boolean {
+    return /^\|?.+\|.+\|?$/.test(line);
+  }
+
+  private parseTableRow(line: string): string[] {
+    return line
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map(cell => cell.trim());
+  }
+
+  private isTableSeparator(cells: string[]): boolean {
+    return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+  }
+
+  private renderTable(rows: string[][]): string {
+    const [head, ...body] = rows;
+    const headerHtml = `<thead><tr>${head.map(cell => `<th>${this.renderInline(cell)}</th>`).join('')}</tr></thead>`;
+    const bodyRows = body.map(
+      row => `<tr>${row.map(cell => `<td>${this.renderInline(cell)}</td>`).join('')}</tr>`
+    );
+    return `<div class="table-wrap"><table>${headerHtml}<tbody>${bodyRows.join('')}</tbody></table></div>`;
   }
 
   /** 转义模型输出中的 HTML 特殊字符，防止回答内容被浏览器当成真实 DOM 执行。 */

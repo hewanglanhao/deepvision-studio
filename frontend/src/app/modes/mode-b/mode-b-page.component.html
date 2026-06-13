@@ -625,9 +625,9 @@
               multiple
               accept=".zip,application/zip,.csv,text/csv,image/*"
               (change)="onTrainingDatasetUpload($event)"
-              [disabled]="trainingDatasetLoading"
+              [disabled]="trainingDatasetLoading || !authUser"
             />
-            <button type="button" class="dataset-upload-button" (click)="datasetFileInput.click()" [disabled]="trainingDatasetLoading">
+            <button type="button" class="dataset-upload-button" (click)="authUser ? datasetFileInput.click() : openAuthModal('login')" [disabled]="trainingDatasetLoading">
               <span class="dataset-upload-icon" aria-hidden="true">↑</span>
               <span>
                 <strong>{{ trainingDatasetLoading ? '正在处理文件' : '选择数据集文件' }}</strong>

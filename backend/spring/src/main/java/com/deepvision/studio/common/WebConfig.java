@@ -27,7 +27,7 @@ public class WebConfig implements WebMvcConfigurer {
         .addResourceHandler("/uploads/**")
         .addResourceLocations(uploadsRoot.toUri().toString() + "/");
     registry
-        .addResourceHandler("/datasets/**")
-        .addResourceLocations(datasetsRoot.toUri().toString() + "/");
+        .addResourceHandler("/datasets/builtin/**")
+        .addResourceLocations(datasetsRoot.resolve("builtin").toUri().toString() + "/");
   }
 }
