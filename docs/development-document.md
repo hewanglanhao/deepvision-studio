@@ -23,12 +23,22 @@ DeepVision Studio：深度学习算法可视化仿真平台。
 
 | 能力 | 说明 | 主要代码位置 |
 | --- | --- | --- |
-| 首页与模式入口 | 统一进入 A/B/C/D/E、教学文档与 AI 博物馆 | `frontend/src/app/shell/home` |
+| 首页与模式入口 | 统一进入 A/B/C/D/E/F、教学文档与 AI 博物馆 | `frontend/src/app/shell/home` |
 | A 模式：前向传播实验室 | 编辑 CNN 风格网络、选择样本、执行真实前向传播、观察每层输出 | `frontend/src/app/modes/mode-a` |
 | B 模式：模型训练工作台 | 数据集管理、结构编辑、真实 PyTorch 训练、指标与反向传播观察 | `frontend/src/app/modes/mode-b`，`backend/spring/src/main/java/com/deepvision/studio/training`，`backend/python-training` |
 | B 模式实验对比 | 按数据集检索历史 checkpoint，对比结构、超参数、训练曲线与结果状态 | `frontend/src/app/modes/mode-b/experiment-compare` |
 | B 模式单样本推理 | 从已完成 checkpoint 选择样本，执行真实推理并展示逐层激活 | `frontend/src/app/modes/mode-b/single-inference` |
 | B 模式训练协作 | 独立聊天室、在线成员、训练状态旁观、日志同步与智能助手 | `frontend/src/app/modes/mode-b/training-collaboration`，`backend/spring/src/main/java/com/deepvision/studio/training/TrainingCollaborationHandler.java` |
+| C 模式：CNN 卷积解释器 | 浏览器端加载 CNN Explainer 资源与 TensorFlow.js 模型，展示样例、网络拓扑、中间特征图和卷积层细节 | `frontend/src/app/modes/mode-c`，`frontend/src/app/modes/mode-c/explainer`，`frontend/public/mode-c/cnn-explainer` |
+| C 模式卷积过程解释 | 支持输入 patch、kernel 权重、逐元素乘积、加权求和、bias、输出格回流，以及 ReLU、Pooling、Softmax 解释 | `frontend/src/app/modes/mode-c/explainer/components/detail-panels`，`frontend/src/app/modes/mode-c/explainer/components/overview` |
+| C 模式 Grad-CAM 与解释报告 | 基于真实 tfjs CNN 模型生成 Grad-CAM 热力图、原图叠加、主导通道摘要和可演示解释报告 | `frontend/src/app/modes/mode-c/explainer/services/mode-c-inference.service.ts`，`frontend/src/app/modes/mode-c/explainer/components/article` |
+| D 模式：Transformer 解释器 | 浏览器端加载 GPT-2 ONNX/tokenizer/wasm 资源，执行下一词预测并展示 Top-K 概率 | `frontend/src/app/modes/mode-d`，`frontend/public/mode-d-assets`，`scripts/sync-transformer-explainer.ps1` |
+| D 模式注意力矩阵 | 支持层/头选择、真实 attention matrix 可视化、hover/click 聚焦和当前注意力单元解释 | `frontend/src/app/modes/mode-d/explainer/components/attention-matrix`，`frontend/src/app/modes/mode-d/explainer/services/mode-d-state.service.ts` |
+| D 模式 QKV 教学可视化 | 将 Query、Key、Score、Value、Output 串成交互式教学链，展示向量维度联动、softmax 权重和 Value 汇流贡献 | `frontend/src/app/modes/mode-d/explainer/components/qkv-panel` |
+| D 模式解释报告 | 汇总当前输入、Top-K 预测、注意力焦点、QKV 过程和自动解释文本 | `frontend/src/app/modes/mode-d/explainer/components/report-panel` |
+| E 模式：反向传播可视化 | 纯 TypeScript 实现 MLP 前向、损失、反向传播、参数更新、子步骤动画和决策边界 | `frontend/src/app/modes/mode-e`，`frontend/src/app/modes/mode-e/explainer/engine/mode-e-backprop-engine.ts` |
+| E 模式优化器与曲线对比 | 支持 SGD、Momentum、Adam、学习率调节、激活函数切换、损失曲线保存/替换/删除和决策边界对比 | `frontend/src/app/modes/mode-e/explainer/services/mode-e-state.service.ts`，`frontend/src/app/modes/mode-e/explainer/components/floating-charts`，`frontend/src/app/modes/mode-e/explainer/components/control-panel` |
+| F 模式：RNN 与 BPTT 解释器 | 纯 TypeScript 实现 RNN 前向、时间反向传播、序列分类预设、隐状态时间展开图和梯度范数展示 | `frontend/src/app/modes/mode-f`，`frontend/src/app/modes/mode-f/explainer/engine/mode-f-rnn-engine.ts` |
 | AI 博物馆 | 第一人称漫游 AI 发展史长廊，支持多人联机同馆参观 | `frontend/src/app/modes/ai-museum`，`backend/spring/src/main/java/com/deepvision/studio/museum` |
 | 3D 网络显示 | 将网络层、shape、特征图快照映射为 Three.js 3D 场景 | `frontend/src/app/shared/network-3d` |
 | 登录注册 | 用户注册、登录、JWT 会话恢复 | `frontend/src/app/core/auth`，`backend/spring/src/main/java/com/deepvision/studio/auth` |
@@ -45,7 +55,7 @@ DeepVision Studio：深度学习算法可视化仿真平台。
 
 ### 3.1 架构分层
 
-项目采用“前端可视化 + Spring 业务后端 + Python 计算服务”的分层方式：
+项目采用“前端可视化 + Spring 业务后端 + Python 计算服务”的分层方式:
 
 ```text
 Browser
@@ -1544,12 +1554,3 @@ interface ModeEDecisionBoundary { resolution: number; xMin: number; xMax: number
 - HTML 模板补全：`@for`/`@if` 控制流代码块、SVG 元素的属性绑定
 - 构建错误排查辅助：识别模板内 `Math.xxx` 不可用、Signal 类型不匹配、`??` 运算符多余等 Angular 编译器警告的具体位置和修复方向
 - 教学文档术语的初始文案草稿（人工修改和补充了公式、导数、决策边界特征等专业内容）
-- 展示稿（course-presentation）的幻灯片文案框架和截图引用占位
-
----
-<!-- 
-- 所有新模式优先放入 `frontend/src/app/modes/mode-*`，公共能力再提取到 `shared`。
-- 后端新增接口应按业务域建包，不建议把 Controller 全部放在同一目录。
-- 如果 H2 数据量或并发压力增大，可迁移到 MySQL/PostgreSQL，JPA 实体可基本保留。
-- LLM 接口应继续由后端代理，避免在前端暴露 API Key。
-- 课程答辩前建议准备一条固定演示路径：登录 -> A 模式选择样本 -> 修改卷积核 -> 执行 forward -> 打开 3D -> 保存历史记录 -> 打开 LLM 浮标解释当前层。 -->
