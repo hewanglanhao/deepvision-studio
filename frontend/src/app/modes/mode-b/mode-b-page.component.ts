@@ -2219,9 +2219,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.trainingDatasetError = '';
     try {
       await this.trainingSvc.reset();
-      this.trainingBackendNotice = this.currentTrainingJobId
-        ? '训练任务已重置，并从第 1 个 Epoch 重新开始。'
-        : '训练状态已恢复初始值。';
+      this.trainingBackendNotice = '当前训练已停止，训练状态已恢复初始值。';
     } catch (err) {
       this.trainingDatasetError = err instanceof Error ? err.message : '重置训练任务失败。';
     } finally {

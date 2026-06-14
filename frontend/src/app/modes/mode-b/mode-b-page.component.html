@@ -862,7 +862,7 @@
             <span class="button-icon" aria-hidden="true">■</span>
             停止
           </button>
-          <button class="btn-ghost reset-btn" (click)="resetTraining()" [disabled]="trainingStarting || trainingResetting" [title]="currentTrainingJobId ? '重新启动当前训练任务并从第 1 个 Epoch 开始' : '清空当前训练状态并恢复初始值'">
+          <button class="btn-ghost reset-btn" (click)="resetTraining()" [disabled]="trainingStarting || trainingResetting" title="停止当前任务并清空训练状态，不会自动重新训练">
             <span class="button-icon" [class.spinning]="trainingResetting" aria-hidden="true">↺</span>
             {{ trainingResetting ? '重置中' : '重置' }}
           </button>
