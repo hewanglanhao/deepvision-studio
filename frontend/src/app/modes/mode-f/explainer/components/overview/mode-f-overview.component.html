@@ -11,19 +11,20 @@
       <h4>损失曲线</h4>
       <svg viewBox="0 0 200 60" class="mini-svg">
         <rect width="200" height="60" fill="#f8fafc" rx="4"/>
-        @if (lossPoints()) { <polyline [attr.points]="lossPoints()" fill="none" stroke="#d97706" stroke-width="1.5"/> }
+        @if (rawLossPoints()) { <polyline [attr.points]="rawLossPoints()" fill="none" stroke="#cbd5e1" stroke-width="0.8" opacity="0.5"/> }
+        @if (avgLossPoints()) { <polyline [attr.points]="avgLossPoints()" fill="none" stroke="#d97706" stroke-width="1.5"/> }
       </svg>
     </div>
     <div class="mini-info">
       <span>网络: {{ meta()?.name ?? '—' }}</span>
       <span>隐层维度: {{ hiddenDim() }}</span>
-      <span>时间步: {{ timeSteps() }}</span>
+      <span appTeachingTerm="bptt">时间步: {{ timeSteps() }}</span>
     </div>
   </div>
 
   <!-- Unrolled RNN -->
   <div class="rnn-card">
-    <h4>RNN 时间展开</h4>
+    <h4 appTeachingTerm="rnn-cell">RNN 时间展开</h4>
     <div class="rnn-scroll">
       <svg [attr.viewBox]="'0 0 ' + svgW() + ' ' + svgH()" class="rnn-svg">
         @for (t of [].constructor(timeSteps()); track t; let ti = $index) {

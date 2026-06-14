@@ -833,7 +833,7 @@ if (room.sessions.isEmpty()) {
             <tbody>
               <tr><td>延迟记忆</td><td>记住第一步 bit，延迟 3 步后分类</td></tr>
               <tr><td>XOR 记忆</td><td>前两步各给 bit，判断是否相同</td></tr>
-              <tr><td>交替检测</td><td>检测前两步是否交替变化</td></tr>
+              <tr><td>延迟对比</td><td>记住首位 bit，隔两步后与末位比较</td></tr>
             </tbody>
           </table>
         </div>
@@ -871,7 +871,7 @@ if (room.sessions.isEmpty()) {
           <div class="label">训练监控</div>
           <ul class="dense-list">
             <li>单步 / 连续训练模式可选，连续模式到达设定步数自动停止</li>
-            <li>实时损失曲线 + 整体准确率每 25 步评估一次</li>
+            <li>实时损失曲线 + 整体准确率每 10 步评估一次</li>
             <li>当前迭代状态：预测类别、真实类别、损失值</li>
             <li>三个预设数据集各 200 个 4 步序列样本，切换预设自动重置</li>
           </ul>

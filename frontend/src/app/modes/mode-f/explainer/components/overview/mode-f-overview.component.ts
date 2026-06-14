@@ -1,12 +1,13 @@
 import { Component, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import { ModeFStateService } from '../../services/mode-f-state.service';
 
 const CELL_W = 130, CELL_H = 80, GAP = 50, PAD = 50;
 
 @Component({
   selector: 'app-mode-f-overview',
-  imports: [CommonModule],
+  imports: [CommonModule, TeachingTermDirective],
   templateUrl: './mode-f-overview.component.html',
   styleUrl: './mode-f-overview.component.css',
 })
@@ -27,8 +28,20 @@ export class ModeFOverviewComponent {
   readonly svgW = computed(() => Math.max(this.timeSteps() * (CELL_W + GAP) + PAD * 2, 600));
   readonly svgH = computed(() => this.hiddenDim() * 22 + CELL_H + PAD * 2);
 
-  // Loss curve
-  readonly lossPoints = computed(() => { const pts = this.lossHistory(); if (pts.length < 2) return ''; const max = Math.max(...pts.map(p => p.loss), 0.1); return pts.map((p, i) => { const x = (i / Math.max(pts.length - 1, 1)) * 200; const y = 60 - (p.loss / max) * 60; return `${x},${y}`; }).join(' '); });
+  // Loss curves: raw (faint) + smoothed avg (solid), shared scale
+  readonly rawLossPoints = computed(() => {
+    const raw = this.lossHistory(), avg = this.avgLossHistory();
+    if (raw.length < 2) return '';
+    const max = Math.max(...raw.map(p => p.loss), ...avg.map(p => p.loss), 0.1);
+    return raw.map((p, i) => { const x = (i / Math.max(raw.length - 1, 1)) * 200; const y = 60 - (p.loss / max) * 60; return `${x},${y}`; }).join(' ');
+  });
+  readonly avgLossPoints = computed(() => {
+    const pts = this.avgLossHistory();
+    if (pts.length < 2) return '';
+    const all = this.lossHistory();
+    const max = Math.max(...all.map(p => p.loss), ...pts.map(p => p.loss), 0.1);
+    return pts.map((p, i) => { const x = (i / Math.max(pts.length - 1, 1)) * 200; const y = 60 - (p.loss / max) * 60; return `${x},${y}`; }).join(' ');
+  });
 
   cellX(t: number): number { return PAD + t * (CELL_W + GAP); }
   cellY(): number { return PAD + 30; }

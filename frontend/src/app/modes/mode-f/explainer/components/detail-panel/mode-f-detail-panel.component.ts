@@ -1,10 +1,11 @@
 import { Component, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TeachingTermDirective } from '@shared/teaching/teaching-term.directive';
 import { ModeFStateService } from '../../services/mode-f-state.service';
 
 @Component({
   selector: 'app-mode-f-detail-panel',
-  imports: [CommonModule],
+  imports: [CommonModule, TeachingTermDirective],
   templateUrl: './mode-f-detail-panel.component.html',
   styleUrl: './mode-f-detail-panel.component.css',
 })

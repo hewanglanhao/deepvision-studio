@@ -1488,13 +1488,15 @@ interface ModeEDecisionBoundary { resolution: number; xMin: number; xMax: number
 
 **文件**：`mode-f-assets.service.ts`
 
-| 数据集 ID | 任务描述 | 序列长度 | 输入维度 | 建议 hiddenDim | 样本数 |
+| 数据集 ID | 任务描述 | 序列长度 | 输入维度 | hiddenDim | 样本数 |
 | --- | --- | --- | --- | --- | --- |
 | `echo` | 延迟记忆：记住第 0 步的 bit，第 3 步输出分类 | 4 | 2 | 4 | 200 |
-| `memory` | XOR 记忆：第 0-1 步各给一个 bit，判断是否相同 | 4 | 2 | 4 | 200 |
-| `alternation` | 交替检测：检测前两个 bit 是否发生了交替变化 | 4 | 2 | 6 | 200 |
+| `memory` | XOR 记忆：第 0-1 步各给一个 bit，判断是否相同 | 4 | 2 | 8 | 200 |
+| `delay-match` | 延迟对比：第 0 步和最后一步各给一个 bit，判断是否相同 | 4 | 2 | 6 | 200 |
 
-输入采用 one-hot 编码：`[bit_value, 0]` 表示二进制值。每个数据集由一个私有生成函数构建（`echoDataset` / `memoryDataset` / `alternationDataset`），在服务构造时一次性生成并存入 `ModeFDatasetPreset.samples`。
+三个数据集难度递进：echo 只需记住一个 bit，memory 需要同时记住两个 bit 并做 XOR 判断，delay-match 需要跨两步空白保持首个 bit 再与末尾比较。memory 的 hiddenDim=8 是因为 4 维隐状态受 tanh 初始化影响容易衰减到零，提高到 8 提供冗余。
+
+输入采用 one-hot 编码：`[1, 0]` = bit 1，`[0, 1]` = bit 0，`[0, 0]` = 空白输入（无信息）。每个数据集由一个私有生成函数构建（`echoDataset` / `xorMemoryDataset` / `delayMatchDataset`），在服务构造时一次性生成并存入 `ModeFDatasetPreset.samples`。
 
 #### 8.4.3 状态管理
 
@@ -1502,11 +1504,11 @@ interface ModeEDecisionBoundary { resolution: number; xMin: number; xMax: number
 
 相比模式 E，状态管理更简——无子步骤动画系统、无决策边界、无激活函数切换、无损失曲线保存对比。训练步是原子的，单步/连续模式直接调用 `engine.trainStep()`。
 
-`computeAvg()` 每 25 步遍历全部样本做纯前向推理（不执行反向传播），计算平均损失和整体准确率。`loadPreset()` 创建全新的 `ModeFRnnEngine` 实例（确保权重完全重置），模式 E 则复用同一个引擎实例并调用 `JSON.parse(JSON.stringify(...))` 深拷贝层参数恢复初始权重。
+`computeAvg()` 每 10 步遍历全部样本做纯前向推理（不执行反向传播），计算平均损失和整体准确率。`loadPreset()` 创建全新的 `ModeFRnnEngine` 实例（确保权重完全重置），模式 E 则复用同一个引擎实例并调用 `JSON.parse(JSON.stringify(...))` 深拷贝层参数恢复初始权重。
 
 #### 8.4.4 可视化组件
 
-- **Overview**：SVG 时间展开图，每个时间步渲染为一个 Cell 方框（`CELL_W=130, CELL_H=80`），Cell 之间用带箭头的连线串联。Cell 内部为隐状态向量的彩色条形图（蓝=正激活、红=负激活、灰=零），下方标注 softmax 输出概率。左侧损失曲线小图显示单步/平滑损失变化。
+- **Overview**：SVG 时间展开图，每个时间步渲染为一个 Cell 方框（`CELL_W=130, CELL_H=80`），Cell 之间用带箭头的连线串联。Cell 内部为隐状态向量的彩色条形图（蓝=正激活、红=负激活、零值不显示），下方标注 softmax 输出概率。损失曲线小图同时渲染原始单步损失（灰色虚线）和每 10 步平滑平均损失（橙色实线），共用同一纵轴刻度。
 - **Control Panel**：预设选择、优化器切换、学习率滑块、步数输入、速度按钮和训练状态显示。训练进行中禁用配置控件。
 - **Detail Panel**：显示权重矩阵形状一览（W_xh/W_hh/W_hy 及偏置维度）、选中时间步的隐状态向量值、梯度范数条形图、每步输出概率分布。
 
@@ -1516,11 +1518,11 @@ interface ModeEDecisionBoundary { resolution: number; xMin: number; xMax: number
 
 **MODE_E_TEACHING_TERMS**（9 项，"训练与优化" 分类）：`optimizer-sgd`（SGD 优化器）、`optimizer-momentum`（Momentum 优化器）、`optimizer-adam`（Adam 优化器）、`backpropagation`（反向传播）、`gradient-descent`（梯度下降）、`learning-rate`（学习率）、`activation-relu`（ReLU）、`activation-sigmoid`（Sigmoid）、`activation-tanh`（Tanh）。每个术语包含公式、导数、决策边界特征和适用场景说明。
 
-**MODE_F_TEACHING_TERMS**（8 项，"序列模型" 分类）：`rnn-cell`（RNN 单元）、`bptt`（BPTT）、`hidden-state`（隐状态）、`gradient-vanishing`（梯度消失）、`optimizer-sgd/momentum/adam`（优化器术语复用）、`sequence-classification`（序列分类）。
+**MODE_F_TEACHING_TERMS**（5 项，"序列模型" 分类）：`rnn-cell`（RNN 单元）、`bptt`（BPTT）、`hidden-state`（隐状态）、`gradient-vanishing`（梯度消失）、`sequence-classification`（序列分类）。Mode F 的优化器术语不再重复添加条目，改为复用 Mode E 的 SGD/Momentum/Adam 条目（`mode` 字段设为 `'E F'` 表示共享）。Mode B 的 `gradient-norm`（梯度范数）也被 Mode F 复用。
 
-`TeachingTerm` 接口的 `mode` 字段类型已从 `'A' | 'C' | 'D'` 扩展为 `'A' | 'B' | 'C' | 'D' | 'E' | 'F'`，合并后的 `TEACHING_TERMS` 数组通过 `findTeachingTerm(id)` 全局查找。
+`TeachingTerm` 接口的 `mode` 字段类型为 `'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'E F'`，支持多模式共享。合并后的 `TEACHING_TERMS` 数组通过 `findTeachingTerm(id)` 全局查找。
 
-模式 E 控制面板的优化器按钮和激活函数按钮通过 `[appTeachingTerm]` 指令绑定到对应术语 ID，点击 "?" 浮标激活教学模式后按钮变为浅绿高亮，点击跳转到 `/teaching#termId`。
+模式 E/F 控制面板的优化器按钮和激活函数按钮通过 `[appTeachingTerm]` 指令绑定到对应术语 ID，点击 "?" 浮标激活教学模式后按钮变为浅绿高亮，点击跳转到 `/teaching#termId`。Mode F 的 Overview（RNN 时间展开标题→rnn-cell、时间步→bptt）和 DetailPanel（隐状态向量→hidden-state、梯度范数→gradient-norm）也挂载了术语绑定。
 
 ### 8.6 工程难点
 

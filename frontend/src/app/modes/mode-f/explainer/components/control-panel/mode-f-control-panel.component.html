@@ -11,6 +11,7 @@
             (click)="selectPreset(preset.id)"
             [title]="preset.description"
             [disabled]="isRunning()"
+            [appTeachingTerm]="'sequence-classification'"
           >{{ preset.name }}</button>
         }
       </div>

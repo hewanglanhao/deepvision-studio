@@ -16,7 +16,7 @@
   <!-- Gradient Norm -->
   @if (gradientNorm(); as gn) {
     <div class="detail-card">
-      <h4>梯度范数</h4>
+      <h4 appTeachingTerm="gradient-norm">梯度范数</h4>
       <div class="grad-row">
         <div class="grad-bar-track">
           <div class="grad-bar-fill" [style.width.%]="min(gn * 10, 100)" [style.background]="gradColor(gn)"></div>
@@ -29,7 +29,7 @@
   <!-- Hidden state per time step -->
   @if (hiddenStates().length > 0) {
     <div class="detail-card">
-      <h4>隐状态向量 (h_t)</h4>
+      <h4 appTeachingTerm="hidden-state">隐状态向量 (h_t)</h4>
       <div class="hidden-list">
         @for (hs of hiddenStates(); track tIdx; let tIdx = $index) {
           <div class="hidden-time-row">

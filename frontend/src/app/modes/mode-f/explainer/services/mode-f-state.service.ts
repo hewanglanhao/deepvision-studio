@@ -58,7 +58,7 @@ export class ModeFStateService {
     this.currentIteration.set(itr + 1);
     const h = [...this.stepHistory(), result]; if (h.length > 500) h.shift(); this.stepHistory.set(h);
     const lh = [...this.lossHistory(), { iteration: itr, loss: result.loss }]; if (lh.length > 500) lh.shift(); this.lossHistory.set(lh);
-    if ((itr + 1) % 25 === 0) this.computeAvg();
+    if ((itr + 1) % 10 === 0) this.computeAvg();
     const next = Math.floor(Math.random() * dataset.length); this.currentSampleIndex.set(next);
   }
 

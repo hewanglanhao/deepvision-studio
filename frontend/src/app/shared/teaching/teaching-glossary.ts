@@ -5,7 +5,7 @@ export interface TeachingTerm {
   category: string;
   summary: string;
   details: string[];
-  mode: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+  mode: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'E F';
 }
 
 export const MODE_A_TEACHING_TERMS: TeachingTerm[] = [
@@ -604,7 +604,7 @@ export const MODE_E_TEACHING_TERMS: TeachingTerm[] = [
       '它的更新规则简单直接，适合教学中展示”梯度如何驱动参数变化”的基本过程。',
       '缺点是对学习率更敏感，在复杂损失面上也可能收敛较慢。'
     ],
-    mode: 'E'
+    mode: 'E F'
   },
   {
     id: 'optimizer-momentum',
@@ -616,7 +616,7 @@ export const MODE_E_TEACHING_TERMS: TeachingTerm[] = [
       '它能减轻来回震荡的问题，并在较平坦区域保持前进速度。',
       '教学上常把它类比成滚动的小球，帮助理解”为什么它比纯 SGD 更稳”。'
     ],
-    mode: 'E'
+    mode: 'E F'
   },
   {
     id: 'optimizer-adam',
@@ -628,7 +628,7 @@ export const MODE_E_TEACHING_TERMS: TeachingTerm[] = [
       '它会根据一阶和二阶统计量自动调节参数更新尺度，因此通常收敛更快。',
       '教学上适合和 SGD、Momentum 做对比，观察不同优化器对训练曲线的影响。'
     ],
-    mode: 'E'
+    mode: 'E F'
   },
   {
     id: 'backpropagation',
@@ -761,42 +761,6 @@ export const MODE_F_TEACHING_TERMS: TeachingTerm[] = [
     mode: 'F'
   },
   {
-    id: 'optimizer-sgd',
-    title: 'SGD 优化器',
-    aliases: ['SGD', '随机梯度下降'],
-    category: '序列模型',
-    summary: 'SGD 是最基础的优化器，直接沿负梯度方向更新参数。',
-    details: [
-      '在 RNN 训练中，SGD 对学习率更敏感，可能因梯度范数波动而震荡。',
-      '对比 SGD、Momentum、Adam 在 RNN 任务上的表现，可以直观理解优化器的差异。'
-    ],
-    mode: 'F'
-  },
-  {
-    id: 'optimizer-momentum',
-    title: 'Momentum 优化器',
-    aliases: ['Momentum', '动量优化'],
-    category: '序列模型',
-    summary: 'Momentum 在 SGD 基础上累积历史更新方向，帮助参数在梯度震荡的维度上更稳定地前进。',
-    details: [
-      '在 BPTT 中梯度在各时间步之间可能波动较大，Momentum 的惯性有助于平滑更新。',
-      '可以对比观察 Momentum 和纯 SGD 在相同 RNN 任务上的损失曲线差异。'
-    ],
-    mode: 'F'
-  },
-  {
-    id: 'optimizer-adam',
-    title: 'Adam 优化器',
-    aliases: ['Adam', '自适应优化器'],
-    category: '序列模型',
-    summary: 'Adam 结合动量和自适应学习率，对每个参数维护一阶和二阶矩估计，通常收敛更快更稳。',
-    details: [
-      'Adam 对 RNN 中可能出现的梯度范数波动有天然的适应能力，自动调节每个参数的步长。',
-      '在 Mode F 中，可以切换 Adam 观察训练曲线和最终准确率的变化。'
-    ],
-    mode: 'F'
-  },
-  {
     id: 'sequence-classification',
     title: '序列分类',
     aliases: ['sequence classification', '时序分类'],
@@ -804,8 +768,9 @@ export const MODE_F_TEACHING_TERMS: TeachingTerm[] = [
     summary: '序列分类任务要求模型在看完整个输入序列后，判断序列属于哪一类别。',
     details: [
       '在 Mode F 中，RNN 在最后一个时间步输出类别概率，用 softmax + 交叉熵计算损失。',
-      '例如"延迟记忆"任务需要模型记住第 0 步看到的 bit，经过几步延迟后正确分类。',
-      '这考验 RNN 的长期记忆能力——早期的关键信息能否被隐状态保留到最后。'
+      '延迟记忆：记住第一步的值，经历几步空白后输出分类——考察 RNN 的长期记忆',
+      'XOR 记忆：前两步各给一个 bit，判断两个 bit 是否相同——考察组合判断',
+      '延迟对比：第一步和第四步各给一个 bit，判断首尾是否相同——需要跨两步记忆，难度最高'
     ],
     mode: 'F'
   },
