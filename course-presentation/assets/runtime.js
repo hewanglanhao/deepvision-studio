@@ -20,9 +20,34 @@
     deck.style.transform = `translate(-50%, -50%) scale(${scale})`;
   }
 
+  function updateContentAlignment(slide) {
+    slide.classList.remove('content-centered');
+    if (slide.classList.contains('title-slide')) return;
+
+    const content = Array.from(slide.children).filter(element => (
+      !element.classList.contains('title')
+      && !element.classList.contains('notes')
+    ));
+    if (!content.length) return;
+
+    const style = getComputedStyle(slide);
+    const availableHeight = slide.clientHeight
+      - parseFloat(style.paddingTop)
+      - parseFloat(style.paddingBottom);
+    const gap = parseFloat(style.rowGap || style.gap) || 0;
+    const contentHeight = content.reduce(
+      (height, element) => height + element.getBoundingClientRect().height,
+      gap * Math.max(0, content.length - 1)
+    );
+
+    // 仅在空白明显时居中，长内容页继续从标题下方开始排布。
+    slide.classList.toggle('content-centered', availableHeight - contentHeight >= 90);
+  }
+
   function setSlide(nextIndex) {
     index = clamp(nextIndex, 0, slides.length - 1);
     slides.forEach((slide, i) => slide.classList.toggle('active', i === index));
+    requestAnimationFrame(() => updateContentAlignment(slides[index]));
     indicator.textContent = `${index + 1} / ${slides.length}`;
     location.hash = String(index);
     updateNotes();
@@ -63,7 +88,12 @@
     });
   });
 
-  window.addEventListener('resize', scaleDeck);
+  window.addEventListener('resize', () => {
+    scaleDeck();
+    updateContentAlignment(slides[index]);
+  });
+  window.addEventListener('load', () => updateContentAlignment(slides[index]));
+  document.fonts?.ready.then(() => updateContentAlignment(slides[index]));
   window.addEventListener('keydown', event => {
     if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
       event.preventDefault();

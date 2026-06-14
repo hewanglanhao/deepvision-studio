@@ -862,9 +862,9 @@
             <span class="button-icon" aria-hidden="true">■</span>
             停止
           </button>
-          <button class="btn-ghost reset-btn" (click)="resetTraining()" [disabled]="trainingStarting" title="清空当前训练状态并恢复初始值">
-            <span class="button-icon" aria-hidden="true">↺</span>
-            重置
+          <button class="btn-ghost reset-btn" (click)="resetTraining()" [disabled]="trainingStarting || trainingResetting" [title]="currentTrainingJobId ? '重新启动当前训练任务并从第 1 个 Epoch 开始' : '清空当前训练状态并恢复初始值'">
+            <span class="button-icon" [class.spinning]="trainingResetting" aria-hidden="true">↺</span>
+            {{ trainingResetting ? '重置中' : '重置' }}
           </button>
         </div>
         @if (trainingDatasetDetail; as ds) {

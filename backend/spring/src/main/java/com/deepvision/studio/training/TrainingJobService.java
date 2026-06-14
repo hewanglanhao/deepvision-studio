@@ -340,26 +340,25 @@ public class TrainingJobService {
           .start();
       job.setProcess(process);
       job.setStatus("running");
-      executor.submit(() -> readWorkerOutput(job));
-      executor.submit(() -> waitForWorkerExit(job));
+      executor.submit(() -> readWorkerOutput(job, process));
+      executor.submit(() -> waitForWorkerExit(job, process));
     } catch (IOException ex) {
       job.setStatus("stopped");
       throw new IllegalArgumentException("Failed to start Python training worker: " + ex.getMessage());
     }
   }
 
-  private void readWorkerOutput(TrainingJob job) {
-    Process process = job.process();
-    if (process == null) {
-      return;
-    }
+  private void readWorkerOutput(TrainingJob job, Process process) {
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
+        if (!job.isCurrentProcess(process)) {
+          return;
+        }
         handleWorkerLine(job, line.trim());
       }
     } catch (IOException ex) {
-      if (!"stopped".equals(job.status())) {
+      if (job.isCurrentProcess(process) && !"stopped".equals(job.status())) {
         job.setStatus("stopped");
       }
     }
@@ -418,13 +417,12 @@ public class TrainingJobService {
     }
   }
 
-  private void waitForWorkerExit(TrainingJob job) {
-    Process process = job.process();
-    if (process == null) {
-      return;
-    }
+  private void waitForWorkerExit(TrainingJob job, Process process) {
     try {
       int exitCode = process.waitFor();
+      if (!job.isCurrentProcess(process)) {
+        return;
+      }
       if (exitCode == 0 && "running".equals(job.status())) {
         job.setStatus("completed");
       } else if (exitCode != 0 && !"stopped".equals(job.status())) {
@@ -432,7 +430,7 @@ public class TrainingJobService {
       }
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-      if (!"stopped".equals(job.status())) {
+      if (job.isCurrentProcess(process) && !"stopped".equals(job.status())) {
         job.setStatus("stopped");
       }
     }
@@ -950,6 +948,7 @@ public class TrainingJobService {
 
     private void destroyProcess() {
       Process current = process;
+      process = null;
       if (current != null && current.isAlive()) {
         current.destroy();
         try {
@@ -961,7 +960,10 @@ public class TrainingJobService {
           current.destroyForcibly();
         }
       }
-      process = null;
+    }
+
+    private boolean isCurrentProcess(Process candidate) {
+      return process == candidate;
     }
 
     private String jobId() {
@@ -1034,10 +1036,6 @@ public class TrainingJobService {
 
     private Path checkpointFile() {
       return checkpointFile;
-    }
-
-    private Process process() {
-      return process;
     }
 
     private void setProcess(Process process) {

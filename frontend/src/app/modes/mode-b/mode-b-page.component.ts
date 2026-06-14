@@ -223,6 +223,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   };
   trainingStatus = 'idle';
   trainingStarting = false;
+  trainingResetting = false;
   trainingEpoch = 0;
   trainingTotalEpochsValue = 20;
   trainingLr = 0.001;
@@ -2211,9 +2212,21 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   pauseTraining(): void  { void this.trainingSvc.pause(); }
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
-  resetTraining(): void  {
+  async resetTraining(): Promise<void> {
+    if (this.trainingResetting) return;
     this.showSingleInferencePrompt = false;
-    void this.trainingSvc.reset();
+    this.trainingResetting = true;
+    this.trainingDatasetError = '';
+    try {
+      await this.trainingSvc.reset();
+      this.trainingBackendNotice = this.currentTrainingJobId
+        ? '训练任务已重置，并从第 1 个 Epoch 重新开始。'
+        : '训练状态已恢复初始值。';
+    } catch (err) {
+      this.trainingDatasetError = err instanceof Error ? err.message : '重置训练任务失败。';
+    } finally {
+      this.trainingResetting = false;
+    }
   }
 
   dismissSingleInferencePrompt(): void {

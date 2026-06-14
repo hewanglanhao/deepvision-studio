@@ -564,10 +564,37 @@ export class TrainingRuntimeService implements OnDestroy {
 
   async reset(): Promise<void> {
     if (this.backendJobId) {
+      const jobId = this.backendJobId;
+      this.closeSocket();
       this.history$.next([]);
+      this.logs$.next([]);
       this.testResult$.next(null);
       this.backprop$.next(null);
-      await this.controlBackend('reset', 'Training reset.');
+      this.patchState({
+        status: 'running',
+        currentEpoch: 0,
+        currentBatch: 0,
+        totalBatches: this.backendTotalBatches,
+        totalEpochs: this.backendTotalEpochs || this.config.totalEpochs,
+        currentLr: this.config.learningRate,
+        latestLoss: 1.7,
+        latestValLoss: 1.78,
+        latestAccuracy: 0.2,
+        latestValAccuracy: 0.18,
+        latestGradientNorm: 1.2,
+        latestWeightMean: 0,
+        latestWeightStd: 0.16,
+        elapsedSeconds: 0,
+        etaSeconds: 0,
+        message: 'Resetting backend training...'
+      });
+      try {
+        await this.controlBackend('reset', 'Training reset.');
+        this.connectWebSocket(`/api/training/stream?jobId=${encodeURIComponent(jobId)}`);
+      } catch (err) {
+        this.patchState({ status: 'stopped' });
+        throw err;
+      }
       return;
     }
     await this.stop();

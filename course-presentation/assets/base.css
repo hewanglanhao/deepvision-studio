@@ -43,6 +43,10 @@ body.overview {
   justify-content: flex-start;
 }
 
+.slide.active.content-centered {
+  justify-content: center;
+}
+
 body.overview .deck {
   position: static;
   display: grid;
@@ -346,18 +350,41 @@ body.overview .slide {
 
 .arch-arrow {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
   color: #1f6aa5;
   font-family: var(--font-mono);
-  font-size: 22px;
+  font-size: 17px;
+  line-height: 1.35;
   text-align: center;
 }
 
-.arch-arrow::after {
-  content: "";
+.arch-arrow span {
+  min-height: 46px;
+  display: grid;
+  place-items: end center;
+  font-weight: 700;
+}
+
+.arch-arrow i {
+  position: relative;
   display: block;
   height: 2px;
-  margin-top: 10px;
   background: #9bc3e2;
+}
+
+.arch-arrow i::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -1px;
+  width: 11px;
+  height: 11px;
+  border-top: 2px solid #1f6aa5;
+  border-right: 2px solid #1f6aa5;
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .pipeline {
