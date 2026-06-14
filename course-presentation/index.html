@@ -13,86 +13,86 @@
     <section class="slide title-slide" data-title="封面">
       <div class="blueprint-mark">DEEPVISION / WEBPJ</div>
       <h1 class="title mono">DeepVision Studio</h1>
-      <p class="subtitle">深度学习算法可视化仿真平台 · 高级 Web 技术课程汇报</p>
+      <p class="subtitle">深度学习可视化学习平台 · 高级 Web 技术课程汇报</p>
       <div class="stage3-layout">
         <div class="card">
-          <div class="label">PROJECT SCOPE</div>
-          <p>Angular SPA + Spring Boot API + Python NumPy/PyTorch 计算模块，面向深度学习教学的可交互实验平台。</p>
+          <div class="label">项目组成</div>
+          <p>平台由 Angular 前端、Spring Boot 后端和 Python 计算模块组成，用于完成可交互的深度学习实验。</p>
         </div>
         <div class="card">
-          <div class="label">CORE LINE</div>
-          <p>从前向传播实验延伸到真实训练、反向传播观察、checkpoint 对比、单样本推理和多人协作。</p>
+          <div class="label">主要内容</div>
+          <p>包括前向传播、真实训练、反向传播观察、Checkpoint 对比、单样本推理和多人协作。</p>
         </div>
       </div>
-      <aside class="notes">开场强调这不是普通展示页，而是把神经网络结构、真实计算和教学解释串起来的 Web 工程项目。</aside>
+      <aside class="notes">开场简单介绍平台的技术组成和主要功能。</aside>
     </section>
 
-    <section class="slide" data-title="展示路线">
-      <h2 class="title">展示路线</h2>
+    <section class="slide" data-title="汇报内容">
+      <h2 class="title">汇报内容</h2>
       <div class="timeline-grid">
-        <div class="stage3-panel"><span class="step">01</span><b>项目定位</b><p>为什么做深度学习可视化平台。</p></div>
-        <div class="stage3-panel"><span class="step">02</span><b>系统架构</b><p>Angular / Spring / Python 的分层职责。</p></div>
-        <div class="stage3-panel"><span class="step">03</span><b>功能矩阵</b><p>A/B/C/D/E、AI 博物馆、LLM、教学文档。</p></div>
-        <div class="stage3-panel"><span class="step">04</span><b>成员 A 实现</b><p>A 模式从输入、结构、forward 到结果展示。</p></div>
-        <div class="stage3-panel"><span class="step">05</span><b>成员 B 实现</b><p>真实训练、数据集、实验对比、推理与协作。</p></div>
-        <div class="stage3-panel"><span class="step">06</span><b>工程难点</b><p>跨进程事件流、状态恢复、资源持久化与用户隔离。</p></div>
+        <div class="stage3-panel"><span class="step">01</span><b>项目目标</b><p>平台要解决哪些学习问题。</p></div>
+        <div class="stage3-panel"><span class="step">02</span><b>系统架构</b><p>Angular、Spring 和 Python 如何配合。</p></div>
+        <div class="stage3-panel"><span class="step">03</span><b>平台功能</b><p>各实验模式和辅助功能。</p></div>
+        <div class="stage3-panel"><span class="step">04</span><b>成员 A 部分</b><p>前向传播实验和相关扩展功能。</p></div>
+        <div class="stage3-panel"><span class="step">05</span><b>成员 B 部分</b><p>真实训练、实验对比、推理和协作。</p></div>
+        <div class="stage3-panel"><span class="step">06</span><b>实现难点</b><p>任务通信、状态恢复、数据保存和用户隔离。</p></div>
       </div>
-      <aside class="notes">开场先建立项目完整度，再分别进入前向实验和真实训练两条主线。</aside>
+      <aside class="notes">按照项目整体、成员 A 和成员 B 的顺序展开介绍。</aside>
     </section>
 
-    <section class="slide" data-title="项目定位">
-      <h2 class="title">项目定位：把“神经网络运行过程”做成可观察实验</h2>
+    <section class="slide" data-title="项目目标">
+      <h2 class="title">项目目标</h2>
       <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">教学问题</div>
+          <div class="label">现有学习方式的问题</div>
           <ul class="dense-list">
-            <li>普通课件只能展示公式，难以看到每层 shape 和特征图如何变化。</li>
-            <li>只做静态图解又缺少真实计算结果，学生无法验证参数修改的影响。</li>
-            <li>深度学习术语密集，需要把“实验”和“解释”放在同一个上下文里。</li>
+            <li>课件可以展示公式，但不容易看到每一层的 shape 和特征图变化。</li>
+            <li>静态图缺少真实计算，无法直接比较修改参数前后的结果。</li>
+            <li>深度学习术语较多，实验时经常还要另外查找概念。</li>
           </ul>
         </div>
         <div class="stage3-panel">
-          <div class="label">项目回答</div>
-          <div class="stage3-metric"><b>可编辑</b><span>网络层、参数、样本输入</span></div>
-          <div class="stage3-metric"><b>可计算</b><span>Python/NumPy 执行真实 forward</span></div>
-          <div class="stage3-metric"><b>可解释</b><span>公式、shape path、特征图、LLM 上下文问答</span></div>
-          <div class="stage3-metric"><b>可保存</b><span>登录用户保存实验快照并回溯</span></div>
+          <div class="label">平台提供的功能</div>
+          <div class="stage3-metric"><b>编辑网络</b><span>调整网络层、参数和样本输入</span></div>
+          <div class="stage3-metric"><b>真实计算</b><span>使用 Python 和 NumPy 执行前向传播</span></div>
+          <div class="stage3-metric"><b>过程解释</b><span>查看公式、shape 变化、特征图和助手回答</span></div>
+          <div class="stage3-metric"><b>保存实验</b><span>登录后保存并恢复实验记录</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>核心判断</b><span>项目价值不在于展示一张神经网络图，而在于让参数变化、张量计算和解释结果形成同一条可验证链路。</span></div>
-      <aside class="notes">强调核心不是“页面多”，而是围绕学习链路设计：搭网络、跑结果、看解释、保存复盘。</aside>
+      <div class="takeaway"><b>设计思路</b><span>把网络编辑、真实计算、结果解释和实验记录放在同一个平台中。</span></div>
+      <aside class="notes">重点说明平台不仅展示网络结构，还能运行计算并查看中间结果。</aside>
     </section>
 
-    <section class="slide" data-title="功能总览">
-      <h2 class="title">功能总览</h2>
+    <section class="slide" data-title="平台功能">
+      <h2 class="title">平台功能概览</h2>
       <table class="stage3-table">
-        <thead><tr><th>模块</th><th>业务能力</th><th>主要技术</th><th>成熟度</th></tr></thead>
+        <thead><tr><th>模块</th><th>主要功能</th><th>使用技术</th><th>当前状态</th></tr></thead>
         <tbody>
-          <tr><td>A 模式</td><td>前向传播实验室：网络编辑、样本输入、逐层结果、3D 展示、历史记录</td><td>Angular + Spring Proxy + Python NumPy</td><td><b>已形成闭环</b></td></tr>
-          <tr><td>B 模式</td><td>数据集管理、网络训练、反向传播观察、checkpoint、实验对比、单样本推理、协作房间</td><td>Angular + Spring + PyTorch Worker + WebSocket</td><td><b>已形成闭环</b></td></tr>
+          <tr><td>A 模式</td><td>网络编辑、样本输入、逐层结果、3D 展示和历史记录</td><td>Angular + Spring Proxy + Python NumPy</td><td><b>已完成</b></td></tr>
+          <tr><td>B 模式</td><td>数据集管理、模型训练、反向传播观察、实验对比、推理和协作</td><td>Angular + Spring + PyTorch Worker + WebSocket</td><td><b>已完成</b></td></tr>
           <tr><td>AI 博物馆</td><td>第一人称 AI 发展史长廊，多人在线参观</td><td>Three.js + WebSocket</td><td>可演示</td></tr>
-          <tr><td>LLM 助手</td><td>结合当前实验上下文进行问答，支持流式输出</td><td>SSE + 后端 LLM 代理</td><td>可演示</td></tr>
+          <tr><td>LLM 助手</td><td>根据当前实验内容进行问答，支持流式输出</td><td>SSE + 后端 LLM 代理</td><td>可演示</td></tr>
           <tr><td>教学浮标</td><td>术语高亮和教学文档跳转</td><td>Angular Directive + Signal</td><td>可演示</td></tr>
-          <tr><td>E 模式</td><td>反向传播可视化：MLP 引擎、子步骤动画、决策边界、优化器对比</td><td>纯前端 TS 引擎</td><td><b>已完成闭环</b></td></tr>
+          <tr><td>E 模式</td><td>MLP 反向传播、分步动画、决策边界和优化器对比</td><td>纯前端 TS 引擎</td><td><b>已完成</b></td></tr>
           <tr><td>F 模式</td><td>RNN 循环神经网络：Tanh RNN + BPTT、时间展开、序列分类</td><td>纯前端 TS 引擎</td><td><b>可演示</b></td></tr>
         </tbody>
       </table>
       <div class="evidence-row">
-        <div class="evidence-item"><b>A 模式</b><span>具备输入、计算、解释、保存和回溯闭环。</span></div>
-        <div class="evidence-item"><b>AI 博物馆</b><span>用 3D 长廊扩展展示型入口。</span></div>
-        <div class="evidence-item"><b>LLM 助手</b><span>通过后端代理和 SSE 支持上下文问答。</span></div>
-        <div class="evidence-item"><b>教学浮标</b><span>把术语解释嵌入实验界面。</span></div>
+        <div class="evidence-item"><b>A 模式</b><span>支持输入、计算、解释、保存和恢复。</span></div>
+        <div class="evidence-item"><b>AI 博物馆</b><span>使用 3D 长廊展示 AI 发展历史。</span></div>
+        <div class="evidence-item"><b>LLM 助手</b><span>通过后端代理和 SSE 返回回答。</span></div>
+        <div class="evidence-item"><b>教学浮标</b><span>在实验页面中直接查询术语。</span></div>
       </div>
-      <aside class="notes">功能矩阵要让老师先看到项目规模，再自然引出成员 A 的完整闭环。</aside>
+      <aside class="notes">快速介绍平台现有的实验模式和辅助功能。</aside>
     </section>
 
     <section class="slide" data-title="系统架构">
-      <h2 class="title">系统架构：前端可视化 + Spring 业务后端 + Python 计算服务</h2>
+      <h2 class="title">系统整体架构</h2>
       <div class="architecture">
         <div class="arch-box">
           <div class="label">BROWSER / ANGULAR</div>
-          <b>交互与可视化</b>
-          <p>路由、A/B 模式工作台、训练图表、3D 网络、LLM 浮窗、教学浮标。</p>
+          <b>页面交互与可视化</b>
+          <p>负责页面路由、实验工作台、训练图表、3D 网络、AI 浮窗和教学浮标。</p>
         </div>
         <div class="arch-arrow">
           <span>
@@ -103,8 +103,8 @@
         </div>
         <div class="arch-box">
           <div class="label">SPRING BOOT</div>
-          <b>统一业务入口</b>
-          <p>Auth/JWT、H2、forward 代理、训练编排、checkpoint 元信息、LLM 与 WebSocket。</p>
+          <b>业务与接口处理</b>
+          <p>负责登录鉴权、H2 数据、forward 转发、训练任务、Checkpoint、LLM 和 WebSocket。</p>
         </div>
         <div class="arch-arrow">
           <span>
@@ -115,16 +115,16 @@
         </div>
         <div class="arch-box">
           <div class="label">PYTHON COMPUTE</div>
-          <b>真实数值与训练</b>
-          <p>NumPy forward 服务与 PyTorch 训练 worker，负责逐层计算、梯度采集、评估和推理。</p>
+          <b>模型计算与训练</b>
+          <p>NumPy 服务负责前向传播，PyTorch worker 负责训练、梯度采集、测试和推理。</p>
         </div>
       </div>
-      <pre class="code-block"><code>Browser 只访问 Spring；Spring 统一鉴权、持久化、训练编排和事件转发；Python 专注数值计算。</code></pre>
-      <aside class="notes">这一页是课程“高级 Web 技术”的关键：跨语言服务分层，不把所有东西堆在前端。</aside>
+      <pre class="code-block"><code>浏览器统一访问 Spring；Spring 处理业务和数据；Python 负责模型计算。</code></pre>
+      <aside class="notes">说明三个部分各自负责什么，以及它们之间如何通信。</aside>
     </section>
 
-    <section class="slide" data-title="技术栈与目录">
-      <h2 class="title">技术栈与目录分层</h2>
+    <section class="slide" data-title="技术与代码结构">
+      <h2 class="title">技术栈与代码结构</h2>
       <div class="stage3-layout">
         <div class="stage3-panel">
           <div class="label">FRONTEND</div>
@@ -153,57 +153,57 @@
 └─ python-training/training_worker.py
    PyTorch 训练、测试、样本推理与 JSON 事件输出</code></pre>
       </div>
-      <div class="takeaway"><b>目录原则</b><span>前端按 core/shared/modes 分层，后端按 auth/forward/llm/museum 业务域组织，方便后续成员继续接入模块。</span></div>
-      <aside class="notes">这里可以快速说明代码组织不是按页面乱放，而是按 core/shared/modes 和后端领域拆分。</aside>
+      <div class="takeaway"><b>组织方式</b><span>前端按基础功能、共享功能和实验模式划分，后端按登录、计算、训练和辅助功能划分。</span></div>
+      <aside class="notes">简单说明前后端目录的划分方式。</aside>
     </section>
 
-    <section class="slide" data-title="成员分工">
-      <h2 class="title">成员分工与模块边界</h2>
+    <section class="slide" data-title="团队分工">
+      <h2 class="title">团队分工</h2>
       <table class="stage3-table">
-        <thead><tr><th>成员</th><th>模块</th><th>交付状态</th><th>技术关键词</th></tr></thead>
+        <thead><tr><th>成员</th><th>负责内容</th><th>当前状态</th><th>主要技术</th></tr></thead>
         <tbody>
-          <tr><td>成员 A</td><td>整体框架、A 模式、forward、登录记录、3D、LLM、教学浮标、AI 博物馆、Docker</td><td><b>核心链路完成</b></td><td>数据流、服务分层、可视化、持久化</td></tr>
-          <tr><td>成员 B · 李子涵</td><td>B 模式前后端、数据集与数据库、训练任务、实验对比、单样本推理、协作聊天室</td><td><b>核心链路完成</b></td><td>PyTorch、任务编排、checkpoint、WebSocket、可视化</td></tr>
+          <tr><td>成员 A</td><td>整体框架、A 模式、forward、登录记录、3D、LLM、教学浮标、AI 博物馆、Docker</td><td><b>已完成</b></td><td>数据流、服务分层、可视化、持久化</td></tr>
+          <tr><td>成员 B · 李子涵</td><td>B 模式前后端、数据集与数据库、训练任务、实验对比、单样本推理、协作聊天室</td><td><b>已完成</b></td><td>PyTorch、任务管理、Checkpoint、WebSocket、可视化</td></tr>
           <tr><td>成员 C</td><td>CNN 可解释性、资源迁移与解释器</td><td>模块接入中</td><td>CNN explainer、可解释可视化</td></tr>
-          <tr><td>成员 D</td><td>反向传播可视化 (E) + RNN 循环神经网络 (F) + 12 条教学术语</td><td>已完成闭环</td><td>MLP 反向传播引擎、BPTT、决策边界、优化器对比</td></tr>
+          <tr><td>成员 D</td><td>反向传播可视化 (E)、RNN 循环神经网络 (F) 和教学术语</td><td>已完成</td><td>MLP 反向传播、BPTT、决策边界、优化器对比</td></tr>
         </tbody>
       </table>
-      <aside class="notes">成员 B 负责从数据集进入训练、保存、对比、推理和协作观察的完整业务链路。</aside>
+      <aside class="notes">介绍每位成员负责的页面和后端功能。</aside>
     </section>
 
-    <section class="slide" data-title="成员A模块-界面">
-      <h2 class="title">成员 A 模块：Mode A 前向传播实验室</h2>
+    <section class="slide" data-title="成员A-前向传播">
+      <h2 class="title">Mode A 前向传播实验</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/screenshots/mode-a.png" alt="A 模式页面截图">
-          <figcaption>Mode A 工作台：围绕网络结构、样本输入、逐层结果和实验记录组织。</figcaption>
+          <figcaption>Mode A 将网络结构、样本输入、逐层结果和实验记录放在同一个工作台中。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">模块定位</div>
+          <div class="label">主要功能</div>
           <ul class="dense-list">
-            <li>Mode A 面向前向传播教学，重点不是只给出分类结果，而是让用户看到输入如何经过每一层变成最终输出。</li>
-            <li>页面主线是：选择样本或上传图片 → 搭建网络结构 → 执行 forward → 查看 shape、特征图、Top-K 和解释信息。</li>
-            <li>前端工作台、Spring 代理和 Python NumPy 计算服务共同形成端到端闭环，支持真实计算和结果回溯。</li>
+            <li>除了最终分类结果，还会展示输入经过每一层时的变化。</li>
+            <li>操作顺序是：选择样本或图片 → 搭建网络 → 执行 forward → 查看 shape、特征图和 Top-K。</li>
+            <li>计算由 Python NumPy 服务完成，结果可以保存并在之后重新查看。</li>
           </ul>
-          <div class="label" style="margin-top:20px">功能能力</div>
+          <div class="label" style="margin-top:20px">页面内容</div>
           <div class="stage3-metric"><b>实验工作台</b><span>支持网络层编辑、样本输入、逐层检查器和卷积核对比。</span></div>
           <div class="stage3-metric"><b>真实 forward</b><span>通过后端代理调用 Python 计算服务，返回可解释的逐层计算结果。</span></div>
-          <div class="stage3-metric"><b>历史记录</b><span>登录后可保存完整实验快照，后续恢复网络、输入和结果状态。</span></div>
-          <div class="stage3-metric"><b>3D 显示</b><span>可把当前 A 模式网络和结果发送到 3D 网络视图中展示。</span></div>
+          <div class="stage3-metric"><b>历史记录</b><span>登录后保存实验，之后恢复网络、输入和计算结果。</span></div>
+          <div class="stage3-metric"><b>3D 显示</b><span>把当前网络结构和结果放到 3D 页面中查看。</span></div>
         </div>
       </div>
-      <aside class="notes">这一页介绍用户看到的界面和 Mode A 的模块价值。</aside>
+      <aside class="notes">介绍 Mode A 的操作流程和页面能够展示的结果。</aside>
     </section>
 
-    <section class="slide" data-title="成员A模块-链路">
-      <h2 class="title">成员 A 模块：Mode A 数据链路与交付价值</h2>
+    <section class="slide" data-title="成员A-数据流程">
+      <h2 class="title">Mode A 数据处理流程</h2>
       <div class="stage3-layout split-55">
         <div class="stage3-panel">
           <div class="label">数据流</div>
           <ul class="dense-list">
             <li>用户在 Mode A 中完成样本选择、网络搭建和参数调整。</li>
-            <li>前端将图片和网络结构整理成统一请求，由 Spring 转发到 Python forward 服务。</li>
-            <li>Python 返回逐层 shape、特征图、Top-K 和错误提示，页面再用于检查器展示、历史保存和结果复用。</li>
+            <li>前端把图片和网络结构整理成请求，由 Spring 转发到 Python forward 服务。</li>
+            <li>Python 返回各层 shape、特征图、Top-K 和错误信息，前端再进行展示和保存。</li>
             <li>登录用户可以保存完整实验快照，后续恢复网络、输入和结果状态。</li>
           </ul>
         </div>
@@ -212,43 +212,43 @@
           <div class="stage3-metric"><b>层检查器</b><span>展示当前层输入输出 shape、公式说明、统计值和特征图。</span></div>
           <div class="stage3-metric"><b>输出结果</b><span>在同一页面查看预测排名、层级形状变化和异常提示。</span></div>
           <div class="stage3-metric"><b>实验快照</b><span>保存网络结构、连接关系、计算结果和输入图片信息。</span></div>
-          <div class="stage3-metric"><b>结果复用</b><span>同一份实验结果可继续用于检查器、历史记录、助手和 3D 页面。</span></div>
+          <div class="stage3-metric"><b>结果复用</b><span>同一份结果可以用于层检查器、历史记录、助手和 3D 页面。</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>Mode A 价值</b><span>成员 A 在 Mode A 中完成的是可操作、可计算、可解释、可保存的前向传播实验闭环。</span></div>
-      <aside class="notes">Mode A 第二页聚焦数据链路和页面功能。</aside>
+      <div class="takeaway"><b>处理流程</b><span>前端负责编辑和展示，Spring 负责转发与保存，Python 负责实际计算。</span></div>
+      <aside class="notes">重点说明一次 forward 请求经过前端、Spring 和 Python 的过程。</aside>
     </section>
 
-    <section class="slide" data-title="成员A-3D显示">
-      <h2 class="title">成员 A 扩展：3D 化显示</h2>
+    <section class="slide" data-title="成员A-三维网络">
+      <h2 class="title">三维网络结构展示</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/screenshots/network-3d.png" alt="3D 网络展示截图">
-          <figcaption>3D 网络展示：消费 A 模式快照，展示结构和结果摘要。</figcaption>
+          <figcaption>3D 页面读取 Mode A 的实验快照，展示网络结构和结果摘要。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">页面作用</div>
+          <div class="label">展示内容</div>
           <ul class="dense-list">
-            <li>把 Mode A 中的网络层、连接关系、shape 路径和输出摘要转成可旋转观察的空间网络。</li>
-            <li>3D 页面不重新计算 forward，而是复用 A 模式已经生成的结果快照。</li>
-            <li>用户可以从二维实验工作台切换到三维视角，观察网络结构和层间关系。</li>
+            <li>把网络层、连接关系、shape 变化和输出结果放到可旋转的三维场景中。</li>
+            <li>3D 页面直接读取 Mode A 已经生成的快照，不会重新执行 forward。</li>
+            <li>用户可以从不同角度观察网络结构和层与层之间的连接。</li>
           </ul>
           <div class="label" style="margin-top:20px">结构呈现</div>
-          <p>页面以层节点、连接线、shape 标记和结果摘要组织 3D 网络，强化“网络如何逐层流动”的直观感受。</p>
+          <p>页面通过层节点、连接线、shape 标记和结果摘要组成三维网络。</p>
         </div>
       </div>
-      <aside class="notes">3D 化显示页聚焦截图、网络结构和结果复用。</aside>
+      <aside class="notes">说明 3D 页面使用已有实验结果，主要负责结构展示。</aside>
     </section>
 
-    <section class="slide" data-title="成员A-帮助文档">
-      <h2 class="title">成员 A 扩展：帮助文档与教学入口</h2>
+    <section class="slide" data-title="成员A-教学文档">
+      <h2 class="title">教学文档与术语检索</h2>
       <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">功能定位</div>
+          <div class="label">主要功能</div>
           <ul class="dense-list">
-            <li>帮助文档集中展示平台术语、实验概念和各模式会遇到的关键知识点。</li>
-            <li>右下角教学浮标可以切换术语高亮，点击高亮术语跳转到对应文档条目。</li>
-            <li>Mode A 中的卷积、池化、全连接、softmax、前向传播等概念都能与文档内容关联。</li>
+            <li>教学文档集中整理平台中的术语、实验概念和相关知识点。</li>
+            <li>右下角浮标可以开启术语高亮，点击后跳转到对应文档。</li>
+            <li>卷积、池化、全连接、softmax 和前向传播等概念都可以直接查询。</li>
           </ul>
         </div>
         <div class="stage3-panel">
@@ -259,19 +259,19 @@
           <div class="stage3-metric"><b>术语高亮</b><span>把页面中的关键概念变成可点击的学习入口。</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>帮助文档</b><span>帮助文档和教学浮标把术语解释接入实验界面，用户不需要离开平台就能查看概念说明。</span></div>
-      <aside class="notes">帮助文档页聚焦文档、教学浮标和术语跳转。</aside>
+      <div class="takeaway"><b>使用方式</b><span>用户在实验页面中就能打开相关术语说明，不需要另外查找资料。</span></div>
+      <aside class="notes">介绍文档目录、术语高亮和页面跳转功能。</aside>
     </section>
 
-    <section class="slide" data-title="成员A-大模型助手">
-      <h2 class="title">成员 A 扩展：大模型助手</h2>
+    <section class="slide" data-title="成员A-智能助手">
+      <h2 class="title">实验智能助手</h2>
       <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">功能定位</div>
+          <div class="label">主要功能</div>
           <ul class="dense-list">
-            <li>大模型助手以右下角浮窗形式存在，用户可以在实验过程中随时提问。</li>
-            <li>助手会结合当前网络结构、选中层、shape 变化、预测结果和可视化内容生成解释。</li>
-            <li>回答以逐步输出的方式呈现，交互体验接近真实对话而不是一次性静态说明。</li>
+            <li>智能助手放在页面右下角，实验过程中可以随时打开。</li>
+            <li>提问时可以带上当前网络、选中层、shape 变化和预测结果。</li>
+            <li>回答采用流式输出，可以边生成边查看。</li>
           </ul>
         </div>
         <div class="stage3-panel">
@@ -279,76 +279,76 @@
           <div class="stage3-metric"><b>AI 浮窗</b><span>包含消息列表、输入框、上下文开关和快捷问题。</span></div>
           <div class="stage3-metric"><b>实验上下文</b><span>把当前页面状态带入回答，使解释贴近正在观察的结果。</span></div>
           <div class="stage3-metric"><b>快捷提问</b><span>围绕层作用、shape 变化和结果解释提供常用问题。</span></div>
-          <div class="stage3-metric"><b>安全接入</b><span>模型访问由后端统一处理，前端只呈现问答体验。</span></div>
+          <div class="stage3-metric"><b>后端调用</b><span>模型请求统一通过后端发送，前端负责展示消息。</span></div>
         </div>
       </div>
-      <div class="takeaway"><b>大模型助手</b><span>助手把实验过程中的数据和可视化结果转成可追问的解释，增强平台的互动教学能力。</span></div>
-      <aside class="notes">大模型助手页聚焦浮窗、实验上下文和逐步输出。</aside>
+      <div class="takeaway"><b>回答内容</b><span>助手可以根据当前实验状态解释网络层、shape 变化和预测结果。</span></div>
+      <aside class="notes">介绍助手如何获取实验上下文，以及回答如何流式显示。</aside>
     </section>
 
     <section class="slide" data-title="成员A-AI博物馆">
-      <h2 class="title">成员 A 扩展：AI 博物馆</h2>
+      <h2 class="title">AI 发展史博物馆</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/screenshots/ai-museum.png" alt="AI 博物馆截图">
-          <figcaption>AI 博物馆：第一人称 3D 展馆与在线状态展示。</figcaption>
+          <figcaption>使用第一人称视角浏览 3D 展馆，并查看其他在线用户。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">功能定位</div>
+          <div class="label">主要功能</div>
           <ul class="dense-list">
-            <li>AI 博物馆是项目的沉浸式展示入口，用第一人称长廊介绍 AI 发展史内容。</li>
-            <li>页面使用 3D 场景组织展品，让课程项目不只停留在表单和图表界面。</li>
-            <li>多人在线状态让不同用户可以同时进入展馆，看到彼此的参观位置。</li>
+            <li>用户可以用第一人称视角在长廊中浏览 AI 发展历史。</li>
+            <li>不同阶段的事件和人物以 3D 展品的形式放在展馆中。</li>
+            <li>多个用户可以同时进入展馆，并看到彼此的位置。</li>
           </ul>
           <div class="label" style="margin-top:20px">页面组成</div>
-          <p>展馆包含里程碑展品、第一人称移动控制、展品详情面板和远端用户位置同步。</p>
+          <p>展馆包括里程碑展品、移动控制、展品详情和在线用户位置同步。</p>
         </div>
       </div>
-      <aside class="notes">AI 博物馆页聚焦第一人称展馆、展品和多人在线状态。</aside>
+      <aside class="notes">介绍第一人称浏览、展品内容和多人在线功能。</aside>
     </section>
 
     <section class="slide member-b-slide" data-title="成员B-训练工作台">
-      <h2 class="title">成员 B：Mode B 真实训练工作台</h2>
+      <h2 class="title">Mode B 模型训练工作台</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/member-b/mode-b-workbench.png" alt="Mode B 训练工作台截图">
-          <figcaption>数据集、划分比例、网络结构与训练控制集中在同一工作台。</figcaption>
+          <figcaption>从选择数据到开始训练，都可以在这个页面完成。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">模块定位</div>
+          <div class="label">主要功能</div>
           <ul class="dense-list compact-list">
-            <li>将“选择数据 → 搭建网络 → 配置超参数 → 真实训练 → 测试与保存”组织为连续操作。</li>
-            <li>支持图像、CSV 表格、二维点和回归数据；表格输入与图像输入采用不同维度规则。</li>
-            <li>网络编辑器支持 Dense、Conv2D、Pool、Dropout、Residual 等层，并在训练前检查输出类别和张量维度。</li>
+            <li>按照“选择数据 → 搭建网络 → 设置参数 → 开始训练 → 测试并保存”的顺序操作。</li>
+            <li>支持图像、CSV、二维点和回归数据，并分别处理表格和图像的输入维度。</li>
+            <li>可以添加 Dense、Conv2D、Pool、Dropout、Residual 等网络层，训练前会检查维度和输出类别。</li>
           </ul>
-          <div class="label" style="margin-top:18px">页面状态</div>
-          <div class="stage3-metric"><b>数据侧栏</b><span>内置数据集、个人上传、格式校验和预览。</span></div>
-          <div class="stage3-metric"><b>训练主区</b><span>结构编辑、超参数、任务控制和实时指标。</span></div>
-          <div class="stage3-metric"><b>扩展入口</b><span>实验对比、单样本推理和独立协作房间。</span></div>
+          <div class="label" style="margin-top:18px">页面分区</div>
+          <div class="stage3-metric"><b>左侧</b><span>选择或上传数据集，并查看数据预览。</span></div>
+          <div class="stage3-metric"><b>中间</b><span>编辑网络、设置超参数并查看训练状态。</span></div>
+          <div class="stage3-metric"><b>其他页面</b><span>实验对比、单样本推理和训练聊天室。</span></div>
         </div>
       </div>
-      <aside class="notes">先从用户视角讲 Mode B：所有训练必要信息在一个页面闭环，不需要手写 Python 脚本。</aside>
+      <aside class="notes">先介绍用户在这个页面能完成什么，重点说明不用自己编写训练脚本。</aside>
     </section>
 
     <section class="slide member-b-slide" data-title="成员B-训练链路">
-      <h2 class="title">真实训练链路：Spring 编排 PyTorch Worker</h2>
+      <h2 class="title">训练任务执行流程</h2>
       <div class="pipeline member-b-pipeline">
-        <div class="pipe-node"><b>01</b><span>Angular 组装数据集、网络层和超参数</span></div>
-        <div class="pipe-node"><b>02</b><span>Spring 创建 job 目录并写入 request.json</span></div>
-        <div class="pipe-node"><b>03</b><span>ProcessBuilder 启动 Python worker</span></div>
-        <div class="pipe-node"><b>04</b><span>worker 按行输出 metric / backprop / test_result</span></div>
-        <div class="pipe-node"><b>05</b><span>Spring 广播 WebSocket 并持久化 checkpoint</span></div>
+        <div class="pipe-node"><b>01</b><span>Angular 提交数据集、网络结构和超参数</span></div>
+        <div class="pipe-node"><b>02</b><span>Spring 创建任务目录，写入 request.json</span></div>
+        <div class="pipe-node"><b>03</b><span>Spring 启动 Python worker</span></div>
+        <div class="pipe-node"><b>04</b><span>Python 持续输出训练事件</span></div>
+        <div class="pipe-node"><b>05</b><span>Spring 推送进度并保存 checkpoint</span></div>
       </div>
       <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">设计选择</div>
+          <div class="label">为什么这样做</div>
           <ul class="dense-list compact-list">
-            <li>训练 worker 不是长期运行的第四个 HTTP 服务，而是由每个训练任务独立拉起的子进程。</li>
-            <li>请求文件固定本次数据集、网络结构和超参数；控制文件负责暂停、继续与停止。</li>
-            <li>标准输出采用一行一个 JSON 事件，Spring 可以边读边推送，不需要等待整个训练完成。</li>
+            <li>每次训练单独启动一个 Python 子进程，任务结束后进程也会退出。</li>
+            <li>request.json 保存本次训练配置，控制文件处理暂停、继续和停止。</li>
+            <li>Python 每次输出一条 JSON 事件，Spring 读到后马上推送给前端。</li>
           </ul>
         </div>
-        <pre class="code-block micro"><code>job.writeRequest(); // 固化本次训练配置
+        <pre class="code-block micro"><code>job.writeRequest(); // 保存本次训练配置
 writeControl(job, "running");
 
 Process process = new ProcessBuilder(
@@ -360,18 +360,18 @@ Process process = new ProcessBuilder(
 executor.submit(() -> readWorkerOutput(job));
 executor.submit(() -> waitForWorkerExit(job));</code></pre>
       </div>
-      <aside class="notes">强调 Spring 是任务编排者，PyTorch worker 是计算执行者；两者通过文件和 JSON 行事件解耦。</aside>
+      <aside class="notes">这里主要讲清楚 Spring 负责管理任务，Python 负责真正的模型训练。</aside>
     </section>
 
     <section class="slide member-b-slide" data-title="成员B-训练观察">
-      <h2 class="title">训练过程可视化：指标、日志与逐层梯度</h2>
+      <h2 class="title">训练过程实时展示</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame tall-shot">
           <img src="assets/member-b/mode-b-training-monitor.png" alt="Mode B 训练状态与反向传播截图">
-          <figcaption>真实训练完成后同步展示指标、日志和每层 grad/update。</figcaption>
+          <figcaption>训练过程中同步更新指标、日志和每一层的梯度数据。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">真实反向传播采集</div>
+          <div class="label">这些数据从哪里来</div>
           <pre class="code-block micro"><code>before = snapshot_trainable_parameters(model)
 
 loss.backward()  # PyTorch 计算真实梯度
@@ -388,36 +388,71 @@ emit(build_backprop_event(
     float(loss.detach().cpu()), lr,
     logits, y, stats
 ))</code></pre>
-          <div class="label" style="margin-top:16px">前端呈现</div>
+          <div class="label" style="margin-top:16px">页面会显示</div>
           <ul class="dense-list compact-list">
-            <li>状态卡：epoch、batch、loss、accuracy、耗时和进度。</li>
-            <li>节点视图：grad norm、update norm、权重统计和梯度等级。</li>
-            <li>节点弹窗：梯度曲线、更新曲线和梯度直方图。</li>
+            <li>当前 epoch、batch、loss、accuracy、耗时和训练进度。</li>
+            <li>每层的 grad norm、update norm、权重大小和梯度等级。</li>
+            <li>点击节点后，还能查看变化曲线和梯度直方图。</li>
           </ul>
         </div>
       </div>
-      <aside class="notes">截图中的数值来自真实 batch，不是前端随机模拟；这也是 Mode B 教学观察的核心。</aside>
+      <aside class="notes">强调这些数值来自正在训练的真实 batch，不是前端生成的演示数据。</aside>
+    </section>
+
+    <section class="slide member-b-slide" data-title="成员B-节点梯度详情">
+      <h2 class="title">网络层梯度分析</h2>
+      <div class="stage3-layout split-60">
+        <figure class="screenshot-frame contain-shot">
+          <img src="assets/member-b/反向传播教学面板节点详细信息.png" alt="反向传播教学面板节点详细信息截图">
+          <figcaption>点击节点图标，可以继续查看这一层的梯度和参数变化。</figcaption>
+        </figure>
+        <div class="stage3-panel">
+          <div class="label">这些数值怎么看</div>
+          <ul class="dense-list compact-list">
+            <li><b>grad_norm</b> 是这一层的总体梯度大小，可以用来发现梯度过小或过大。</li>
+            <li><b>update_norm</b> 是参数实际改变的大小，可以结合梯度判断学习率是否合适。</li>
+            <li><b>grad_mean / grad_max</b> 分别看平均值和最大值，<b>weight_norm</b> 反映权重整体大小。</li>
+            <li>上面两条曲线看随 step 的变化，下面的直方图看当前梯度分布。</li>
+          </ul>
+          <div class="label" style="margin-top:16px">曲线数据怎么保存</div>
+          <pre class="code-block micro"><code>// 每次收到真实 backprop 事件，按层记录一个采样点
+current.push({
+  step: ++backpropHistoryStep,
+  gradNorm: layer.gradNorm,
+  updateNorm: layer.updateNorm,
+  gradMean: layer.gradMean,
+  gradMax: layer.gradMax,
+  weightNorm: layer.weightNorm,
+  histogram: layer.gradHistogram ?? []
+});
+
+// 限制历史长度，避免长时间训练持续占用内存
+backpropLayerHistory[layer.layerId] =
+    current.slice(-80);</code></pre>
+        </div>
+      </div>
+      <aside class="notes">结合截图说明，用户可以从整体训练状态继续看到某一层的具体变化。</aside>
     </section>
 
     <section class="slide member-b-slide" data-title="成员B-数据与持久化">
-      <h2 class="title">数据集与 Checkpoint：文件和元信息分层保存</h2>
+      <h2 class="title">数据集与训练结果存储</h2>
       <div class="stage3-layout split-55">
         <div class="stage3-panel">
-          <div class="label">数据集处理</div>
+          <div class="label">上传数据时会做什么</div>
           <table class="stage3-table compact-table">
             <tbody>
-              <tr><td>CSV</td><td>用户明确选择标签列和类别数；校验空标签、列数和数值特征。</td></tr>
-              <tr><td>图像 ZIP</td><td>按类别目录解析；忽略 __MACOSX、._ 文件等系统元数据。</td></tr>
-              <tr><td>访问控制</td><td>内置数据集公开；上传数据集按 owner 查询和删除。</td></tr>
-              <tr><td>预览</td><td>图像按类别抽样；CSV 展示原始字段；资源接口校验用户权限。</td></tr>
+              <tr><td>CSV</td><td>用户选择标签列和类别数，系统检查空标签、列数和特征格式。</td></tr>
+              <tr><td>图像 ZIP</td><td>按照文件夹识别类别，并忽略 __MACOSX、._ 等系统文件。</td></tr>
+              <tr><td>用户权限</td><td>内置数据集公开；上传的数据集只能由上传者查看和删除。</td></tr>
+              <tr><td>数据预览</td><td>图片按类别抽样，CSV 直接展示原始字段。</td></tr>
             </tbody>
           </table>
-          <div class="label" style="margin-top:20px">混合持久化</div>
-          <div class="stage3-metric"><b>文件系统</b><span>数据文件、训练目录、request/control.json 和 checkpoint.pt。</span></div>
-          <div class="stage3-metric"><b>H2 数据库</b><span>数据集元信息、用户归属、网络结构、超参数、指标历史和测试结果。</span></div>
+          <div class="label" style="margin-top:20px">分别保存在哪里</div>
+          <div class="stage3-metric"><b>磁盘文件</b><span>原始数据、任务目录、配置文件和 checkpoint.pt。</span></div>
+          <div class="stage3-metric"><b>H2 数据库</b><span>用户归属、网络结构、超参数、指标历史和测试结果。</span></div>
         </div>
         <div class="stage3-panel">
-          <div class="label">Checkpoint 保存关键代码</div>
+          <div class="label">保存 Checkpoint 的代码</div>
           <pre class="code-block micro"><code>if ("test_result".equals(type)
     &amp;&amp; !job.checkpointSaved()) {
   saveCheckpoint(job, node);
@@ -435,29 +470,64 @@ new TrainingCheckpoint(
     describeNetwork(job.request().layers()),
     job.status(), job.epoch(), job.totalEpochs()
 );</code></pre>
-          <p class="code-caption">权重文件不直接塞入数据库，避免大二进制对象影响查询；数据库保存路径与描述信息。</p>
+          <p class="code-caption">权重文件保存在磁盘，数据库只记录路径和训练信息，查询起来更方便。</p>
         </div>
       </div>
-      <aside class="notes">这一页解释为什么不是“全部存 H2”：大文件和结构化查询采用不同存储方式。</aside>
+      <aside class="notes">这里说明为什么权重放磁盘、训练信息放数据库，两类数据分开保存。</aside>
+    </section>
+
+    <section class="slide member-b-slide" data-title="成员B-独立测试集">
+      <h2 class="title">Checkpoint 测试集评估</h2>
+      <div class="stage3-layout split-60">
+        <figure class="screenshot-frame contain-shot">
+          <img src="assets/member-b/单独跑测试集和测试集效果.png" alt="单独运行测试集与测试集效果截图">
+          <figcaption>选择历史 Checkpoint，重新查看测试指标和具体预测结果。</figcaption>
+        </figure>
+        <div class="stage3-panel">
+          <div class="label">操作过程</div>
+          <ol class="dense-list ordered compact-list">
+            <li>用户从自己的历史训练记录中选择一个 Checkpoint。</li>
+            <li>Spring 检查用户权限，并读取原来的数据集、网络结构和权重路径。</li>
+            <li>Python 恢复模型，在原来的测试集上重新执行推理。</li>
+            <li>页面展示 loss、accuracy、样本数，以及部分样本的预测结果。</li>
+          </ol>
+          <pre class="code-block micro"><code>checkpoint = torch.load(checkpoint_file)
+model = build_model(layers, sample_x, class_count)
+model.load_state_dict(checkpoint["modelStateDict"])
+
+# 测试阶段不计算梯度，也不更新任何参数
+test_loss, test_accuracy = evaluate(
+    model, test_loader, criterion, device
+)
+
+emit({
+  "type": "test_result",
+  "testLoss": round(test_loss, 4),
+  "testAccuracy": round(test_accuracy, 4),
+  "samples": collect_prediction_samples(...)
+})</code></pre>
+        </div>
+      </div>
+      <aside class="notes">说明这里只做测试，不会重新训练，也不会修改原来的 Checkpoint。</aside>
     </section>
 
     <section class="slide member-b-slide" data-title="成员B-实验对比">
-      <h2 class="title">实验对比：按数据集回看每次训练</h2>
+      <h2 class="title">历史训练实验对比</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/member-b/experiment-compare.png" alt="实验对比页面截图">
-          <figcaption>同一数据集的 checkpoint、指标曲线、超参数和网络结构并列展示。</figcaption>
+          <figcaption>同一数据集的训练记录放在一起，更方便比较参数和结果。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">页面组织</div>
+          <div class="label">可以比较哪些内容</div>
           <ul class="dense-list compact-list">
-            <li>左侧按数据集聚合当前用户的历史 checkpoint，并计算最佳测试指标。</li>
-            <li>每次训练展示 train/val/test 指标、数据划分、优化器和学习率配置。</li>
-            <li>小型曲线同时回放 loss、accuracy、learning rate 和 gradient norm。</li>
-            <li>网络结构复用编辑器节点样式；点击节点查看层参数，也可进入 3D 结构视图。</li>
-            <li>未完成或异常结束的训练使用状态标签和说明，避免与正常实验混淆。</li>
+            <li>左侧按数据集整理当前用户的历史 Checkpoint，并标出最好结果。</li>
+            <li>每次训练都能看到 train/val/test 指标、数据划分和超参数。</li>
+            <li>曲线包括 loss、accuracy、learning rate 和 gradient norm。</li>
+            <li>点击网络节点可以查看层参数，也可以打开 3D 网络结构。</li>
+            <li>未完成或异常结束的训练会单独标记。</li>
           </ul>
-          <div class="label" style="margin-top:20px">数据来源</div>
+          <div class="label" style="margin-top:20px">后端返回的数据</div>
           <pre class="code-block micro"><code>GET /api/training/checkpoints?datasetId=...
 
 TrainingCheckpointSummary {
@@ -467,23 +537,23 @@ TrainingCheckpointSummary {
 }</code></pre>
         </div>
       </div>
-      <aside class="notes">实验对比不是只比较最终准确率，还保留训练过程和当时的网络结构。</aside>
+      <aside class="notes">这里不只比较最终准确率，也能看到当时的训练过程和网络结构。</aside>
     </section>
 
     <section class="slide member-b-slide" data-title="成员B-单样本推理">
-      <h2 class="title">单样本推理：用已完成模型观察逐层激活</h2>
+      <h2 class="title">单样本逐层推理</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/member-b/single-inference.png" alt="单样本推理页面截图">
-          <figcaption>选择 checkpoint 和真实样本后，逐层播放激活并展示输出概率。</figcaption>
+          <figcaption>选择一个真实样本，逐层查看模型的计算结果。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">交互流程</div>
+          <div class="label">使用步骤</div>
           <ol class="dense-list ordered compact-list">
-            <li>只列出当前用户已完成训练的 checkpoint。</li>
-            <li>按需加载对应数据集的部分样本，避免一次读取全部数据。</li>
-            <li>图片样本显示预览；CSV 样本显示原始字段并支持详情弹窗。</li>
-            <li>后端重新加载 .pt 权重，返回预测结果和每层 activation。</li>
+            <li>先选择当前用户已经训练完成的 Checkpoint。</li>
+            <li>再从对应数据集中选择一条样本，样本列表按需加载。</li>
+            <li>图片直接预览，CSV 展示原始字段和完整详情。</li>
+            <li>后端加载 .pt 权重，返回预测结果和每层 activation。</li>
           </ol>
           <pre class="code-block micro"><code>model.load_state_dict(state)
 model.eval()
@@ -501,23 +571,23 @@ emit({
 })</code></pre>
         </div>
       </div>
-      <aside class="notes">推理结果来自保存的真实权重，前端负责把各层 activation 组织成可播放的网络结构。</aside>
+      <aside class="notes">说明结果来自保存的真实权重，页面会按照网络结构逐层播放 activation。</aside>
     </section>
 
     <section class="slide member-b-slide" data-title="成员B-协作聊天室">
-      <h2 class="title">训练协作聊天室：共享指标、日志与讨论</h2>
+      <h2 class="title">多人训练协作</h2>
       <div class="stage3-layout split-60">
         <figure class="screenshot-frame">
           <img src="assets/member-b/training-collaboration.png" alt="训练协作聊天室截图">
-          <figcaption>独立窗口同步训练状态、训练日志、在线成员和实时消息。</figcaption>
+          <figcaption>聊天室会同步训练状态、日志、在线成员和实时消息。</figcaption>
         </figure>
         <div class="stage3-panel">
-          <div class="label">房间规则</div>
+          <div class="label">聊天室怎么工作</div>
           <ul class="dense-list compact-list">
-            <li>房主从当前训练任务创建房间；加入者只能进入已经存在的房间。</li>
-            <li>聊天通道和训练观察通道分离，避免普通消息影响指标推送。</li>
-            <li>输入“@”弹出智能助手选项；“@智能助手”请求携带房间训练上下文并流式返回。</li>
-            <li>最后一名用户离开后自动销毁房间，在线列表不保留空房间。</li>
+            <li>房主根据当前训练任务创建房间，其他用户只能加入已有房间。</li>
+            <li>聊天消息和训练数据分开传输，互相不会影响。</li>
+            <li>输入“@”可以选择智能助手，并结合当前训练状态进行提问。</li>
+            <li>最后一名用户离开后，房间会自动删除。</li>
           </ul>
           <pre class="code-block micro"><code>// 不允许通过“加入”隐式创建不存在的房间
 if (!createRoom &amp;&amp; !rooms.containsKey(jobId)) {
@@ -532,7 +602,7 @@ if (room.sessions.isEmpty()) {
 }</code></pre>
         </div>
       </div>
-      <aside class="notes">聊天室不需要额外后端，复用 Spring WebSocket；训练日志来自原任务事件流。</aside>
+      <aside class="notes">聊天室直接使用 Spring WebSocket，训练状态和日志来自原来的训练任务。</aside>
     </section>
 
     <section class="slide" data-title="成员C模块-界面">

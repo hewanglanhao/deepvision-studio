@@ -531,6 +531,11 @@ body.overview .slide {
   object-position: center top;
 }
 
+.member-b-slide .screenshot-frame.contain-shot img {
+  object-fit: contain;
+  object-position: center center;
+}
+
 .member-b-slide .stage3-metric {
   grid-template-columns: 130px 1fr;
   padding: 13px 0;
