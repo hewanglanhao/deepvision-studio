@@ -363,9 +363,22 @@ body.overview .slide {
 
 .arch-arrow span {
   min-height: 46px;
-  display: grid;
-  place-items: end center;
-  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+
+.arch-arrow b {
+  color: #0a5085;
+  font-size: 17px;
+}
+
+.arch-arrow small {
+  color: #426789;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .arch-arrow i {
