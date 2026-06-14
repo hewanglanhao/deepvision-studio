@@ -1,0 +1,17 @@
+{
+  "name": "course-presentation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.html",
+  "scripts": {
+    "export:pptx": "node scripts/export-screenshot-pptx.cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.60.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

@@ -27,19 +27,6 @@
       <aside class="notes">开场简单介绍平台的技术组成和主要功能。</aside>
     </section>
 
-    <section class="slide" data-title="汇报内容">
-      <h2 class="title">汇报内容</h2>
-      <div class="timeline-grid">
-        <div class="stage3-panel"><span class="step">01</span><b>项目目标</b><p>平台要解决哪些学习问题。</p></div>
-        <div class="stage3-panel"><span class="step">02</span><b>系统架构</b><p>Angular、Spring 和 Python 如何配合。</p></div>
-        <div class="stage3-panel"><span class="step">03</span><b>平台功能</b><p>各实验模式和辅助功能。</p></div>
-        <div class="stage3-panel"><span class="step">04</span><b>成员 A 部分</b><p>前向传播实验和相关扩展功能。</p></div>
-        <div class="stage3-panel"><span class="step">05</span><b>成员 B 部分</b><p>真实训练、实验对比、推理和协作。</p></div>
-        <div class="stage3-panel"><span class="step">06</span><b>实现难点</b><p>任务通信、状态恢复、数据保存和用户隔离。</p></div>
-      </div>
-      <aside class="notes">按照项目整体、成员 A 和成员 B 的顺序展开介绍。</aside>
-    </section>
-
     <section class="slide" data-title="项目目标">
       <h2 class="title">项目目标</h2>
       <div class="stage3-layout split-55">
@@ -70,6 +57,8 @@
         <tbody>
           <tr><td>A 模式</td><td>网络编辑、样本输入、逐层结果、3D 展示和历史记录</td><td>Angular + Spring Proxy + Python NumPy</td><td><b>已完成</b></td></tr>
           <tr><td>B 模式</td><td>数据集管理、模型训练、反向传播观察、实验对比、推理和协作</td><td>Angular + Spring + PyTorch Worker + WebSocket</td><td><b>已完成</b></td></tr>
+          <tr><td>C 模式</td><td>CNN 可解释性展示、卷积层特征图、局部 patch 计算和逐层解释</td><td>Angular + CNN Explainer 资源迁移</td><td><b>已完成</b></td></tr>
+          <tr><td>D 模式</td><td>Transformer 下一词预测、注意力矩阵、Top-K 结果和 QKV 逐步解释</td><td>Angular + ONNX Runtime + Tokenizer</td><td><b>已完成</b></td></tr>
           <tr><td>AI 博物馆</td><td>第一人称 AI 发展史长廊，多人在线参观</td><td>Three.js + WebSocket</td><td>可演示</td></tr>
           <tr><td>LLM 助手</td><td>根据当前实验内容进行问答，支持流式输出</td><td>SSE + 后端 LLM 代理</td><td>可演示</td></tr>
           <tr><td>教学浮标</td><td>术语高亮和教学文档跳转</td><td>Angular Directive + Signal</td><td>可演示</td></tr>
@@ -77,12 +66,6 @@
           <tr><td>F 模式</td><td>RNN 循环神经网络：Tanh RNN + BPTT、时间展开、序列分类</td><td>纯前端 TS 引擎</td><td><b>可演示</b></td></tr>
         </tbody>
       </table>
-      <div class="evidence-row">
-        <div class="evidence-item"><b>A 模式</b><span>支持输入、计算、解释、保存和恢复。</span></div>
-        <div class="evidence-item"><b>AI 博物馆</b><span>使用 3D 长廊展示 AI 发展历史。</span></div>
-        <div class="evidence-item"><b>LLM 助手</b><span>通过后端代理和 SSE 返回回答。</span></div>
-        <div class="evidence-item"><b>教学浮标</b><span>在实验页面中直接查询术语。</span></div>
-      </div>
       <aside class="notes">快速介绍平台现有的实验模式和辅助功能。</aside>
     </section>
 
@@ -163,9 +146,9 @@
         <thead><tr><th>成员</th><th>负责内容</th><th>当前状态</th><th>主要技术</th></tr></thead>
         <tbody>
           <tr><td>成员 A</td><td>整体框架、A 模式、forward、登录记录、3D、LLM、教学浮标、AI 博物馆、Docker</td><td><b>已完成</b></td><td>数据流、服务分层、可视化、持久化</td></tr>
-          <tr><td>成员 B · 李子涵</td><td>B 模式前后端、数据集与数据库、训练任务、实验对比、单样本推理、协作聊天室</td><td><b>已完成</b></td><td>PyTorch、任务管理、Checkpoint、WebSocket、可视化</td></tr>
-          <tr><td>成员 C</td><td>CNN 可解释性、资源迁移与解释器</td><td>模块接入中</td><td>CNN explainer、可解释可视化</td></tr>
-          <tr><td>成员 D</td><td>反向传播可视化 (E)、RNN 循环神经网络 (F) 和教学术语</td><td>已完成</td><td>MLP 反向传播、BPTT、决策边界、优化器对比</td></tr>
+          <tr><td>成员 B</td><td>B 模式前后端、数据集与数据库、训练任务、实验对比、单样本推理、协作聊天室</td><td><b>已完成</b></td><td>PyTorch、任务管理、Checkpoint、WebSocket、可视化</td></tr>
+          <tr><td>成员 C</td><td>CNN 可解释性、资源迁移与解释器</td><td><b>已完成</b></td><td>CNN explainer、可解释可视化</td></tr>
+          <tr><td>成员 D</td><td>反向传播可视化 (E)、RNN 循环神经网络 (F) 和教学术语</td><td><b>已完成</b></td><td>MLP 反向传播、BPTT、决策边界、优化器对比</td></tr>
         </tbody>
       </table>
       <aside class="notes">介绍每位成员负责的页面和后端功能。</aside>
@@ -902,25 +885,13 @@ if (room.sessions.isEmpty()) {
       <aside class="notes">第二张图截详情面板，展示权重、梯度、隐状态和输出概率四个教学模块。</aside>
     </section>
 
-    <section class="slide" data-title="总结">
-      <h2 class="title">总结：从可视化页面到完整工程闭环</h2>
-      <div class="stage3-layout">
-        <div class="stage3-panel">
-          <div class="label">业务完整</div>
-          <p>不是单一页面 demo，而是包含实验、计算、解释、保存、问答、展示和部署的完整 Web 平台。</p>
-        </div>
-        <div class="stage3-panel">
-          <div class="label">工程完整</div>
-          <p>前端交互、后端安全与持久化、Python 计算服务、WebSocket、SSE、Docker 都有明确职责。</p>
-        </div>
-      </div>
-      <div class="stage3-panel compact">
-        <div class="label">成员 A 的主线一句话</div>
-        <p class="big-statement">用结构化网络数据驱动真实 forward 计算，再把同一份结果复用到检查器、3D 展示、历史记录和 LLM 解释中。</p>
-      </div>
-      <div class="takeaway"><b>最终结论</b><span>项目从“可看”提升到“可操作、可计算、可解释、可保存”，体现了 Web 工程和深度学习教学场景的结合。</span></div>
-      <aside class="notes">结束时回到主线：项目从页面展示扩展为完整教学平台。</aside>
+    <section class="slide title-slide" data-title="谢谢">
+      <div class="blueprint-mark">DEEPVISION / WEBPJ</div>
+      <h1 class="title mono">谢谢</h1>
+      <p class="subtitle">DeepVision Studio 课程项目汇报</p>
+      <aside class="notes">结束页。</aside>
     </section>
+
   </main>
 
   <div class="hud">

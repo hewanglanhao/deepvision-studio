@@ -574,42 +574,6 @@ body.overview .slide {
   display: none;
 }
 
-.evidence-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
-  margin-top: 24px;
-}
-
-.evidence-item {
-  min-height: 142px;
-  padding: 20px;
-  border: 0;
-  border-top: 1px solid #c9dcea;
-  border-radius: 0;
-  background: transparent;
-}
-
-.evidence-item b {
-  display: block;
-  margin-bottom: 10px;
-  color: #0a2f55;
-  font-family: var(--font-mono);
-  font-size: 20px;
-}
-
-.evidence-item span {
-  color: #31516f;
-  font-size: 20px;
-  line-height: 1.38;
-}
-
-.big-statement {
-  color: #09233f !important;
-  font-size: 36px !important;
-  line-height: 1.42 !important;
-}
-
 .blueprint-mark {
   position: absolute;
   top: 78px;
