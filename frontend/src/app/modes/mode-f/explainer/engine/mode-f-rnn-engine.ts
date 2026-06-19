@@ -63,6 +63,12 @@ export class ModeFRnnEngine {
     this.t = 0;
   }
 
+  /** Return a snapshot of all current weight values */
+  getWeights(): { Wxh: number[][]; Whh: number[][]; Why: number[][]; bh: number[]; by: number[] } {
+    const copyMat = (m: number[][]) => m.map(r => [...r]);
+    return { Wxh: copyMat(this.Wxh), Whh: copyMat(this.Whh), Why: copyMat(this.Why), bh: [...this.bh], by: [...this.by] };
+  }
+
   forward(sequence: number[][]): ModeFForwardResult {
     const T = sequence.length;
     const h = vec(this.hiddenDim, 0); // h_0 = 0
@@ -152,6 +158,9 @@ export class ModeFRnnEngine {
 
     const gradient: ModeFRnnGradient = { dWhy: dLdWhy, dWhh: dLdWhh, dWxh: dLdWxh, dbh: dLdbh, dby: dLdby, gradientNorm: gradNorm };
 
+    // Snapshot weights before update
+    const wBefore = this.getWeights();
+
     // Apply gradients
     this.t++;
     this.applyUpdate(this.Wxh, dLdWxh, this.oWxh, this.ovWxh, config);
@@ -160,9 +169,19 @@ export class ModeFRnnEngine {
     this.applyVecUpdate(this.bh, dLdbh, this.obh, this.ovbh, config);
     this.applyVecUpdate(this.by, dLdby, this.oby, this.ovby, config);
 
+    // Snapshot weights after update
+    const wAfter = this.getWeights();
+
     return {
       iteration, loss, predictedClass: probs.indexOf(Math.max(...probs)), trueClass: sample.label,
       forwardResult: result, gradient, hiddenDim: this.hiddenDim, timeSteps: T, outputProbs: probs,
+      weightSnapshot: {
+        WxhBefore: wBefore.Wxh, WxhAfter: wAfter.Wxh,
+        WhhBefore: wBefore.Whh, WhhAfter: wAfter.Whh,
+        WhyBefore: wBefore.Why, WhyAfter: wAfter.Why,
+        bhBefore: wBefore.bh, bhAfter: wAfter.bh,
+        byBefore: wBefore.by, byAfter: wAfter.by,
+      },
     };
   }
 
