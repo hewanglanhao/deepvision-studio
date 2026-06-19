@@ -87,6 +87,17 @@
 .ss-correct .ss-fill { background: #059669; }
 .ss-val { color: #8a9ab0; width: 38px; text-align: right; font-family: 'Courier New', monospace; }
 
+/* ---- formula bar ---- */
+.formula-bar {
+  margin-top: 10px; padding: 8px 14px;
+  background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.12);
+  border-radius: 8px; overflow-x: auto;
+}
+.formula-text {
+  font-family: 'Courier New', monospace; font-size: 12px; color: #334155;
+  white-space: nowrap; line-height: 1.6;
+}
+
 @media (max-width: 700px) {
   .softmax-strip { flex-direction: column; }
 }

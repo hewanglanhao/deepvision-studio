@@ -22,6 +22,10 @@ export class ModeEOverviewComponent {
 
   /** Hovered edge for showing label on demand */
   readonly hoveredEdge = signal<{ layerFrom: number; neuronFrom: number; layerTo: number; neuronTo: number } | null>(null);
+  /** Clicked edge for showing specific formula */
+  readonly clickedEdge = signal<{ layerFrom: number; neuronFrom: number; layerTo: number; neuronTo: number } | null>(null);
+  /** Clicked neuron for showing its computation */
+  readonly clickedNeuron = signal<{ layerIdx: number; neuronIdx: number } | null>(null);
 
   /** Cursor position within the SVG (offsetX/offsetY from mousemove) */
   labelX = 0;
@@ -43,6 +47,17 @@ export class ModeEOverviewComponent {
 
   onEdgeLeave(): void {
     this.hoveredEdge.set(null);
+  }
+
+  onEdgeClick(e: { layerFrom: number; neuronFrom: number; layerTo: number; neuronTo: number }): void {
+    const current = this.clickedEdge();
+    if (current?.layerFrom === e.layerFrom && current?.neuronFrom === e.neuronFrom &&
+        current?.layerTo === e.layerTo && current?.neuronTo === e.neuronTo) {
+      this.clickedEdge.set(null); // toggle off
+    } else {
+      this.clickedEdge.set(e);
+      this.clickedNeuron.set(null);
+    }
   }
 
   isEdgeHovered(e: { layerFrom: number; neuronFrom: number; layerTo: number; neuronTo: number }): boolean {
@@ -270,7 +285,123 @@ export class ModeEOverviewComponent {
     return 'rgba(148,163,184,0.3)';
   }
 
-  selectN(li: number, ni: number): void { this.s.selectNeuron(li, ni); }
+  selectN(li: number, ni: number): void {
+    this.s.selectNeuron(li, ni);
+    const cur = this.clickedNeuron();
+    if (cur?.layerIdx === li && cur?.neuronIdx === ni) {
+      this.clickedNeuron.set(null); // toggle off
+    } else {
+      this.clickedNeuron.set({ layerIdx: li, neuronIdx: ni });
+      this.clickedEdge.set(null);
+    }
+  }
+
+  /** Formula line showing the current neuron's computation */
+  private fmtH(v: number, color: string): string { return `<span style="color:${color};font-weight:600">${this.fmt(v)}</span>`; }
+
+  /** Get the target neuron index for formula display (clicked > sub-step default) */
+  private getFormulaNeuron(targetLayer: number): number {
+    const cn = this.clickedNeuron();
+    if (cn && cn.layerIdx === targetLayer) return cn.neuronIdx;
+    const ce = this.clickedEdge();
+    if (ce && ce.layerTo === targetLayer) return ce.neuronTo;
+    return 0; // default: first neuron
+  }
+
+  readonly formulaLine = computed(() => {
+    const ss = this.sub();
+    const step = this.step();
+    if (!step || ss.type === 'idle' || ss.type === 'done') return null;
+    const layers = this.layers();
+    const acts = this.acts();
+    const ce = this.clickedEdge();
+
+    // Edge-level formula (clicked edge takes priority) — look up full data from edges()
+    const edgeData = ce ? this.edges().find(e =>
+      e.layerFrom === ce.layerFrom && e.neuronFrom === ce.neuronFrom &&
+      e.layerTo === ce.layerTo && e.neuronTo === ce.neuronTo
+    ) : null;
+
+    if (edgeData && ss.type === 'forward') {
+      const w = this.fmtH(edgeData.weight, '#2563eb');
+      const a = this.fmtH(acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0, '#7c3aed');
+      const prod = this.fmtH(edgeData.weight * (acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0), '#d97706');
+      return `<span style="color:#64748b">前向:</span> W<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub>×a<sub>${edgeData.neuronFrom}</sub> = ${w}×${a} = ${prod}`;
+    }
+    if (edgeData && ss.type === 'backward') {
+      const g = this.fmtH(edgeData.gradient ?? 0, '#2563eb');
+      const aPrev = this.fmtH(acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0, '#7c3aed');
+      const dW = this.fmtH((acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0) * (edgeData.gradient ?? 0), '#d97706');
+      return `<span style="color:#64748b">反向:</span> dW<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub> = a<sub>${edgeData.neuronFrom}</sub>×dZ<sub>${edgeData.neuronTo}</sub> = ${aPrev}×${g} = ${dW}`;
+    }
+    if (edgeData && ss.type === 'update') {
+      const before = this.fmtH(edgeData.before ?? 0, '#dc2626');
+      const after = this.fmtH(edgeData.after ?? 0, '#059669');
+      const delta = this.fmtH(Math.abs((edgeData.after ?? 0) - (edgeData.before ?? 0)), '#d97706');
+      return `<span style="color:#64748b">更新:</span> W<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub> = ${before} <span style="color:#94a3b8">→</span> ${after} <span style="color:#94a3b8">(Δ=${delta})</span>`;
+    }
+
+    // Neuron-level formula (clicked neuron or sub-step default)
+    if (ss.type === 'loss') {
+      const preds = step.predictions;
+      if (!preds) return null;
+      const tc = step.trueClass ?? 0;
+      const probsHTML = preds.map((p, i) => `<span style="color:${i===tc?'#059669':'#64748b'}">${(p*100).toFixed(1)}%</span>`).join(', ');
+      const lossVal = this.fmtH(step.loss ?? 0, '#d97706');
+      return `<span style="color:#64748b">损失:</span> Softmax → [${probsHTML}] <span style="color:#94a3b8">真实=${tc}</span> −ln(p) = ${lossVal}`;
+    }
+
+    if (ss.type === 'forward') {
+      const li = ss.layerPair + 1;
+      const ni = this.getFormulaNeuron(li);
+      const cache = step.forwardCache?.find(c => c.layerIndex === li);
+      if (!cache?.preActivation) return null;
+      // Use before-update weights to match the cached activations
+      const snap = step.parameterSnapshots.find(s => s.layerId === layers[li]?.id);
+      const wBefore = snap?.weightsBefore ?? layers[li]?.params?.['weights'] as number[][] | undefined;
+      if (!wBefore?.[ni]) return null;
+      const incoming = this.edges().filter(e => e.layerTo === li && e.neuronTo === ni);
+      if (incoming.length === 0) return null;
+      const bBefore = snap?.biasBefore?.[ni] ?? layers[li]?.params?.['bias']?.[ni] as number ?? 0;
+      const terms = incoming.map((e, idx) => {
+        const a = acts[e.layerFrom]?.[e.neuronFrom] ?? 0;
+        const w = wBefore[ni]?.[idx] ?? e.weight;
+        return `<span style="color:#2563eb;font-weight:600">${this.fmt(w)}</span><span style="color:#94a3b8">×</span><span style="color:#7c3aed;font-weight:600">${this.fmt(a)}</span>`;
+      });
+      const sum = wBefore[ni].reduce((s: number, w: number, idx: number) => s + w * (acts[li-1]?.[idx] ?? 0), 0) + bBefore;
+      const actName = layers[li]?.params?.['activation'] ?? '线性';
+      const actResult = actName === 'relu' ? Math.max(0, sum) : actName === 'sigmoid' ? 1 / (1 + Math.exp(-sum)) : actName === 'tanh' ? Math.tanh(sum) : sum;
+      const biasHTML = bBefore !== 0 ? ` <span style="color:#94a3b8">+</span> <span style="color:#d97706;font-weight:600">${this.fmt(bBefore)}</span>` : '';
+      return `<span style="color:#64748b">前向:</span> ${layers[li]?.name ?? 'L'+li}·神经元${ni}: (${terms.join(' <span style="color:#94a3b8">+</span> ')})${biasHTML} <span style="color:#94a3b8">=</span> <span style="color:#d97706;font-weight:600">${this.fmt(sum)}</span> <span style="color:#94a3b8">→ ${actName} →</span> <span style="color:#d97706;font-weight:600">${this.fmt(actResult)}</span>`;
+    }
+
+    if (ss.type === 'backward') {
+      const li = ss.layerPair + 1;
+      const ni = this.getFormulaNeuron(li);
+      const grad = step.layerGradients.find(g => g.layerId === layers[li]?.id);
+      if (!grad?.weightGradients?.[ni]?.[0]) return null;
+      const cache = step.forwardCache?.find(c => c.layerIndex === li);
+      const aPrev = cache?.input[0]?.[0] ?? 0;
+      const dW = grad.weightGradients[ni][0];
+      const dZ = grad.biasGradients?.[ni] ?? 0;
+      const aPrevH = this.fmtH(aPrev, '#7c3aed');
+      const dZH = this.fmtH(dZ, '#2563eb');
+      const dWH = this.fmtH(dW, '#d97706');
+      return `<span style="color:#64748b">反向:</span> ${layers[li]?.name ?? 'L'+li}·神经元${ni}: dW<sub>${ni},0</sub> = a<sub>0</sub>×dZ<sub>${ni}</sub> = ${aPrevH}×${dZH} = ${dWH}`;
+    }
+
+    if (ss.type === 'update') {
+      const li = ss.layerIdx;
+      const ni = this.getFormulaNeuron(li);
+      const snap = step.parameterSnapshots.find(s => s.layerId === layers[li]?.id);
+      const wBefore = snap?.weightsBefore?.[ni]?.[0];
+      const wAfter = snap?.weightsAfter?.[ni]?.[0];
+      if (wBefore == null || wAfter == null) return null;
+      return `<span style="color:#64748b">更新:</span> ${layers[li]?.name ?? 'L'+li}·神经元${ni}: W<sub>${ni},0</sub> = <span style="color:#dc2626;font-weight:600">${this.fmt(wBefore)}</span> <span style="color:#94a3b8">→</span> <span style="color:#059669;font-weight:600">${this.fmt(wAfter)}</span> <span style="color:#94a3b8">(Δ=${this.fmtH(Math.abs(wAfter-wBefore),'#d97706')})</span>`;
+    }
+
+    return null;
+  });
 
   doStep(): void { this.s.startAnimatedStep(); }
   doNext(): void { this.s.advanceSubStep(); }
