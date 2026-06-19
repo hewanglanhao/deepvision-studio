@@ -504,22 +504,61 @@ export class ModeEOverviewComponent {
 
     if (ss.type === 'backward') {
       const li = ss.layerPair + 1;
-      const ni = this.getFormulaNeuron(li);
       const grad = step.layerGradients.find(g => g.layerId === layers[li]?.id);
-      if (!grad?.weightGradients?.[ni]?.[0]) return null;
+      if (!grad?.weightGradients) return null;
       const cache = step.forwardCache?.find(c => c.layerIndex === li);
-      const aPrev = cache?.input[0]?.[0] ?? 0;
-      const dW = grad.weightGradients[ni][0];
-      const dZ = grad.biasGradients?.[ni] ?? 0;
-      const aPrevH = this.fmtV(aPrev, 'fv-a');
-      const dZH = this.fmtV(dZ, 'fv-w');
-      const dWH = this.fmtV(dW, 'fv-r');
-      // Show dZ derivation from CE gradient
-      const preds = step.predictions;
-      const tc = step.trueClass ?? 0;
-      const softmaxVal = preds?.[ni] ?? 0;
-      const dZsrc = dZ;
-      return `<span class="fv-lb">反向:</span> ${layers[li]?.name ?? 'L'+li}<span class="fv-op">·</span>神经元${ni}: dZ<sub>${ni}</sub><span class="fv-op">=</span>softmax<sub>${ni}</sub><span class="fv-op">−</span>𝟙(label=${tc}) <span class="fv-op">=</span> ${this.fmt(softmaxVal)}<span class="fv-op">−</span>${ni===tc?'1':'0'} <span class="fv-op">=</span> ${this.fmtV(dZsrc,'fv-w')} <span class="fv-op">|</span> dW<sub>${ni},0</sub><span class="fv-op">=</span>a<sub>0</sub><span class="fv-op">×</span>dZ<sub>${ni}</sub><span class="fv-op">=</span>${aPrevH}<span class="fv-op">×</span>${dZH}<span class="fv-op">=</span>${dWH}`;
+      if (!cache?.input?.[0]) return null;
+      const aPrev = cache.input[0];
+      const isOutput = layers[li]?.type === 'output';
+      const act = layers[li]?.params?.['activation'] ?? 'relu';
+      const counts = this.counts();
+      const prevCount = counts[li - 1] ?? 0;
+      const thisCount = counts[li] ?? 0;
+
+      // ---- 1) dZ: loss gradient w.r.t. Z ----
+      const dZ = grad.biasGradients ?? new Array(thisCount).fill(0);
+      let dZRows = '';
+      if (isOutput && act === 'softmax') {
+        const preds = step.predictions ?? [];
+        const tc = step.trueClass ?? 0;
+        dZRows = dZ.map((dzVal, i) => {
+          const p = preds[i] ?? 0;
+          const target = i === tc ? '1' : '0';
+          return `<div class="fv-term-row"><span class="fv-tl">dZ<sub>${i}</sub></span><span class="fv-op">= softmax<sub>${i}</sub> − 𝟙</span><span class="fv-st">(label=${tc}) = ${this.fmt(p)}−${target}</span><span class="fv-op">=</span><span class="fv-w">${this.fmt(dzVal)}</span></div>`;
+        }).join('');
+      } else {
+        const dA = grad.inputGradient?.[0] ?? new Array(thisCount).fill(0);
+        const Z = cache.preActivation?.[0] ?? new Array(thisCount).fill(0);
+        const A = cache.output?.[0] ?? new Array(thisCount).fill(0);
+        dZRows = dZ.map((dzVal, i) => {
+          let deriv = '';
+          if (act === 'relu') deriv = `ReLU'(<span class="fv-st">${this.fmt(Z[i])}</span>) = <span class="fv-st">${Z[i] > 0 ? '1' : '0'}</span>`;
+          else if (act === 'sigmoid') deriv = `σ'(<span class="fv-st">${this.fmt(A[i])}</span>) = <span class="fv-st">${this.fmt(A[i] * (1 - A[i]))}</span>`;
+          else if (act === 'tanh') deriv = `tanh'(<span class="fv-st">${this.fmt(A[i])}</span>) = <span class="fv-st">${this.fmt(1 - A[i] * A[i])}</span>`;
+          else deriv = '×1';
+          return `<div class="fv-term-row"><span class="fv-tl">dZ<sub>${i}</sub></span><span class="fv-op">= dA<sub>${i}</sub> × ${deriv}</span><span class="fv-op">=</span><span class="fv-st">${this.fmt(dA[i] ?? 0)}</span><span class="fv-op">×</span><span class="fv-st">${this.fmt(1)}</span><span class="fv-op">=</span><span class="fv-w">${this.fmt(dzVal)}</span></div>`;
+        }).join('');
+      }
+      const dZBlock = `<div class="fv-section-label">dZ — 损失对 Z 的梯度</div><div class="fv-terms">${dZRows}</div>`;
+
+      // ---- 2) dW = a_prev · dZ (outer product) ----
+      const dW = grad.weightGradients ?? [];
+      let dWRows = '';
+      for (let i = 0; i < Math.min(thisCount, dW.length); i++) {
+        for (let j = 0; j < Math.min(prevCount, dW[i]?.length ?? 0); j++) {
+          const w = dW[i][j];
+          dWRows += `<div class="fv-term-row"><span class="fv-tl">dW<sub>${i},${j}</sub></span><span class="fv-op">= a<sub>${j}</sub> × dZ<sub>${i}</sub> =</span><span class="fv-a">${this.fmt(aPrev[j] ?? 0)}</span><span class="fv-op">×</span><span class="fv-w">${this.fmt(dZ[i] ?? 0)}</span><span class="fv-op">=</span><span class="fv-r">${this.fmt(w)}</span></div>`;
+        }
+      }
+      const dWBlock = `<div class="fv-sep"></div><div class="fv-section-label">dW — 权重梯度 (a_prev · dZ)</div><div class="fv-terms">${dWRows}</div>`;
+
+      // ---- 3) db = dZ ----
+      const dbRows = dZ.map((dzVal, i) =>
+        `<div class="fv-term-row fv-bias-row"><span class="fv-tl">db<sub>${i}</sub></span><span class="fv-op">= dZ<sub>${i}</sub> =</span><span class="fv-r">${this.fmt(dzVal)}</span></div>`
+      ).join('');
+      const dbBlock = `<div class="fv-sep"></div><div class="fv-section-label">db — 偏置梯度</div><div class="fv-terms">${dbRows}</div>`;
+
+      return `${dZBlock}${dWBlock}${dbBlock}`;
     }
 
     if (ss.type === 'update') {
