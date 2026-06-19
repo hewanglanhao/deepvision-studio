@@ -87,16 +87,81 @@
 .ss-correct .ss-fill { background: #059669; }
 .ss-val { color: #8a9ab0; width: 38px; text-align: right; font-family: 'Courier New', monospace; }
 
-/* ---- formula bar ---- */
-.formula-bar {
-  margin-top: 10px; padding: 8px 14px;
-  background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.12);
-  border-radius: 8px; overflow-x: auto;
+/* ---- formula card ---- */
+.formula-card {
+  margin-top: 10px;
+  background: #fff; border: 1px solid #e2e6ea;
+  border-radius: 12px; padding: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
 }
-.formula-text {
+.formula-card h4 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: #8a9ab0; margin: 0 0 8px; font-weight: 600;
+}
+.formula-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.phase-badge {
+  padding: 2px 8px; border-radius: 6px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  white-space: nowrap;
+}
+.phase-badge.fw  { background: #eff6ff; color: #2563eb; }
+.phase-badge.bw  { background: #fff7ed; color: #d97706; }
+.phase-badge.up  { background: #ecfdf5; color: #059669; }
+.phase-badge.ls  { background: #fef3c7; color: #b45309; }
+.phase-badge.nr  { background: #f5f3ff; color: #7c3aed; }
+.formula-title { font-size: 13px; font-weight: 600; color: #1a2332; }
+.formula-body {
   font-family: 'Courier New', monospace; font-size: 12px; color: #334155;
-  white-space: nowrap; line-height: 1.6;
+  line-height: 1.6;
 }
+/* value spans inside innerHTML */
+.formula-body ::ng-deep .fv-w  { color: #2563eb; font-weight: 600; }
+.formula-body ::ng-deep .fv-a  { color: #7c3aed; font-weight: 600; }
+.formula-body ::ng-deep .fv-r  { color: #d97706; font-weight: 600; }
+.formula-body ::ng-deep .fv-bf { color: #dc2626; font-weight: 600; }
+.formula-body ::ng-deep .fv-af { color: #059669; font-weight: 700; }
+.formula-body ::ng-deep .fv-lb { color: #64748b; }
+.formula-body ::ng-deep .fv-op { color: #94a3b8; }
+.formula-body ::ng-deep .fv-ok { color: #059669; }
+.formula-body ::ng-deep .fv-st { color: #64748b; }
+/* section label */
+.formula-body ::ng-deep .fv-section-label {
+  display: block; font-size: 11px; color: #8a9ab0;
+  font-weight: 600; margin: 8px 0 4px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+/* ---- formula term rows ---- */
+.formula-body ::ng-deep .fv-terms {
+  display: flex; flex-direction: column; gap: 3px;
+  margin: 8px 0;
+}
+.formula-body ::ng-deep .fv-term-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  background: #f8fafc; border: 1px solid #f1f5f9;
+  border-radius: 8px; font-size: 12px;
+}
+.formula-body ::ng-deep .fv-term-row .fv-tl {
+  font-size: 10px; color: #94a3b8; min-width: 36px;
+  font-family: 'Courier New', monospace;
+}
+.formula-body ::ng-deep .fv-sep {
+  height: 1px; background: #e2e6ea; margin: 3px 0 3px 16px;
+}
+.formula-body ::ng-deep .fv-bias-row {
+  background: #fffbeb; border-color: #fde68a;
+}
+.formula-body ::ng-deep .fv-sum-row {
+  background: #eff6ff; border-color: #bfdbfe;
+}
+.formula-body ::ng-deep .fv-sum-row .fv-tl,
+.formula-body ::ng-deep .fv-sum-row .fv-r { font-weight: 700; }
+/* activation result line */
+.formula-body ::ng-deep .fv-ar { margin-top: 4px; font-size: 11px; }
+.formula-body ::ng-deep .fv-ar .ar-op { color: #94a3b8; }
+.formula-body ::ng-deep .fv-ar .ar-val { color: #059669; font-weight: 700; }
 
 @media (max-width: 700px) {
   .softmax-strip { flex-direction: column; }

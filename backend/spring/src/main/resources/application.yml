@@ -37,7 +37,7 @@ deepvision:
   training:
     stream-base-url: ${DEEPVISION_TRAINING_STREAM_BASE_URL:}
     jobs-root: ${DEEPVISION_TRAINING_JOBS_ROOT:./training-jobs}
-    python-executable: ${DEEPVISION_TRAINING_PYTHON:C:/Users/lizihan/miniconda3/envs/dl-platform/python.exe}
+    python-executable: ${DEEPVISION_TRAINING_PYTHON:C:/Python312/python.exe}
     worker-script: ${DEEPVISION_TRAINING_WORKER_SCRIPT:../python-training/training_worker.py}
   llm:
     ark-base-url: ${ARK_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}

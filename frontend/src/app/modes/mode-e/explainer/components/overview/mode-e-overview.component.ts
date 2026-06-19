@@ -93,9 +93,22 @@ export class ModeEOverviewComponent {
   readonly hasStep = computed(() => !!this.s.currentStep());
 
   /** Format activation: show "—" when no data, actual value otherwise */
+  fmtZ(li: number, ni: number): string {
+    const step = this.step();
+    if (!step) return '—';
+    const cache = step.forwardCache?.find(e => e.layerIndex === li);
+    const val = cache?.preActivation?.[0]?.[ni];
+    if (val == null) return '—';
+    return this.fmt(val);
+  }
+
   fmtAct(li: number, ni: number): string {
-    if (!this.hasStep()) return '—';
-    const val = this.acts()[li]?.[ni] ?? 0;
+    const step = this.step();
+    if (!step) return '—';
+    // Show '—' for layers not yet computed in incremental mode
+    const cache = step.forwardCache?.find(e => e.layerIndex === li);
+    if (!cache?.output?.[0]) return '—';
+    const val = cache.output[0][ni] ?? 0;
     if (Math.abs(val) < 0.0001) return '0';
     if (Math.abs(val) < 0.01) return val.toFixed(4);
     return val.toFixed(3);
@@ -142,12 +155,12 @@ export class ModeEOverviewComponent {
   }
 
   edgeOpacity(e: { layerFrom: number; layerTo: number }): number {
-    return this.isActiveLayerPair(e) ? 1 : 0.45;
+    return this.isActiveLayerPair(e) ? 1 : 0.7;
   }
 
   // Edge color: only active layer pair gets phase color, rest stay gray
   edgeStroke(e: { layerFrom: number; layerTo: number }): string {
-    if (!this.isActiveLayerPair(e)) return '#cbd5e1';
+    if (!this.isActiveLayerPair(e)) return '#94a3b8';
     const p = this.phase();
     if (p === 'forward') return '#3b82f6';
     if (p === 'backward') return '#d97706';
@@ -212,17 +225,14 @@ export class ModeEOverviewComponent {
     const y1 = this.ny(e.neuronFrom, e.layerFrom);
     const x2 = this.nx(e.layerTo);
     const y2 = this.ny(e.neuronTo, e.layerTo);
-    const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2;
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const perpX = -dy / len;
-    const perpY = dx / len;
-    const cnt = this.counts()[e.layerFrom] ?? 2;
-    const offset = (e.neuronFrom - e.neuronTo) * 10 + (e.neuronFrom + e.neuronTo - cnt) * 5;
-    const rot = Math.atan2(dy, dx) * 180 / Math.PI;
-    return { mx: mx + perpX * offset, my: my + perpY * offset, angle: rot };
+    const nx = -dy / len, ny = dx / len;  // unit normal
+    const mx = (x1 + x2) / 2 - nx * 8;
+    const my = (y1 + y2) / 2 - ny * 8;
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    return { mx, my, angle };
   }
 
   // ---- formatting -------------------------------------------------------
@@ -234,9 +244,12 @@ export class ModeEOverviewComponent {
   }
 
   edgeLabel(e: { weight: number; gradient?: number; before?: number; after?: number }): string {
-    if (this.phase() === 'backward' && e.gradient != null) return '∇' + this.fmt(e.gradient);
-    if (this.sub().type === 'update' && e.after != null && e.before != null)
+    const ss = this.sub();
+    if (ss.type === 'backward' && e.gradient != null) return '∇' + this.fmt(e.gradient);
+    if (ss.type === 'update' && e.after != null && e.before != null)
       return this.fmt(e.before) + '→' + this.fmt(e.after);
+    // During forward animation, show pre-update weight to match cached activations
+    if (ss.type === 'forward' && e.before != null) return this.fmt(e.before);
     return this.fmt(e.weight);
   }
 
@@ -296,8 +309,8 @@ export class ModeEOverviewComponent {
     }
   }
 
-  /** Formula line showing the current neuron's computation */
-  private fmtH(v: number, color: string): string { return `<span style="color:${color};font-weight:600">${this.fmt(v)}</span>`; }
+  /** Format a value wrapped in a CSS class span (for innerHTML formula content) */
+  private fmtV(v: number, cssClass: string): string { return `<span class="${cssClass}">${this.fmt(v)}</span>`; }
 
   /** Get the target neuron index for formula display (clicked > sub-step default) */
   private getFormulaNeuron(targetLayer: number): number {
@@ -308,13 +321,70 @@ export class ModeEOverviewComponent {
     return 0; // default: first neuron
   }
 
-  readonly formulaLine = computed(() => {
-    const ss = this.sub();
+  /** Card header metadata: phase badge + descriptive title */
+  readonly formulaHeader = computed(() => {
     const step = this.step();
-    if (!step || ss.type === 'idle' || ss.type === 'done') return null;
+    const cn = this.clickedNeuron();
+    const ce = this.clickedEdge();
+    if (!step) return null;
+    const ss = this.sub();
+    const hasClick = cn || ce;
+    if (!hasClick && (ss.type === 'idle' || ss.type === 'done')) return null;
+    const layers = this.layers();
+
+    // Edge-level formulas
+    if (ce && ss.type === 'forward') {
+      return { phase: 'forward' as const, phaseLabel: '前向传播', title: `W · a  (边 N${ce.neuronFrom} → N${ce.neuronTo})` };
+    }
+    if (ce && ss.type === 'backward') {
+      return { phase: 'backward' as const, phaseLabel: '反向传播', title: `∂W / ∂a  (边 N${ce.neuronFrom} → N${ce.neuronTo})` };
+    }
+    if (ce && ss.type === 'update') {
+      return { phase: 'update' as const, phaseLabel: '参数更新', title: `W 更新 (边 N${ce.neuronFrom} → N${ce.neuronTo})` };
+    }
+
+    // Neuron clicked outside animation
+    const li = cn && (ss.type === 'idle' || ss.type === 'done') ? cn.layerIdx
+      : ss.type === 'forward' ? ss.layerPair + 1
+      : ss.type === 'backward' ? ss.layerPair + 1
+      : ss.type === 'update' ? ss.layerIdx
+      : -1;
+
+    if (cn && (ss.type === 'idle' || ss.type === 'done')) {
+      return { phase: 'neuron' as const, phaseLabel: '神经元', title: `${layers[cn.layerIdx]?.name ?? 'L' + cn.layerIdx} · 神经元 #${cn.neuronIdx} 激活计算` };
+    }
+
+    // Sub-step formulas
+    if (ss.type === 'loss') {
+      return { phase: 'loss' as const, phaseLabel: '损失计算', title: '交叉熵损失 (Cross-Entropy Loss)' };
+    }
+    if (ss.type === 'forward' && li >= 0) {
+      const ni = this.getFormulaNeuron(li);
+      return { phase: 'forward' as const, phaseLabel: '前向传播', title: `${layers[li]?.name ?? 'L' + li} · 神经元 #${ni} 加权和计算` };
+    }
+    if (ss.type === 'backward' && li >= 0) {
+      const ni = this.getFormulaNeuron(li);
+      return { phase: 'backward' as const, phaseLabel: '反向传播', title: `${layers[li]?.name ?? 'L' + li} · 神经元 #${ni} 梯度推导` };
+    }
+    if (ss.type === 'update' && li >= 0) {
+      const ni = this.getFormulaNeuron(li);
+      return { phase: 'update' as const, phaseLabel: '参数更新', title: `${layers[li]?.name ?? 'L' + li} · 神经元 #${ni} 权重更新` };
+    }
+
+    return null;
+  });
+
+  readonly formulaLine = computed(() => {
+    const step = this.step();
+    const cn = this.clickedNeuron();
+    const ce = this.clickedEdge();
+    // Show formula if: sub-step active, OR user clicked a neuron/edge
+    if (!step) return null;
+    const ss = this.sub();
+    const hasClick = cn || ce;
+    if (!hasClick && (ss.type === 'idle' || ss.type === 'done')) return null;
     const layers = this.layers();
     const acts = this.acts();
-    const ce = this.clickedEdge();
 
     // Edge-level formula (clicked edge takes priority) — look up full data from edges()
     const edgeData = ce ? this.edges().find(e =>
@@ -323,32 +393,67 @@ export class ModeEOverviewComponent {
     ) : null;
 
     if (edgeData && ss.type === 'forward') {
-      const w = this.fmtH(edgeData.weight, '#2563eb');
-      const a = this.fmtH(acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0, '#7c3aed');
-      const prod = this.fmtH(edgeData.weight * (acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0), '#d97706');
-      return `<span style="color:#64748b">前向:</span> W<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub>×a<sub>${edgeData.neuronFrom}</sub> = ${w}×${a} = ${prod}`;
+      const w = this.fmtV(edgeData.before ?? edgeData.weight, 'fv-w');
+      const a = this.fmtV(acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0, 'fv-a');
+      const prod = this.fmtV((edgeData.before ?? edgeData.weight) * (acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0), 'fv-r');
+      return `<span class="fv-lb">前向:</span> W<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub><span class="fv-op">×</span>a<sub>${edgeData.neuronFrom}</sub> <span class="fv-op">=</span> ${w}<span class="fv-op">×</span>${a} <span class="fv-op">=</span> ${prod}`;
     }
     if (edgeData && ss.type === 'backward') {
-      const g = this.fmtH(edgeData.gradient ?? 0, '#2563eb');
-      const aPrev = this.fmtH(acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0, '#7c3aed');
-      const dW = this.fmtH((acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0) * (edgeData.gradient ?? 0), '#d97706');
-      return `<span style="color:#64748b">反向:</span> dW<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub> = a<sub>${edgeData.neuronFrom}</sub>×dZ<sub>${edgeData.neuronTo}</sub> = ${aPrev}×${g} = ${dW}`;
+      const g = this.fmtV(edgeData.gradient ?? 0, 'fv-w');
+      const aPrev = this.fmtV(acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0, 'fv-a');
+      const dW = this.fmtV((acts[edgeData.layerFrom]?.[edgeData.neuronFrom] ?? 0) * (edgeData.gradient ?? 0), 'fv-r');
+      return `<span class="fv-lb">反向:</span> dW<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub> <span class="fv-op">=</span> a<sub>${edgeData.neuronFrom}</sub><span class="fv-op">×</span>dZ<sub>${edgeData.neuronTo}</sub> <span class="fv-op">=</span> ${aPrev}<span class="fv-op">×</span>${g} <span class="fv-op">=</span> ${dW}`;
     }
     if (edgeData && ss.type === 'update') {
-      const before = this.fmtH(edgeData.before ?? 0, '#dc2626');
-      const after = this.fmtH(edgeData.after ?? 0, '#059669');
-      const delta = this.fmtH(Math.abs((edgeData.after ?? 0) - (edgeData.before ?? 0)), '#d97706');
-      return `<span style="color:#64748b">更新:</span> W<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub> = ${before} <span style="color:#94a3b8">→</span> ${after} <span style="color:#94a3b8">(Δ=${delta})</span>`;
+      const before = this.fmtV(edgeData.before ?? edgeData.weight, 'fv-bf');
+      const after = this.fmtV(edgeData.after ?? edgeData.weight, 'fv-af');
+      const delta = this.fmtV(Math.abs((edgeData.after ?? edgeData.weight) - (edgeData.before ?? edgeData.weight)), 'fv-r');
+      return `<span class="fv-lb">更新:</span> W<sub>${edgeData.neuronTo},${edgeData.neuronFrom}</sub> <span class="fv-op">=</span> ${before} <span class="fv-op">→</span> ${after} <span class="fv-op">(Δ=</span>${delta}<span class="fv-op">)</span>`;
     }
 
     // Neuron-level formula (clicked neuron or sub-step default)
+    // When a neuron is clicked, always show its forward formula (even outside animation)
+    if (cn && (ss.type === 'idle' || ss.type === 'done')) {
+      const li = cn.layerIdx;
+      const cache = step.forwardCache?.find(c => c.layerIndex === li);
+      if (!cache?.preActivation || layers[li]?.type === 'input') return null;
+      const ni = cn.neuronIdx;
+      const incoming = this.edges().filter(e => e.layerTo === li && e.neuronTo === ni);
+      if (incoming.length === 0) return null;
+      const bias = this.biases().find(b => b.layerIdx === li && b.neuronIdx === ni)?.bias ?? 0;
+      const termRows = incoming.map((e, idx) => {
+        const a = acts[e.layerFrom]?.[e.neuronFrom] ?? 0;
+        const prod = e.weight * a;
+        return `<div class="fv-term-row"><span class="fv-tl">w<sub>${idx}</sub>·a<sub>${idx}</sub></span><span class="fv-w">${this.fmt(e.weight)}</span><span class="fv-op">×</span><span class="fv-a">${this.fmt(a)}</span><span class="fv-op">=</span><span class="fv-st">${this.fmt(prod)}</span></div>`;
+      });
+      const sum = incoming.reduce((s, e) => s + e.weight * (acts[e.layerFrom]?.[e.neuronFrom] ?? 0), 0) + bias;
+      const actName = layers[li]?.params?.['activation'] ?? '线性';
+      const actResult = actName === 'relu' ? Math.max(0, sum) : actName === 'sigmoid' ? 1 / (1 + Math.exp(-sum)) : actName === 'tanh' ? Math.tanh(sum) : sum;
+      const biasRow = `<div class="fv-term-row fv-bias-row"><span class="fv-tl">+ b</span><span class="fv-r">${this.fmt(bias)}</span></div>`;
+      const sumRow = `<div class="fv-term-row fv-sum-row"><span class="fv-tl">Z</span><span class="fv-r">${this.fmt(sum)}</span></div>`;
+      const actLine = `<div class="fv-ar"><span class="ar-op">${actName} →</span> <span class="ar-val">${this.fmt(actResult)}</span></div>`;
+      return `<div class="fv-section-label">加权和计算</div><div class="fv-terms">${termRows.join('')}</div><div class="fv-sep"></div>${biasRow}${sumRow}${actLine}`;
+    }
+
     if (ss.type === 'loss') {
       const preds = step.predictions;
       if (!preds) return null;
       const tc = step.trueClass ?? 0;
-      const probsHTML = preds.map((p, i) => `<span style="color:${i===tc?'#059669':'#64748b'}">${(p*100).toFixed(1)}%</span>`).join(', ');
-      const lossVal = this.fmtH(step.loss ?? 0, '#d97706');
-      return `<span style="color:#64748b">损失:</span> Softmax → [${probsHTML}] <span style="color:#94a3b8">真实=${tc}</span> −ln(p) = ${lossVal}`;
+      const trueLabel = this.s.datasetMeta()?.classLabels?.[tc] ?? `类${tc}`;
+      const pTrue = preds[tc];
+      const lossVal = step.loss ?? 0;
+      // Step 1: show softmax output (compact)
+      const probRows = preds.map((p, i) => {
+        const label = this.s.datasetMeta()?.classLabels?.[i] ?? `类${i}`;
+        return `<div class="fv-term-row${i===tc?' fv-sum-row':''}"><span class="fv-tl">p<sub>${i}</sub></span><span class="fv-op">${label}</span><span class="${i===tc?'fv-af':'fv-r'}">${(p*100).toFixed(1)}%</span></div>`;
+      }).join('');
+      // Step 2: pick out the true-class probability
+      const pickRow = `<div class="fv-term-row fv-bias-row"><span class="fv-tl">p<sub>真实</sub></span><span class="fv-op">真实类别 = ${trueLabel}</span><span class="fv-af">p<sub>${tc}</sub> = ${this.fmt(pTrue)}</span></div>`;
+      // Step 3: CE = -ln(p_true), expanded
+      const step1 = `<div class="fv-term-row"><span class="fv-tl">CE</span><span class="fv-op">= −ln(p<sub>真实</sub>)</span><span class="fv-st">交叉熵公式</span></div>`;
+      const step2 = `<div class="fv-term-row"><span class="fv-tl"></span><span class="fv-op">= −ln(</span><span class="fv-r">${this.fmt(pTrue)}</span><span class="fv-op">)</span></div>`;
+      const step3 = `<div class="fv-term-row fv-sum-row"><span class="fv-tl"></span><span class="fv-op">=</span><span class="fv-af">${this.fmt(lossVal)}</span></div>`;
+      return `<div class="fv-section-label">损失计算</div><div class="fv-terms">${probRows}</div><div class="fv-sep"></div><div class="fv-terms">${pickRow}${step1}${step2}${step3}</div>`;
     }
 
     if (ss.type === 'forward') {
@@ -363,16 +468,38 @@ export class ModeEOverviewComponent {
       const incoming = this.edges().filter(e => e.layerTo === li && e.neuronTo === ni);
       if (incoming.length === 0) return null;
       const bBefore = snap?.biasBefore?.[ni] ?? layers[li]?.params?.['bias']?.[ni] as number ?? 0;
-      const terms = incoming.map((e, idx) => {
+      const sum = incoming.reduce((s, e) => s + (wBefore[ni]?.[e.neuronFrom] ?? e.weight) * (acts[e.layerFrom]?.[e.neuronFrom] ?? 0), 0) + bBefore;
+
+      // ---- build weighted-sum term rows ----
+      const termRows = incoming.map((e, idx) => {
         const a = acts[e.layerFrom]?.[e.neuronFrom] ?? 0;
-        const w = wBefore[ni]?.[idx] ?? e.weight;
-        return `<span style="color:#2563eb;font-weight:600">${this.fmt(w)}</span><span style="color:#94a3b8">×</span><span style="color:#7c3aed;font-weight:600">${this.fmt(a)}</span>`;
+        const w = wBefore[ni]?.[e.neuronFrom] ?? e.weight;
+        const prod = w * a;
+        return `<div class="fv-term-row"><span class="fv-tl">w<sub>${idx}</sub>·a<sub>${idx}</sub></span><span class="fv-w">${this.fmt(w)}</span><span class="fv-op">×</span><span class="fv-a">${this.fmt(a)}</span><span class="fv-op">=</span><span class="fv-st">${this.fmt(prod)}</span></div>`;
       });
-      const sum = wBefore[ni].reduce((s: number, w: number, idx: number) => s + w * (acts[li-1]?.[idx] ?? 0), 0) + bBefore;
+      const biasRow = `<div class="fv-term-row fv-bias-row"><span class="fv-tl">+ b</span><span class="fv-r">${this.fmt(bBefore)}</span></div>`;
+      const sumRow = `<div class="fv-term-row fv-sum-row"><span class="fv-tl">Z</span><span class="fv-r">${this.fmt(sum)}</span></div>`;
+      const inner = `<div class="fv-section-label">加权和计算</div><div class="fv-terms">${termRows.join('')}</div><div class="fv-sep"></div>${biasRow}${sumRow}`;
       const actName = layers[li]?.params?.['activation'] ?? '线性';
       const actResult = actName === 'relu' ? Math.max(0, sum) : actName === 'sigmoid' ? 1 / (1 + Math.exp(-sum)) : actName === 'tanh' ? Math.tanh(sum) : sum;
-      const biasHTML = bBefore !== 0 ? ` <span style="color:#94a3b8">+</span> <span style="color:#d97706;font-weight:600">${this.fmt(bBefore)}</span>` : '';
-      return `<span style="color:#64748b">前向:</span> ${layers[li]?.name ?? 'L'+li}·神经元${ni}: (${terms.join(' <span style="color:#94a3b8">+</span> ')})${biasHTML} <span style="color:#94a3b8">=</span> <span style="color:#d97706;font-weight:600">${this.fmt(sum)}</span> <span style="color:#94a3b8">→ ${actName} →</span> <span style="color:#d97706;font-weight:600">${this.fmt(actResult)}</span>`;
+      if (layers[li]?.type === 'output' && actName === 'softmax') {
+        const zVals = cache.preActivation![0];
+        const softmaxVals = cache.output[0];
+        // exp rows: e^z_i = exp(z_i)
+        const expRows = zVals.map((z, i) => {
+          const expZ = Math.exp(z);
+          return `<div class="fv-term-row"><span class="fv-tl">e<sup>z${i}</sup></span><span class="fv-st">exp(${this.fmt(z)})</span><span class="fv-op">=</span><span class="fv-r">${this.fmt(expZ)}</span></div>`;
+        }).join('');
+        const expSum = zVals.reduce((s, z) => s + Math.exp(z), 0);
+        const expSumRow = `<div class="fv-term-row fv-bias-row"><span class="fv-tl">Σ e<sup>Z</sup></span><span class="fv-r">${this.fmt(expSum)}</span></div>`;
+        // probability rows: p_i = e^z_i / Σ e^Z
+        const probRows = softmaxVals.map((p, i) => {
+          return `<div class="fv-term-row fv-sum-row"><span class="fv-tl">p<sub>${i}</sub></span><span class="fv-st">${this.fmt(Math.exp(zVals[i]))}/${this.fmt(expSum)}</span><span class="fv-op">=</span><span class="${i===ni?'fv-af':'fv-r'}">${this.fmt(p)}</span></div>`;
+        }).join('');
+        const softmaxBlock = `<div class="fv-sep"></div><div class="fv-section-label">softmax 归一化</div><div class="fv-terms">${expRows}${expSumRow}<div class="fv-sep"></div>${probRows}</div>`;
+        return `${inner}${softmaxBlock}`;
+      }
+      return `${inner}<div class="fv-ar"><span class="ar-op">${actName} →</span> <span class="ar-val">${this.fmt(actResult)}</span></div>`;
     }
 
     if (ss.type === 'backward') {
@@ -384,10 +511,15 @@ export class ModeEOverviewComponent {
       const aPrev = cache?.input[0]?.[0] ?? 0;
       const dW = grad.weightGradients[ni][0];
       const dZ = grad.biasGradients?.[ni] ?? 0;
-      const aPrevH = this.fmtH(aPrev, '#7c3aed');
-      const dZH = this.fmtH(dZ, '#2563eb');
-      const dWH = this.fmtH(dW, '#d97706');
-      return `<span style="color:#64748b">反向:</span> ${layers[li]?.name ?? 'L'+li}·神经元${ni}: dW<sub>${ni},0</sub> = a<sub>0</sub>×dZ<sub>${ni}</sub> = ${aPrevH}×${dZH} = ${dWH}`;
+      const aPrevH = this.fmtV(aPrev, 'fv-a');
+      const dZH = this.fmtV(dZ, 'fv-w');
+      const dWH = this.fmtV(dW, 'fv-r');
+      // Show dZ derivation from CE gradient
+      const preds = step.predictions;
+      const tc = step.trueClass ?? 0;
+      const softmaxVal = preds?.[ni] ?? 0;
+      const dZsrc = dZ;
+      return `<span class="fv-lb">反向:</span> ${layers[li]?.name ?? 'L'+li}<span class="fv-op">·</span>神经元${ni}: dZ<sub>${ni}</sub><span class="fv-op">=</span>softmax<sub>${ni}</sub><span class="fv-op">−</span>𝟙(label=${tc}) <span class="fv-op">=</span> ${this.fmt(softmaxVal)}<span class="fv-op">−</span>${ni===tc?'1':'0'} <span class="fv-op">=</span> ${this.fmtV(dZsrc,'fv-w')} <span class="fv-op">|</span> dW<sub>${ni},0</sub><span class="fv-op">=</span>a<sub>0</sub><span class="fv-op">×</span>dZ<sub>${ni}</sub><span class="fv-op">=</span>${aPrevH}<span class="fv-op">×</span>${dZH}<span class="fv-op">=</span>${dWH}`;
     }
 
     if (ss.type === 'update') {
@@ -397,7 +529,7 @@ export class ModeEOverviewComponent {
       const wBefore = snap?.weightsBefore?.[ni]?.[0];
       const wAfter = snap?.weightsAfter?.[ni]?.[0];
       if (wBefore == null || wAfter == null) return null;
-      return `<span style="color:#64748b">更新:</span> ${layers[li]?.name ?? 'L'+li}·神经元${ni}: W<sub>${ni},0</sub> = <span style="color:#dc2626;font-weight:600">${this.fmt(wBefore)}</span> <span style="color:#94a3b8">→</span> <span style="color:#059669;font-weight:600">${this.fmt(wAfter)}</span> <span style="color:#94a3b8">(Δ=${this.fmtH(Math.abs(wAfter-wBefore),'#d97706')})</span>`;
+      return `<span class="fv-lb">更新:</span> ${layers[li]?.name ?? 'L'+li}<span class="fv-op">·</span>神经元${ni}: W<sub>${ni},0</sub> <span class="fv-op">=</span> <span class="fv-bf">${this.fmt(wBefore)}</span> <span class="fv-op">→</span> <span class="fv-af">${this.fmt(wAfter)}</span> <span class="fv-op">(Δ=</span>${this.fmtV(Math.abs(wAfter-wBefore),'fv-r')}<span class="fv-op">)</span>`;
     }
 
     return null;

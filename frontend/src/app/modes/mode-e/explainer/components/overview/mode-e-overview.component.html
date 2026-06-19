@@ -153,10 +153,24 @@
     <span class="leg-item">活跃连线=实时显示数值</span>
   </div>
 
-  <!-- Formula line: shows the current neuron's computation -->
+  <!-- Formula card: shows the current neuron's computation -->
   @if (formulaLine(); as f) {
-    <div class="formula-bar">
-      <code class="formula-text" [innerHTML]="f"></code>
+    <div class="formula-card">
+      <h4>计算详情</h4>
+      @if (formulaHeader(); as hdr) {
+        <div class="formula-header">
+          <span class="phase-badge"
+                [class.fw]="hdr.phase === 'forward'"
+                [class.bw]="hdr.phase === 'backward'"
+                [class.up]="hdr.phase === 'update'"
+                [class.ls]="hdr.phase === 'loss'"
+                [class.nr]="hdr.phase === 'neuron'">
+            {{ hdr.phaseLabel }}
+          </span>
+          <span class="formula-title">{{ hdr.title }}</span>
+        </div>
+      }
+      <div class="formula-body" [innerHTML]="f"></div>
     </div>
   }
 
