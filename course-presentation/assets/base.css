@@ -633,3 +633,51 @@ body.overview .slide {
   font-size: 18px;
   line-height: 1.45;
 }
+
+@media print {
+  @page {
+    size: 20in 11.25in;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 1920px;
+    height: auto;
+    overflow: visible;
+    background: #ffffff;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.print-mode .deck {
+    position: static;
+    left: auto;
+    top: auto;
+    width: 1920px;
+    height: auto;
+    transform: none !important;
+  }
+
+  body.print-mode .slide,
+  body.print-mode .slide.active {
+    position: relative;
+    inset: auto;
+    display: flex !important;
+    flex-direction: column;
+    width: 1920px;
+    height: 1080px;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  body.print-mode .slide:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  body.print-mode .hud,
+  body.print-mode .speaker-notes {
+    display: none !important;
+  }
+}

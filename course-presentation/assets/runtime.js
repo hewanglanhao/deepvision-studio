@@ -7,7 +7,9 @@
   const overviewBtn = document.getElementById('overviewBtn');
   const notesBtn = document.getElementById('notesBtn');
   const notesPanel = document.getElementById('speakerNotes');
-  let index = Number(new URLSearchParams(location.search).get('slide') || location.hash.replace('#', '')) || 0;
+  const searchParams = new URLSearchParams(location.search);
+  const printMode = searchParams.get('print') === '1';
+  let index = Number(searchParams.get('slide') || location.hash.replace('#', '')) || 0;
   let notesVisible = false;
 
   function clamp(value, min, max) {
@@ -119,7 +121,14 @@
     }
   });
 
-  index = clamp(index, 0, slides.length - 1);
-  setSlide(index);
-  scaleDeck();
+  if (printMode) {
+    document.body.classList.add('print-mode');
+    slides.forEach(slide => slide.classList.add('active'));
+    requestAnimationFrame(() => slides.forEach(updateContentAlignment));
+    document.fonts?.ready.then(() => slides.forEach(updateContentAlignment));
+  } else {
+    index = clamp(index, 0, slides.length - 1);
+    setSlide(index);
+    scaleDeck();
+  }
 })();
