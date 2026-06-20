@@ -97,22 +97,12 @@ export class ModeEStateService {
 
     const config = this.trainingConfig();
     const iteration = this.currentIteration();
-    const step = this.engine.trainingStep(layers, sample.input, sample.label, config, iteration);
-
-    this.currentStep.set(step);
     this.currentIteration.set(iteration + 1);
-    const history = [...this.stepHistory(), step];
-    if (history.length > 500) history.shift();
-    this.stepHistory.set(history);
-    if (step.loss != null) {
-      const lh = [...this.lossHistory(), { iteration, loss: step.loss }];
-      if (lh.length > 500) lh.shift();
-      this.lossHistory.set(lh);
-    }
-    this.maybeRecordAvgLoss(iteration + 1);
-
     const nextIdx = Math.floor(Math.random() * dataset.length);
     this.currentSampleIndex.set(nextIdx);
+
+    // Init incremental step — NO full computation
+    this.engine.initIncStep(layers, sample.input, sample.label, config);
 
     this.pendingSubSteps.set(this.buildSubSteps());
     this.currentSubIdx.set(0);
@@ -128,6 +118,8 @@ export class ModeEStateService {
     if (!this.isAnimating()) return;
     this.currentSubIdx.update(n => n + 1);
     if (this.currentSubIdx() >= this.pendingSubSteps().length) {
+      // Flush remaining data before finishing
+      this.maybeRecordAvgLoss(this.currentIteration());
       this.finishAnimation();
     } else {
       this.applySubStep(this.pendingSubSteps()[this.currentSubIdx()]);
@@ -151,6 +143,26 @@ export class ModeEStateService {
       ss.type === 'update' ? 'update' :
       ss.type === 'backward' ? 'backward' : 'forward'
     );
+
+    // Execute the actual incremental computation for this sub-step
+    if (ss.type === 'forward') {
+      this.engine.stepForwardPair(ss.layerPair, ss.layerPair + 1);
+    } else if (ss.type === 'loss') {
+      const r = this.engine.stepLoss();
+      if (r) {
+        const itr = this.currentIteration();
+        const lh = [...this.lossHistory(), { iteration: itr, loss: r.loss }];
+        if (lh.length > 500) lh.shift(); this.lossHistory.set(lh);
+      }
+    } else if (ss.type === 'backward') {
+      this.engine.stepBackwardPair(ss.layerPair + 1);
+    } else if (ss.type === 'update') {
+      this.engine.stepUpdate(ss.layerIdx);
+    }
+
+    // Rebuild current step from incremental state
+    const incStep = this.engine.buildIncStep(this.activePhase(), ss.type === 'forward' ? ss.layerPair + 1 : (ss as any).layerIdx ?? 0);
+    this.currentStep.set(incStep);
   }
 
   private finishAnimation(): void {
@@ -417,6 +429,21 @@ export class ModeEStateService {
     const firstDense = preset.layers.find((l: any) => l.type === 'dense');
     if (firstDense) this.currentActivation.set((firstDense as any).params['activation'] ?? 'relu');
     this.reset();
+    // Force immediate weight init + forward pass so edges/neurons are visible on load
+    const layers = this.networkLayers();
+    const samples = this.currentDataset();
+    if (layers.length > 0 && samples.length > 0) {
+      const sample = samples[0];
+      const { output, cache } = this.engine.forwardPass(layers, sample.input);
+      const { loss } = this.engine.computeLoss(output, sample.label, this.trainingConfig().lossFunction);
+      const step: ModeEBackpropStep = {
+        iteration: 0, phase: 'forward', layerIndex: layers.length - 1, totalLayers: layers.length,
+        forwardCache: cache, loss, predictedClass: output.indexOf(Math.max(...output)),
+        trueClass: sample.label, predictions: output,
+        layerGradients: [], parameterSnapshots: [],
+      };
+      this.currentStep.set(step);
+    }
   }
 
   setTrainingConfig(partial: Partial<ModeETrainingConfig>): void {

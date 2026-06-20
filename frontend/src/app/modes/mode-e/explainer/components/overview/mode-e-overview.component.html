@@ -50,7 +50,7 @@
           @let active = isActiveLayerPair(e);
           @let hover = isEdgeHovered(e);
           @let dimmed = isEdgeDimmed(e);
-          <g (mouseenter)="onEdgeEnter(e)">
+          <g (mouseenter)="onEdgeEnter(e)" (click)="onEdgeClick(e)">
             <line [attr.x1]="x1" [attr.y1]="y1" [attr.x2]="x2" [attr.y2]="y2"
                   stroke="transparent" stroke-width="16" style="cursor:crosshair" />
             <line [attr.x1]="x1" [attr.y1]="y1" [attr.x2]="x2" [attr.y2]="y2"
@@ -58,6 +58,17 @@
                   [attr.opacity]="hover ? 1 : dimmed ? 0.15 : active ? 1 : 0.45"
                   style="pointer-events:none"
                   [style.stroke-width.px]="hover ? 2.5 : 1.2" />
+
+            <!-- Edge label: always visible on active edges during animation -->
+            @if (active) {
+              @let pos = labelPos(e);
+              <text [attr.x]="pos.mx" [attr.y]="pos.my" text-anchor="middle"
+                    [attr.fill]="edgeLblColor()" font-size="9"
+                    font-family="'Courier New', monospace" font-weight="700"
+                    style="pointer-events:none"
+                    [attr.transform]="'rotate(' + pos.angle + ',' + pos.mx + ',' + pos.my + ')'"
+              >{{ edgeLabel(e) }}</text>
+            }
 
             @if (active && showFlowDots(e)) {
               <circle [attr.r]="4"
@@ -139,8 +150,29 @@
     <span class="leg-item"><span class="leg-swatch bw"></span>橙=反向传播</span>
     <span class="leg-item"><span class="leg-swatch up"></span>绿=参数更新</span>
     <span class="leg-item"><span class="leg-swatch dot"></span>流动点=数据方向</span>
-    <span class="leg-item">悬停连线=显示权重</span>
+    <span class="leg-item">活跃连线=实时显示数值</span>
   </div>
+
+  <!-- Formula card: shows the current neuron's computation -->
+  @if (formulaLine(); as f) {
+    <div class="formula-card">
+      <h4>计算详情</h4>
+      @if (formulaHeader(); as hdr) {
+        <div class="formula-header">
+          <span class="phase-badge"
+                [class.fw]="hdr.phase === 'forward'"
+                [class.bw]="hdr.phase === 'backward'"
+                [class.up]="hdr.phase === 'update'"
+                [class.ls]="hdr.phase === 'loss'"
+                [class.nr]="hdr.phase === 'neuron'">
+            {{ hdr.phaseLabel }}
+          </span>
+          <span class="formula-title">{{ hdr.title }}</span>
+        </div>
+      }
+      <div class="formula-body" [innerHTML]="f"></div>
+    </div>
+  }
 
   <!-- Prediction bars -->
   @if (predPct().length > 0 && hasStep()) {

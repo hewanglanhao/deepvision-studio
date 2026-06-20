@@ -57,6 +57,14 @@ export interface ModeFRnnGradient {
   gradientNorm: number;
 }
 
+export interface ModeFWeightSnapshot {
+  WxhBefore: number[][]; WxhAfter: number[][];
+  WhhBefore: number[][]; WhhAfter: number[][];
+  WhyBefore: number[][]; WhyAfter: number[][];
+  bhBefore: number[]; bhAfter: number[];
+  byBefore: number[]; byAfter: number[];
+}
+
 export interface ModeFStepResult {
   iteration: number;
   loss: number;
@@ -67,6 +75,7 @@ export interface ModeFStepResult {
   hiddenDim: number;
   timeSteps: number;
   outputProbs: number[];
+  weightSnapshot?: ModeFWeightSnapshot;
 }
 
 export type ModeFVisualStatus = 'idle' | 'ready' | 'running' | 'paused';

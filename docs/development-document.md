@@ -23,12 +23,21 @@ DeepVision Studio：深度学习算法可视化仿真平台。
 
 | 能力 | 说明 | 主要代码位置 |
 | --- | --- | --- |
-| 首页与模式入口 | 统一进入 A/B/C/D/E、教学文档与 AI 博物馆 | `frontend/src/app/shell/home` |
+| 首页与模式入口 | 统一进入 A/B/C/D/E/F、教学文档与 AI 博物馆 | `frontend/src/app/shell/home` |
 | A 模式：前向传播实验室 | 编辑 CNN 风格网络、选择样本、执行真实前向传播、观察每层输出 | `frontend/src/app/modes/mode-a` |
 | B 模式：模型训练工作台 | 数据集管理、结构编辑、真实 PyTorch 训练、指标与反向传播观察 | `frontend/src/app/modes/mode-b`，`backend/spring/src/main/java/com/deepvision/studio/training`，`backend/python-training` |
 | B 模式实验对比 | 按数据集检索历史 checkpoint，对比结构、超参数、训练曲线与结果状态 | `frontend/src/app/modes/mode-b/experiment-compare` |
 | B 模式单样本推理 | 从已完成 checkpoint 选择样本，执行真实推理并展示逐层激活 | `frontend/src/app/modes/mode-b/single-inference` |
 | B 模式训练协作 | 独立聊天室、在线成员、训练状态旁观、日志同步与智能助手 | `frontend/src/app/modes/mode-b/training-collaboration`，`backend/spring/src/main/java/com/deepvision/studio/training/TrainingCollaborationHandler.java` |
+| C 模式：CNN 卷积解释器 | 浏览器端加载 CNN Explainer 资源与 TensorFlow.js 模型，展示样例、网络拓扑、中间特征图和卷积层细节 | `frontend/src/app/modes/mode-c`，`frontend/src/app/modes/mode-c/explainer`，`frontend/public/mode-c/cnn-explainer` |
+| C 模式卷积过程解释 | 支持输入 patch、kernel 权重、逐元素乘积、加权求和、bias、输出格回流，以及 ReLU、Pooling、Softmax 解释 | `frontend/src/app/modes/mode-c/explainer/components/detail-panels`，`frontend/src/app/modes/mode-c/explainer/components/overview` |
+| C 模式 Grad-CAM 与解释报告 | 基于真实 tfjs CNN 模型生成 Grad-CAM 热力图、原图叠加、主导通道摘要和可演示解释报告 | `frontend/src/app/modes/mode-c/explainer/services/mode-c-inference.service.ts`，`frontend/src/app/modes/mode-c/explainer/components/article` |
+| D 模式：Transformer 解释器 | 浏览器端加载 GPT-2 ONNX/tokenizer/wasm 资源，执行下一词预测并展示 Top-K 概率 | `frontend/src/app/modes/mode-d`，`frontend/public/mode-d-assets`，`scripts/sync-transformer-explainer.ps1` |
+| D 模式注意力矩阵 | 支持层/头选择、真实 attention matrix 可视化、hover/click 聚焦和当前注意力单元解释 | `frontend/src/app/modes/mode-d/explainer/components/attention-matrix`，`frontend/src/app/modes/mode-d/explainer/services/mode-d-state.service.ts` |
+| D 模式 QKV 教学可视化 | 将 Query、Key、Score、Value、Output 串成交互式教学链，展示向量维度联动、softmax 权重和 Value 汇流贡献 | `frontend/src/app/modes/mode-d/explainer/components/qkv-panel` |
+| D 模式解释报告 | 汇总当前输入、Top-K 预测、注意力焦点、QKV 过程和自动解释文本 | `frontend/src/app/modes/mode-d/explainer/components/report-panel` |
+| E 模式：反向传播沙盒 | 纯 TS MLP 引擎：前向、损失、反向、参数更新、子步骤拆解动画、决策边界。含神经元拓扑图（SVG 连线+激活值）、计算详情卡片（加权和→softmax→dZ→dW→db 逐项展开）、优化器对比曲线 | `frontend/src/app/modes/mode-e`，`frontend/src/app/modes/mode-e/explainer/engine/mode-e-backprop-engine.ts` |
+| F 模式：RNN 循环神经网络 | 纯 TS RNN 引擎：tanh 前向、BPTT、序列分类。含 3 列神经元拓扑图（隐层虚线框+W_hh 自循环箭头）、权重矩阵热力图、时间展开柱状图、隐状态激活值 | `frontend/src/app/modes/mode-f`，`frontend/src/app/modes/mode-f/explainer/engine/mode-f-rnn-engine.ts` |
 | AI 博物馆 | 第一人称漫游 AI 发展史长廊，支持多人联机同馆参观 | `frontend/src/app/modes/ai-museum`，`backend/spring/src/main/java/com/deepvision/studio/museum` |
 | 3D 网络显示 | 将网络层、shape、特征图快照映射为 Three.js 3D 场景 | `frontend/src/app/shared/network-3d` |
 | 登录注册 | 用户注册、登录、JWT 会话恢复 | `frontend/src/app/core/auth`，`backend/spring/src/main/java/com/deepvision/studio/auth` |
@@ -45,7 +54,7 @@ DeepVision Studio：深度学习算法可视化仿真平台。
 
 ### 3.1 架构分层
 
-项目采用“前端可视化 + Spring 业务后端 + Python 计算服务”的分层方式：
+项目采用“前端可视化 + Spring 业务后端 + Python 计算服务”的分层方式:
 
 ```text
 Browser
@@ -222,7 +231,7 @@ Mode D
 | 王龄锋 | 成员 A | 项目初始化、整体网站设计、A 模式、登录注册、H2 数据库、LLM 浮标、帮助浮标、Spring/forward 服务、Docker 部署与云端部署 | 人工主导架构与核心逻辑，AI 辅助 UI 细化、接口样板和文档整理；云端部署由人工完成，无 AI 参与 |
 | 李子涵 | 成员 B | B 模式训练工作台、数据集与数据库、PyTorch 训练链、checkpoint、实验对比、单样本推理、训练协作聊天室及相关页面样式 | 人工确定模块边界、数据结构、接口契约和调试验收；AI 辅助生成部分组件/DTO/WebSocket 样板、可视化草稿和报错排查建议，最终由人工整合修改 |
 | 肖羽平 | 成员 C | 模块 C（CNN 卷积过程解释）与模块 D（Transformer 注意力/QKV 解释）、第三方解释器迁移、浏览器端推理接入、平台共享能力复用 | 人工确定模块边界、状态结构、推理链路和交互形式；AI 辅助生成局部组件样板、部分可视化实现参考、报错排查与文档整理，最终代码由人工集成调试与验收 |
-| 赵红林 | 成员 D | Transformer/反向传播/协作或展示相关模块 | 待补充 |
+| 赵红林 | 成员 D | 模式 E（MLP 反向传播可视化引擎、子步骤动画、决策边界、优化器对比）、模式 F（RNN + BPTT 引擎、时间展开图、序列分类数据集）、12 条教学术语、E/F 模式的 AI 助手接入 | 人工主导引擎公式推导与实现、状态机设计、架构选型与调试验收；AI 辅助组件样板生成、CSS 样式微调、批量重命名与构建排错 |
 
 ## 5. 成员 A：王龄锋开发内容
 
@@ -1310,119 +1319,295 @@ Nginx 对 `/api/` 开启 WebSocket Upgrade 并设置较长读取超时，同时�
 
 ### 8.1 负责模块概述
 
-成员 D 负责以下模块的设计与实现：
+成员 D 负责模式 E（反向传播可视化）和模式 F（RNN 循环神经网络）的全部前端开发，并在共享教学词典中新增 12 个术语。
 
-| 模块 | 路径 | 说明 |
+| 模块 | 代码路径 | 核心文件 | 说明 |
+| --- | --- | --- | --- |
+| 模式 E：反向传播沙盒 | `frontend/src/app/modes/mode-e/` | `engine/mode-e-backprop-engine.ts` (240行), `services/mode-e-state.service.ts` (560行), `services/mode-e-assets.service.ts`, `components/overview/`, `components/control-panel/`, `components/detail-panel/`, `components/floating-charts/`, `components/shell/` | MLP 引擎、增量子步骤拆解、神经元拓扑图、计算详情卡片(加权和→softmax→dZ→dW→db)、决策边界、优化器对比 |
+| 模式 F：RNN 循环神经网络 | `frontend/src/app/modes/mode-f/` | `engine/mode-f-rnn-engine.ts` (208行), `services/mode-f-state.service.ts` (160行), `services/mode-f-assets.service.ts`, `components/overview/`, `components/control-panel/`, `components/detail-panel/`, `components/shell/` | Tanh RNN+BPTT 引擎、3列拓扑图(隐层虚线框+自循环箭头)、时间展开柱状图、权重矩阵热力图 |
+| 教学术语 | `frontend/src/app/shared/teaching/teaching-glossary.ts` | `MODE_E_TEACHING_TERMS` (9项), `MODE_F_TEACHING_TERMS` (5项+复用E的3项优化器+B的gradient-norm) | 训练与优化分类 + 序列模型分类 |
+| AI 助手接入 | 模式 E Shell | `mode-e-explainer-shell.component.ts` | 模式 E 专属系统提示词、上下文数据构建函数、6 个快捷提问 |
+| 路由与首页 | `app.routes.ts`, `shell/home/` | 懒加载路由 `/mode-e`、`/mode-f`，首页卡片 | 紫色/青色主题入口 |
+
+### 8.2 公共架构模式
+
+两个模式共用一套 Angular 架构规范：
+
+- **Signal 驱动的状态管理**：全部 UI 状态使用 `signal()` 和 `computed()`，共用一个 `@Injectable({ providedIn: 'root' })` 单例状态服务，不引入 RxJS BehaviorSubject 或 NgRx。
+- **纯 TypeScript 计算引擎**：`ModeEBackpropEngine` 和 `ModeFRnnEngine` 不含任何 Angular 依赖，使用原始 `number[]` / `number[][]` 运算，可在浏览器主线程独立运行。
+- **懒加载路由**：页面组件通过 `loadComponent` 动态导入，首次访问时按需加载整个模式代码块。
+- **共享组件复用**：壳组件统一挂载 `PlatformTopbarComponent`（顶栏）、`LlmFloatingAssistantComponent`（AI 浮窗）和 `TeachingSearchFabComponent`（教学浮标）。控制面板的按钮通过 `TeachingTermDirective` 接入共享教学文档。
+- **I/O 边界**：所有模式数据均由引擎在内存中计算，不通过 HTTP 调用后端接口。模式 E 和 F 不与其他模式交换业务数据。
+
+### 8.3 模式 E：反向传播可视化
+
+#### 8.3.1 引擎设计
+
+**文件**：`mode-e-backprop-engine.ts`（约 240 行）
+
+`ModeEBackpropEngine` 在浏览器内实现完整的 MLP 训练循环。核心方法：
+
+| 方法 | 输入 | 输出 | 说明 |
+| --- | --- | --- | --- |
+| `forwardPass` | `layers[], input[]` | `{ output, cache: ModeEForwardCacheEntry[] }` | 按拓扑序逐层前向。每层记录 preActivation（Z）和后激活输出（A），无权重时自动用 `randMat` 初始化 |
+| `computeLoss` | `predictions[], label, lossFunction` | `{ loss, outputGradient }` | 支持 crossEntropy、mse、binaryCrossEntropy。CE 实现为 `-ln(max(p[label], 1e-15))`，输出梯度用 `ceGrad`/`mseGrad` |
+| `backwardPass` | `layers[], cache, outGrad` | `ModeELayerGradient[]` | 逆序遍历层，activation 层过 `actDeriv` 导数，dense/output 层计算 `dW=dZ^T·A_prev`、`db=dZ`、`dA_prev=dZ·W`，含梯度范数 `l2Norm` 和统计量 `stats` |
+| `applyGradients` | `layers[], grads[], config, cache` | `ModeEParameterSnapshot[]` | 根据优化器类型更新权重。SGD 原地减 `lr*dW`；Momentum 累积 `beta*vel+lr*dW`；Adam 维护 `m/v` 并做偏差修正 `/(1-beta^t)`。返回 before/after 快照和逐元素变化量 |
+| `trainingStep` | 以上全部 + `iteration` | `ModeEBackpropStep` | 串联 forward→loss→backward→update |
+| `computeDecisionBoundary` | `layers[], resolution, xRange, yRange` | `ModeEDecisionBoundary` | 对二维网格逐点 forwardPass，返回每点预测类别编号 |
+
+**增量子步骤 API**（供公式卡片和子步骤动画使用）：
+
+| 方法 | 说明 |
+| --- | --- |
+| `initIncStep` | 初始化增量状态：清空 cache/gradients/snapshots，存 layers/input/label/config 引用 |
+| `stepForwardPair(fromIdx, toIdx)` | 对单层对执行前向：`Z = W·A_prev + b`，`A = activate(Z)`，写入 incCache |
+| `stepLoss` | 在全部前向完成后计算 loss 和 outputGradient，存入 incLoss/incOutputGrad，初始化 incBackwardDZ |
+| `stepBackwardPair(toIdx)` | 对单层执行反向：`dZ = dA ⊙ act'(Z)`，`dW = dZ^T·A_prev`，`db = dZ`，更新 incBackwardDZ |
+| `stepUpdate(layerIdx)` | 对单层执行优化器更新，记录 before/after 快照到 incSnapshots |
+| `buildIncStep(phase, layerIdx)` | 从当前增量状态构建 `ModeEBackpropStep` 供 UI 渲染 |
+
+`buildSubSteps()` 根据层数自动生成子步骤序列：`[forward×n, loss, backward×n, update×k]`，其中 k 为含 trainable params 的层数。
+
+**矩阵运算**（引擎内私有函数）：`dot`、`transpose`、`hadamard`、`addVecToRows`、`subMat`、`softmax`（含 max 减法防溢出）、`relu/reluDeriv`、`sigmoid/sigmoidDeriv`、`tanh/tanhDeriv`、`ceGrad`（dL/dy = p - onehot）、`mseGrad`、`l2Norm`、`stats`。全部自行实现，不依赖外部数学库。
+
+**支持的层类型与反向传播公式**：
+
+| 层类型 | 前向 | 反向传播公式 |
 | --- | --- | --- |
-| 模式 E：反向传播可视化 | `frontend/src/app/modes/mode-e/` | MLP 前向/反向传播引擎、逐层子步骤动画、神经元权重连线图、决策边界、优化器对比 |
-| 模式 F：RNN 循环神经网络 | `frontend/src/app/modes/mode-f/` | Tanh RNN + BPTT 引擎、时间展开可视化、序列分类数据集 |
-| 教学文档（训练与优化 + 序列模型） | `frontend/src/app/shared/teaching/teaching-glossary.ts` | SGD/Momentum/Adam/反向传播/梯度下降/学习率/ReLU/Sigmoid/Tanh + RNN Cell/BPTT/隐状态 等 12 个术语 |
-| AI 助手接入（E/F） | 模式 E/F 的 Shell 组件 | 模式专属系统提示词、上下文数据收集、快捷提问 |
+| Dense | Z = X·W^T + b, A = act(Z) | dZ = dA ⊙ act'(Z), dW = dZ^T·X, db = ∑dZ, dX = dZ·W |
+| Activation (ReLU) | A = max(0, Z) | dZ = dA ⊙ (Z > 0) |
+| Activation (Sigmoid) | A = σ(Z) | dZ = dA ⊙ σ(Z)(1-σ(Z)) |
+| Activation (Tanh) | A = tanh(Z) | dZ = dA ⊙ (1-tanh²(Z)) |
+| Output (Softmax) | A = softmax(Z) | dZ = A - y_onehot（与 CrossEntropy 合并梯度） |
 
-### 8.2 模式 E：反向传播可视化
+**优化器状态管理**：`optState: ModeEOptimizerState` 被所有层共享，按 `layerId` 键值存储各层的动量（Momentum）和一二阶矩估计（Adam）。`t` 计数器每步递增，用于 Adam 的偏差修正。切换优化器时须调用 `reset()` 清零状态。
 
-#### 8.2.1 核心设计
+**矩阵运算**（均为引擎内部私有函数）：`dot`（通用矩阵乘法）、`transpose`、`hadamard`（逐元素乘积）、`addVecToRows`（偏置广播）、`softmax`（含数值稳定性的 max 减法）。全部自行实现，不依赖 NumPy、math.js 或 TensorFlow.js。
 
-模式 E 的核心目标是**展示单步训练中数据如何从前向后流动、梯度如何从后向前回传、参数如何被更新**。
+#### 8.3.2 数据集与预设
 
-采用纯 TypeScript 在浏览器内实现完整的前向传播、损失计算、反向传播和参数更新引擎（`mode-e-backprop-engine.ts`，约 650 行），零外部依赖。
+**文件**：`mode-e-assets.service.ts`
 
-**支持的层类型**：Dense（全连接）、Activation（ReLU/Sigmoid/Tanh）、Output（Softmax）
+| 预设 ID | 数据集 | 网络结构 | 样本数 | 输出类 |
+| --- | --- | --- | --- | --- |
+| `xor-mlp` | XOR 四团分布 | 2→12(ReLU)→2(Softmax) | 400 | 2 |
+| `circle-mlp` | 同心圆 | 2→16(Sigmoid)→2(Softmax) | 350 | 2 |
+| `blobs-mlp` | 高斯团 | 2→4(Sigmoid)→3(Softmax) | 350 | 3 |
 
-**反向传播实现**：
-- Dense 层：dW = a_prev^T · dZ, db = Σ dZ, dA_prev = dZ · W^T
-- ReLU：dZ = dA · (Z > 0)
-- Sigmoid：dZ = dA · σ(Z) · (1 - σ(Z))
-- Tanh：dZ = dA · (1 - tanh²(Z))
-- Softmax + CrossEntropy 合并：dZ = softmax(Z) - y_onehot
+数据集在构造时通过静态方法 `ModeEBackpropEngine.generateXorData()` / `generateCircleData()` / `generateBlobData()` 预生成并存入 `ModeEDatasetPreset.samples`。每个样本为 `{ input: [x, y], label: number }`。
 
-**优化器**：SGD（基础梯度下降）、Momentum（动量累积）、Adam（自适应学习率 + 动量）
+三个预设网络架构是在反复试验后确定的：XOR 用 ReLU 12 单元减少局部最优困局；同心圆用 Sigmoid 16 单元生成弧形边界（ReLU 产生分段直线、无法高效闭合环形）；高斯团用 Sigmoid 4 单元即可线性分割。
 
-**数据集生成器**：XOR 四团分布、同心圆、高斯团三类，均支持噪声参数控制
+#### 8.3.3 状态管理
 
-#### 8.2.2 可视化设计
+**文件**：`mode-e-state.service.ts`
 
-模式 E 采用三大可视化面板：
+核心类型 `SubStep` 将单次训练迭代分解为可手动推进的微步骤：
 
-**神经元权重连线图**（Overview 组件）：SVG 绘制每层神经元节点和层间全连接权重边。通过子步骤动画逐层揭示前向/反向传播过程——蓝线=前向流动、橙线=反向梯度回传、绿线=参数更新。鼠标悬停连线弹出权重值浮层，选中神经元高亮其入边/出边。
-
-**浮层图表面板**（FloatingCharts 组件）：左侧悬浮面板包含数据集散点图（叠加决策边界半透明色块）、损失曲线对比图（支持多条历史曲线叠加、单条删除）、当前预测状态。点击图表可弹出居中放大弹窗。
-
-**控制面板**（ControlPanel 组件）：预设网络选择、激活函数切换（ReLU/Sigmoid/Tanh）、优化器切换（SGD/Momentum/Adam）、学习率调节、训练步数设置、播放速度控制。
-
-#### 8.2.3 子步骤动画状态机
-
-为实现"单步训练"中逐层流动的教学效果，设计了 `SubStep` 状态机：
-
-```text
-idle → forward-0-1 → forward-1-2 → ... → loss → backward-2-1 → backward-1-0 → update-1 → update-2 → done
+```typescript
+type SubStep =
+  | { type: 'idle' }
+  | { type: 'forward'; layerPair: number }
+  | { type: 'loss' }
+  | { type: 'backward'; layerPair: number }
+  | { type: 'update'; layerIdx: number }
+  | { type: 'done' };
 ```
 
-每个子步骤停留至用户点击"继续"按钮，进度条实时显示当前位置。连续播放模式每 N 毫秒自动推进。
+`buildSubSteps()` 根据当前网络层数自动生成完整序列：N-1 个 forward 步骤，1 个 loss 步骤，N-1 个 backward 步骤，K 个 update 步骤（K = 含可训练参数的层数）。用户点击"继续"调用 `advanceSubStep()` 推进，全部完成后调用 `finishAnimation()`。
 
-#### 8.2.4 决策边界计算
+`instantStep()` 跳过子步骤分拆，直接计算完整训练步——供连续播放模式使用。`play()` 方法在检测到已达 maxIterations 时自动调用 `saveCurrentCurve()` 后 pause；再次点击播放会触发 `reset()` 重新初始化权重后继续。
 
-每 25 步训练后用全部样本计算平均损失和整体准确率，同时用 50×50 网格计算模型对二维空间的分类判断，在散点图上叠加半透明色块展示决策边界。数据点坐标根据实际数据集范围动态映射（带 8% 边距），解决了同心圆等数据集点溢出坐标轴的问题。
+`maybeRecordAvgLoss(itr)` 每 25 步遍历全部训练样本，调用引擎的 `forwardPass` 和 `computeLoss` 计算平均损失和整体准确率，存入 `avgLossHistory`（上限 200 条），并触发决策边界重算。
 
-#### 8.2.5 损失曲线对比
+`saveCurrentCurve()` 将当前 avgLossHistory 快照保存到 `savedCurves`，标签格式为 `${optimizer}+${activation} (Acc XX%)`，颜色从 8 色调色板中自动选择一个未被使用的。同标签的旧曲线会被替换。
 
-训练完成指定步数后自动保存当前平滑损失曲线（含优化器和激活函数标签）。曲线图支持多条历史曲线叠加显示，颜色自动分配不重复。每条已保存曲线可单独删除（图例旁 x 按钮）。
+#### 8.3.4 可视化组件
 
-### 8.3 模式 F：RNN 循环神经网络
+**A. 神经元拓扑图**（`overview/mode-e-overview.component`，约 560 行 TS）
 
-#### 8.3.1 核心设计
+SVG 布局：`LAYER_GAP=240`、`NEURON_GAP=60`、`NEURON_R=20`。神经元按层排列为垂直列，层间全连接权重边以细线绘制。边标签使用固定 8px 法线偏移（`[-dy, dx]/len`），`labelPos()` 统一计算位置和旋转角。
 
-模式 F 实现一个简单的 Tanh RNN + BPTT（穿越时间的反向传播）引擎（`mode-f-rnn-engine.ts`，约 180 行），支持 SGD/Momentum/Adam 三种优化器。
+子步骤动画的视觉映射：
+- 活动层对连线着色（蓝=forward、橙=backward、绿=update），其余灰色半透明
+- 流动光点沿活动连线做 `animateMotion`（forward 右向、backward 左向）
+- 活动层神经元外圈为对应阶段彩色环 `hlRingColor`
+- 选中神经元外圈为基于激活符号的辉光环（蓝=正、红=负 `selGlowColor`）
 
-**前向传播**：对长度为 T 的序列，从初始零隐状态开始，每步计算 h_t = tanh(W_xh·x_t + W_hh·h_{t-1} + b_h)，最后时间步通过 softmax 输出分类概率。
+交互：`onSvgMove` 追踪鼠标坐标，hover 连线触发 tooltip 显示权值，同层对其他连线 `isEdgeDimmed` 降至 0.15 透明度，hover 线宽 2.5px。
 
-**BPTT**：从最后时间步的输出梯度开始，沿时间轴反向传播，同时累积各时间步对 W_xh、W_hh、W_hy 和偏置的梯度。
+**B. 计算详情卡片**（`formulaLine` computed + `formulaCard` CSS）
 
-**数据集**：三个简单序列分类任务——延迟记忆（echo）、XOR 记忆、交替检测，均为 4 步序列，200 个样本。
+公式卡片替代了早期扁平文本栏，采用 `border-radius:12px` 卡片 + `phase-badge`（前向传播/反向传播/参数更新/损失计算/神经元）+ 描述标题的结构。`formulaHeader` computed 根据 `subStep` 类型和点击目标生成阶段标签和标题。
 
-#### 8.3.2 可视化设计
+内容用 `::ng-deep` 穿透 `[innerHTML]` 注入的 CSS 类（`.fv-w`/`.fv-a`/`.fv-r`/`.fv-bf`/`.fv-af` 等），无 `<table>` 元素，全部使用 `display:flex` 的 `.fv-term-row` 布局。
 
-时间展开图展示 RNN 在各时间步的隐状态向量（彩色条形图）和输出概率。每个 Cell 方框代表一个时间步，箭头串联隐状态传递路径。
+**前向传播**展示三步：
+1. 加权和计算（section label）：每项 `w×a` 为一行 term-row，偏置行淡黄底 `fv-bias-row`，Z 行淡蓝底 `fv-sum-row`
+2. softmax 归一化（section label）：`e^z = exp(z)` → `Σ e^Z` → `p_i = e^z_i/Σ`
+3. 激活结果（`ReLU → val` 或 `softmax → [p₀, p₁, p₂]`）
 
-### 8.4 共享组件复用
+**反向传播**展开为三步 term-row（`dZ`→`dW`→`db`）：
+1. dZ — 损失对 Z 的梯度：输出层 `dZ_i = softmax_i − 𝟙(label=i)` 逐神经元推导；隐层 `dZ = dA × activation'(Z)`（含 ReLU'/Sigmoid'/Tanh' 等式）
+2. dW — 权重梯度：`dW[i][j] = a_prev[j] × dZ[i]` 逐项展开为 term-row
+3. db — 偏置梯度：`db_i = dZ_i` 淡黄底行
 
-成员 D 开发的模式 E/F 复用了项目中多个共享组件：
+**损失计算**展开为：softmax 概率摘要 → 取出 `p_真实` → CE 公式 `−ln(p_true)` → 代入 → 结果。
 
-| 复用组件 | 使用位置 | 说明 |
+**C. 浮层图表面板**（`floating-charts/mode-e-floating-charts.component`）
+
+`position: fixed` 固定左侧，三个子面板：数据集散点图（50×50 决策边界色块 + 数据点）、损失曲线对比（原始单步+平滑平均+已保存曲线，图例可删除）、当前预测（样本坐标/真实/预测 ✓/✗）。
+
+**D. 控制面板**（`control-panel/mode-e-control-panel.component`）
+
+四区布局：网络（预设+激活函数 chip）、优化器（SGD/Momentum/Adam+lr 滑块）、训练（步数+速度 chip+单步/连续/重置按钮）、状态（预测/真实/损失）。`isRunning` 时禁用配置控件。
+
+#### 8.3.5 关键类型定义
+
+**文件**：`mode-e.types.ts`
+
+```typescript
+interface ModeEBackpropStep {
+  iteration: number; phase: ModeEBackpropPhase; layerIndex: number; totalLayers: number;
+  forwardCache?: ModeEForwardCacheEntry[]; loss?: number; predictedClass?: number;
+  trueClass?: number; predictions?: number[]; layerGradients: ModeELayerGradient[];
+  parameterSnapshots: ModeEParameterSnapshot[]; optimizerState?: ModeEOptimizerState;
+}
+
+interface ModeEForwardCacheEntry { layerId: number; layerIndex: number; input: number[][]; output: number[][]; preActivation?: number[][]; }
+interface ModeELayerGradient { layerId: number; weightGradients?: number[][]; biasGradients?: number[]; inputGradient?: number[][]; gradientNorm: number; gradientStats: { min, max, mean, std }; }
+interface ModeEParameterSnapshot { layerId: number; weightsBefore?: number[][]; weightsAfter?: number[][]; biasBefore?: number[]; biasAfter?: number[]; weightChange?: number[][]; biasChange?: number[]; }
+interface ModeEDecisionBoundary { resolution: number; xMin: number; xMax: number; yMin: number; yMax: number; grid: number[][]; }
+```
+
+### 8.4 模式 F：RNN 循环神经网络
+
+#### 8.4.1 引擎设计
+
+**文件**：`mode-f-rnn-engine.ts`（约 208 行）
+
+`ModeFRnnEngine` 构造函数接收 `(inputDim, hiddenDim, outputDim)`，初始化权重矩阵 `Wxh[hiddenDim×inputDim]`、`Whh[hiddenDim×hiddenDim]`、`Why[outputDim×hiddenDim]` 和偏置 `bh`、`by`。权重用 `randMat(scale=0.08)` 均匀初始化，偏置为零。
+
+**公开方法**：
+
+| 方法 | 说明 |
+| --- | --- |
+| `forward(sequence)` | 从 `h_0=0` 开始逐时间步前向：`h_t=tanh(Wxh·x_t+Whh·h_{t-1}+bh)`，`output_t=softmax(Why·h_t+by)`。返回每步 state 和 predictions |
+| `trainStep(sample, config, iteration)` | 串联 forward → CE loss → BPTT → apply gradients。训练前 snapshot 更新前权重 `wBefore`，更新后再 snapshot `wAfter`，存入 `ModeFStepResult.weightSnapshot` |
+| `getWeights()` | 返回 `{Wxh, Whh, Why, bh, by}` 的深拷贝快照，供 UI computed signals 读取 |
+| `reset()` | 重新随机初始化所有权重，清零优化器状态和步计数 |
+
+**BPTT 流程**：
+1. 最后时间步 T-1 计算 CE 梯度 `dy = softmax - oneHot(label)`
+2. 输出层梯度：`dWhy += dy⊗h_T`，`dby += dy`，`dh = Why^T·dy`
+3. 从 T-1 逆序到 0：`dh = dh ⊙ (1-h_t²)`（tanh 导数）→ 累积 `dWxh += dh⊗x_t`、`dWhh += dh⊗h_{t-1}`、`dbh += dh` → 传播 `dh_new = Whh^T·dh`
+4. 累加梯度范数 `l2Norm`
+
+**优化器**：`applyUpdate`（矩阵）/ `applyVecUpdate`（向量）私有方法。SGD 原地减 `lr*dW`；Momentum `vel=beta*vel+lr*dW`；Adam 维护 `m/v` 并做偏差修正 `/(1-beta^t)`。每个权重矩阵独立维护优化器状态。
+
+**辅助函数**：`dot`、`dotVec`（矩阵×向量）、`outer`（外积用于梯度累积）、`add/sub/scale/hprod`、`softmax`（含 max 减法）。
+
+#### 8.4.2 数据集与预设
+
+**文件**：`mode-f-assets.service.ts`
+
+| 数据集 ID | 任务 | 序列长度 | inputDim | hiddenDim | 样本数 |
+| --- | --- | --- | --- | --- | --- |
+| `echo` | 延迟记忆：记第 0 步 bit，3 步空白后分类 | 4 | 2 | 4 | 200 |
+| `memory` | XOR 记忆：前两步各给 bit，判断异或关系 | 4 | 2 | 8 | 200 |
+| `delay-match` | 延迟对比：首尾各给 bit，中间空白，判断是否相同 | 4 | 2 | 6 | 200 |
+
+难度递进：echo 只需记住一个 bit；memory 需同时记住两个 bit 并 XOR 判断，hiddenDim=8 是因为 4 维隐状态在 tanh 初始化下易衰减为零；delay-match 需跨两步空白保持首个 bit。
+
+输入编码：`[1,0]`=bit1, `[0,1]`=bit0, `[0,0]`=空白。数据集在服务构造时通过 `echoDataset`/`xorMemoryDataset`/`delayMatchDataset` 一次性生成。
+
+#### 8.4.3 状态管理
+
+**文件**：`mode-f-state.service.ts`（约 160 行）
+
+无子步骤动画系统（相比模式 E 简化的关键差异）。训练步为原子操作，`stepForward()` 直接调用 `engine.trainStep()`。
+
+`computeAvg()` 每 10 步遍历全部样本做纯前向推理（不执行 BPTT），计算平均损失和整体准确率。`loadPreset()` 创建全新 `ModeFRnnEngine` 实例确保权重完全重置。
+
+**网络拓扑数据 computed signals**（供 topology graph 使用）：
+
+| Signal | 返回类型 | 说明 |
 | --- | --- | --- |
-| PlatformTopbarComponent | E/F Shell | 统一顶栏导航 |
-| LlmFloatingAssistantComponent | E/F Shell | AI 浮层助手，配置模式专属提示词和上下文 |
-| TeachingSearchFabComponent | E/F Shell | 教学文档浮层按钮 |
-| TeachingTermDirective | E 控制面板 | 优化器和激活函数按钮的高亮术语 |
+| `neuronCounts` | `number[]` | `[inputDim, hiddenDim, outputDim]` |
+| `weightEdges` | edge[] | W_xh (0→1) + W_hy (1→2) 边，含 weight/gradient |
+| `biasValues` | bias[] | 隐层和输出层偏置值，含 gradient |
+| `neuronActivations` | `number[][]` | 3 层激活值（输入=原始值/隐层=tanh/输出=softmax） |
+| `selectedNeuron` | computed | 选中神经元的出入边、偏置、激活值上下文 |
+| `selectedNeuronRef` | signal | `{layerIdx, neuronIdx}` 选择状态 |
+
+`weightEdges` 和 `biasValues` 通过读取 `this.networkMeta()` 作为 signal 依赖确保 preset 切换后重新求值（engine 是 plain 字段不是 signal，仅靠 `currentStep` 不足以触发首次加载后的重算）。
+
+#### 8.4.4 可视化组件
+
+**A. 网络拓扑图**（`overview/mode-f-overview.component`，约 170 行 TS + 110 行 HTML）
+
+3 列布局（`TLG=160`、`TNG=52`、`TNR=18`）：输入层 | 隐层（虚线框内） | 输出层。隐层外框为橙色虚线圆角矩形 `stroke-dasharray="6 3"`，自循环箭头从框右侧贝塞尔曲线绕回顶部，标注 `W_hh`。W_xh 蓝线、W_hy 绿线直连，边标签用固定 8px 法线偏移。
+
+神经元圆内显示激活值（`font-size:10`，正蓝底/负红底/零灰底），偏置值标注在下方。hover 连线显示 tooltip，click 神经元联动 detail panel 展示出入边权重列表。
+
+**B. 时间展开图**（同组件内）
+
+SVG 水平排列 Cell 方框（`CELL_W=130, CELL_H=80`），Cell 间箭头串联 t=0→1→2→3。Cell 内隐状态向量用纵向条形图（正蓝↑/负红↓），数值用 `fmtShort`（2 位小数）标注在柱体下方，文本 Y 坐标 = 最高柱底 + 8px 避免遮挡。输入向量从 `curSampleInputs` 读取显示为 `x0=[1,0]`。输出概率显示在 Cell 下方。
+
+**C. 权重矩阵热力图**（`detail-panel/mode-f-detail-panel.component`）
+
+`weightMatrices` computed 从 engine 读取 W_xh/W_hh/W_hy/b_h/b_y 实际数值，渲染为 CSS Grid 彩色网格。每格蓝底=正权值、红底=负权值，深浅=|值|，hover title 显示精确值。行列标注 `h_0..h_n`。
+
+**D. 控制面板**（`control-panel/mode-f-control-panel.component`）
+
+预设选择、优化器（SGD/Momentum/Adam）、学习率滑块、步数输入、速度 chip 和运行/单步/重置按钮。
 
 ### 8.5 教学文档贡献
 
-在共享的教学词典（`teaching-glossary.ts`）中新增 12 个术语，归属两个分类：
+在 `teaching-glossary.ts` 中新增两项术语数组：
 
-**训练与优化**（模式 E）：SGD 优化器、Momentum 优化器、Adam 优化器、反向传播、梯度下降、学习率、ReLU、Sigmoid、Tanh
+**MODE_E_TEACHING_TERMS**（9 项，"训练与优化" 分类）：`optimizer-sgd`（SGD 优化器）、`optimizer-momentum`（Momentum 优化器）、`optimizer-adam`（Adam 优化器）、`backpropagation`（反向传播）、`gradient-descent`（梯度下降）、`learning-rate`（学习率）、`activation-relu`（ReLU）、`activation-sigmoid`（Sigmoid）、`activation-tanh`（Tanh）。每个术语包含公式、导数、决策边界特征和适用场景说明。
 
-**序列模型**（模式 F）：RNN Cell、BPTT、隐状态
+**MODE_F_TEACHING_TERMS**（5 项，"序列模型" 分类）：`rnn-cell`（RNN 单元）、`bptt`（BPTT）、`hidden-state`（隐状态）、`gradient-vanishing`（梯度消失）、`sequence-classification`（序列分类）。Mode F 的优化器术语不再重复添加条目，改为复用 Mode E 的 SGD/Momentum/Adam 条目（`mode` 字段设为 `'E F'` 表示共享）。Mode B 的 `gradient-norm`（梯度范数）也被 Mode F 复用。
 
-每个术语包含标题、别名、分类、摘要和多段详细说明，覆盖原理公式、优缺点分析和在对应模式中的教学应用场景。
+`TeachingTerm` 接口的 `mode` 字段类型为 `'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'E F'`，支持多模式共享。合并后的 `TEACHING_TERMS` 数组通过 `findTeachingTerm(id)` 全局查找。
+
+模式 E/F 控制面板的优化器按钮和激活函数按钮通过 `[appTeachingTerm]` 指令绑定到对应术语 ID，点击 "?" 浮标激活教学模式后按钮变为浅绿高亮，点击跳转到 `/teaching#termId`。Mode F 的 Overview（RNN 时间展开标题→rnn-cell、时间步→bptt）和 DetailPanel（隐状态向量→hidden-state、梯度范数→gradient-norm）也挂载了术语绑定。
 
 ### 8.6 工程难点
 
-1. **纯 TypeScript 矩阵运算**：前向/反向传播引擎不依赖任何数值计算库，手动实现了矩阵乘法、转置、Hadamard 积、softmax 等全套运算，需处理维度对齐和数值稳定性。
+| 难点 | 问题背景 | 解决方案 | 关键代码 |
+| --- | --- | --- | --- |
+| 子步骤动画状态机 | 需要将单次训练迭代拆分为逐层展示的前向/反向/更新微步骤，每步对应特定 UI 高亮和动画 | 定义 `SubStep` 联合类型：`idle/forward/loss/backward/update/done`，`buildSubSteps()` 根据层数动态生成 `[forward×n, loss, backward×n, update×k]` 序列。增量子步骤方法（`initIncStep`/`stepForwardPair`/`stepLoss`/`stepBackwardPair`/`stepUpdate`）逐层推进计算 | `mode-e-state.service.ts` SubStep 类型、`buildSubSteps()`、`applySubStep()`、`advanceSubStep()` |
+| innerHTML 内容样式穿透 | 公式卡片内容通过 `[innerHTML]` 注入 HTML 字符串，Angular 的 ViewEncapsulation.Emulated 阻止 CSS 选择器穿透到动态注入的 DOM 节点 | 使用 `::ng-deep` 作用于 `.formula-body` 容器内的子元素（`.fv-w/.fv-a/.fv-r` 等），仅在有 `[innerHTML]` 的场景使用，其余样式保持封装修剪 | `mode-e-overview.component.css` `.formula-body ::ng-deep .fv-*` |
+| 表格导致的公式显示混乱 | 前向加权和最初用 `<table>` 渲染，列对齐困难、视觉与 detail-panel 风格不统一 | 全部替换为 `display:flex` 的 `.fv-term-row` 布局：每项为一行（`fv-tl` 标签 + 值 + `fv-op` 运算符），偏置行淡黄底 `fv-bias-row`，总和行淡蓝底 `fv-sum-row` | `formulaLine` computed 内 term-row HTML 生成 |
+| 边标签定位漂移 | W_xh/W_hy 标签使用 `(neuronFrom-neuronTo)*10` 累加偏移，底部标签远离线条 | 改为固定 8px 法线偏移：`mx = midX - nx*8, my = midY - ny*8`，其中 `[nx,ny]=[-dy,dx]/len` 为单位法向量 | `topoEdgeLabelPos()` / `labelPos()` 方法 |
+| Signal 依赖 engine plain 字段导致首次加载空数据 | `weightEdges`/`biasValues` computed 读 `this.engine.Wxh` 等 plain 字段，`loadPreset()` 创建新 engine 后不触发重新求值（engine 非 signal） | computed 中额外读取 `this.networkMeta()` signal，preset 切换时触发连锁重算。初始化时 `loadPreset` 后手动调用一次预计算使 UI 立即显示 | `mode-f-state.service.ts` `weightEdges`/`biasValues` 内的 `const _meta = this.networkMeta()` |
+| W_hh 循环连接可视化选型 | RNN 的隐层自循环（W_hh）需要可视化：弧线方式 16 条重叠、热力图方式信息密度过高但与连线图风格不统一 | 最终采用"隐层虚线框+自循环箭头"方案：橙色虚线圆角矩形包围隐层神经元，单根贝塞尔曲线箭头从框右侧绕回顶部，标注 W_hh。简洁且不失信息 | `mode-f-overview` 的 `hiddenBox` computed、`selfLoopPath` computed、marker 箭头定义 |
 
-2. **子步骤动画状态管理**：在单步训练中拆分出逐层子步骤（前向各层对→损失→反向各层对→更新），用 Angular signal 驱动的状态机控制动画节奏和 UI 同步。
+### 8.7 人工与 AI 分工
 
-3. **决策边界实时渲染**：50×50 网格需要 2500 次前向传播计算，权衡精度与性能后每 25 步更新一次，数据点坐标根据实际范围动态映射避免溢出。
+所有 AI 使用均归属为成员 D 个人贡献的一部分，AI 不作为独立角色。
 
-4. **激活函数与决策边界的关系**：ReLU 产生分段直线边界、Sigmoid 产生弧线边界——这一特性在同心圆数据集上表现突出，需要选择合适的预设网络架构（Sigmoid 16 隐藏单元）才能收敛。
+**人工主导**：
+- 两个引擎的数学公式推导和全部代码实现：MLP 前向/反向传播链式法则、softmax-CE 合并梯度、SGD/Momentum/Adam 更新规则及 Adam 偏差修正、RNN BPTT 时间轴梯度累积
+- 模式 E `SubStep` 状态机设计与增量子步骤 API（`initIncStep`/`stepForwardPair`/`stepLoss`/`stepBackwardPair`/`stepUpdate`）
+- 公式卡片设计：从表格到 term-row 的 HTML 结构选型、`::ng-deep` 样式穿透方案、前向（加权和→softmax→激活）和反向（dZ→dW→db）两步展开的内容组织
+- 边标签定位算法：从累加偏移到固定 8px 法线偏移的迭代调试
+- 模式 F W_hh 可视化选型迭代：弧线→热力图→4列直连→3列虚线框+自循环箭头，对比每种方案的信息密度和可读性后选定最终方案
+- 模式 F 网络拓扑图设计：3 列布局、隐层虚线框+自循环箭头、权重矩阵热力图、选中神经元联动 detail panel
+- `weightEdges`/`biasValues` computed 的 signal 依赖修复：通过 `networkMeta()` 读取触发 preset 切换后重新求值
+- 三个预设网络架构选择：XOR ReLU12、同心圆 Sigmoid16、高斯团 Sigmoid4
+- 三个 RNN 预设数据集的 hiddenDim 确定：echo=4/memory=8/delayMatch=6
+- 损失曲线对比系统：去重逻辑（同标签替换）、8 色调色板颜色分配
+- 模式 D→E 代码迁移：手动解决 git 冲突、修正路径引用、修复 import 别名
+- 服务器部署：本地构建→Python paramiko SFTP 上传→docker cp 到运行中容器
 
-### 8.7 AI 使用复盘
-
-- **人工主导**：引擎数学公式推导、子步骤状态机设计、可视化布局决策、同心圆/ReLU 等训练调参
-- **AI 辅助**：组件样板代码、CSS 样式微调、字符串批量替换（mode-d→mode-e 迁移）、文案润色
-- **AI 工具使用记录**：见 `AI_USAGE.md`
-
-- 所有新模式优先放入 `frontend/src/app/modes/mode-*`，公共能力再提取到 `shared`。
-- 后端新增接口应按业务域建包，不建议把 Controller 全部放在同一目录。
-- 如果 H2 数据量或并发压力增大，可迁移到 MySQL/PostgreSQL，JPA 实体可基本保留。
-- LLM 接口应继续由后端代理，避免在前端暴露 API Key。
-- 课程答辩前建议准备一条固定演示路径：登录 -> A 模式选择样本 -> 修改卷积核 -> 执行 forward -> 打开 3D -> 保存历史记录 -> 打开 LLM 浮标解释当前层。
+**AI 辅助**：
+- 组件样板代码生成：shell、overview、detail-panel、control-panel、floating-charts 的初始文件骨架
+- CSS 类命名和样式迭代：公式卡片的颜色值、间距、`::ng-deep` 穿透策略建议
+- HTML 模板补全：`@for`/`@if` 控制流代码块、SVG 元素属性绑定、热力图 grid 布局
+- 构建错误排查辅助：Angular 编译器警告（模板内箭头函数不支持、`<sub>` 在 SVG 中不可用、`@for` 变量名冲突）的定位和修复方向
+- 公式展开的 HTML 结构设计：加权和、softmax、dZ/dW/db 的 term-row 模板字符串由 AI 生成初稿后人工验证数值正确性
+- 字符串批量替换：`mode-d`→`mode-e`、`ModeD`→`ModeE`、`模式 D`→`模式 E` 的文件重命名和内容替换

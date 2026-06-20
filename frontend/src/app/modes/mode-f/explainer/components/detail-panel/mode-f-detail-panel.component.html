@@ -1,22 +1,93 @@
 <div class="detail-panel">
-  <!-- Weight matrix summary -->
-  <div class="detail-card">
-    <h4>权重矩阵</h4>
-    <div class="shape-list">
-      @for (w of weightShapes(); track w.name) {
-        <div class="shape-row">
-          <span class="shape-name">{{ w.name }}</span>
-          <span class="shape-dims">{{ w.shape }}</span>
-          <span class="shape-desc">{{ w.desc }}</span>
-        </div>
-      }
+  <!-- Selected neuron (from topology click) -->
+  @if (neuron(); as n) {
+    <div class="detail-card">
+      <h4>神经元详情</h4>
+      <div class="neuron-header">
+        <span class="neuron-badge">{{ n.layerType }}</span>
+        <strong>{{ n.layerName }} · 神经元 #{{ n.neuronIdx }}</strong>
+      </div>
+      <div class="neuron-meta">
+        <div class="meta-row"><span>激活值</span><span class="act-val" [style.color]="n.activation > 0 ? '#60a5fa' : n.activation < 0 ? '#f87171' : '#888'">{{ fmt(n.activation) }}</span></div>
+        @if (n.bias; as b) {
+          <div class="meta-row"><span>偏置 b</span><span>{{ fmt(b.bias) }}</span></div>
+          @if (b.gradient != null) {
+            <div class="meta-row"><span>偏置梯度</span><span [style.color]="b.gradient >= 0 ? '#10b981' : '#f59e0b'">∇{{ fmt(b.gradient) }}</span></div>
+          }
+        }
+      </div>
     </div>
-  </div>
+    @if (n.incoming.length > 0) {
+      <div class="detail-card">
+        <h4>入边权重 ({{ n.incoming.length }})</h4>
+        <div class="edge-list">
+          @for (e of n.incoming; track e.layerFrom + '-' + e.neuronFrom) {
+            <div class="edge-row">
+              <div class="edge-source">
+                <span class="src-layer">{{ sourceLayerName(e.layerFrom) }}</span>
+                <span class="src-neuron">N{{ e.neuronFrom }}</span>
+              </div>
+              <div class="edge-values">
+                <span class="w-val">W={{ fmt(e.weight) }}</span>
+                @if (e.gradient != null) {
+                  <span class="grad-tag">∇{{ fmt(e.gradient) }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+    @if (n.outgoing.length > 0) {
+      <div class="detail-card">
+        <h4>出边权重 ({{ n.outgoing.length }})</h4>
+        <div class="edge-list">
+          @for (e of n.outgoing; track e.layerTo + '-' + e.neuronTo) {
+            <div class="edge-row">
+              <div class="edge-source">
+                <span class="src-layer">→ {{ sourceLayerName(e.layerTo) }}</span>
+                <span class="src-neuron">N{{ e.neuronTo }}</span>
+              </div>
+              <div class="edge-values">
+                <span class="w-val">W={{ fmt(e.weight) }}</span>
+                @if (e.gradient != null) {
+                  <span class="grad-tag">∇{{ fmt(e.gradient) }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Weight matrices (actual values as colored grids) -->
+  @for (m of weightMatrices(); track m.name) {
+    <div class="detail-card">
+      <h4>{{ m.name }} — {{ m.label }} ({{ m.rows }}×{{ m.cols }})</h4>
+      <div class="wmx-grid" [style.grid-template-columns]="'auto repeat(' + m.cols + ', 1fr)'">
+        <!-- header row -->
+        <div class="wmx-cell wmx-hdr"></div>
+        @for (cj of [].constructor(m.cols); track $index) {
+          <div class="wmx-cell wmx-hdr">h<sub>{{ $index }}</sub></div>
+        }
+        <!-- data rows -->
+        @for (row of m.data; track ri; let ri = $index) {
+          <div class="wmx-cell wmx-hdr">h<sub>{{ ri }}</sub></div>
+          @for (val of row; track ci; let ci = $index) {
+            <div class="wmx-cell" [style.background]="cellColor(val)" [title]="fmt(val)">
+              {{ fmt(val) }}
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
 
   <!-- Gradient Norm -->
   @if (gradientNorm(); as gn) {
     <div class="detail-card">
-      <h4>梯度范数</h4>
+      <h4 appTeachingTerm="gradient-norm">梯度范数</h4>
       <div class="grad-row">
         <div class="grad-bar-track">
           <div class="grad-bar-fill" [style.width.%]="min(gn * 10, 100)" [style.background]="gradColor(gn)"></div>
@@ -29,7 +100,7 @@
   <!-- Hidden state per time step -->
   @if (hiddenStates().length > 0) {
     <div class="detail-card">
-      <h4>隐状态向量 (h_t)</h4>
+      <h4 appTeachingTerm="hidden-state">隐状态向量 (h_t)</h4>
       <div class="hidden-list">
         @for (hs of hiddenStates(); track tIdx; let tIdx = $index) {
           <div class="hidden-time-row">

@@ -11,19 +11,114 @@
       <h4>损失曲线</h4>
       <svg viewBox="0 0 200 60" class="mini-svg">
         <rect width="200" height="60" fill="#f8fafc" rx="4"/>
-        @if (lossPoints()) { <polyline [attr.points]="lossPoints()" fill="none" stroke="#d97706" stroke-width="1.5"/> }
+        @if (rawLossPoints()) { <polyline [attr.points]="rawLossPoints()" fill="none" stroke="#cbd5e1" stroke-width="0.8" opacity="0.5"/> }
+        @if (avgLossPoints()) { <polyline [attr.points]="avgLossPoints()" fill="none" stroke="#d97706" stroke-width="1.5"/> }
       </svg>
     </div>
     <div class="mini-info">
       <span>网络: {{ meta()?.name ?? '—' }}</span>
       <span>隐层维度: {{ hiddenDim() }}</span>
-      <span>时间步: {{ timeSteps() }}</span>
+      <span appTeachingTerm="bptt">时间步: {{ timeSteps() }}</span>
+    </div>
+  </div>
+
+  <!-- Network topology (folded view) -->
+  <div class="topo-card">
+    <h4>网络拓扑 (折叠视图)</h4>
+    <div class="topo-scroll" style="position:relative">
+      <svg [attr.viewBox]="'0 0 ' + topoSvgW() + ' ' + topoSvgH()" class="topo-svg"
+           (mousemove)="onTopoSvgMove($event)" (mouseleave)="onTopoEdgeLeave()">
+
+        <!-- Hidden layer bounding box + self-loop arrow -->
+        @let hb = hiddenBox();
+        <rect [attr.x]="hb.x" [attr.y]="hb.y" [attr.width]="hb.w" [attr.height]="hb.h"
+              fill="none" stroke="#f59e0b" stroke-width="1.5" rx="12" stroke-dasharray="6 3"/>
+        <path [attr.d]="selfLoopPath()" fill="none" stroke="#f59e0b" stroke-width="1.5"
+              marker-end="url(#loopArrow)"/>
+        <text [attr.x]="hb.x + hb.w + 20" [attr.y]="hb.y - 6"
+              fill="#f59e0b" font-size="9">W_hh</text>
+
+        <!-- W_xh (blue) + W_hy (green) edges -->
+        @for (e of topoEdges(); track e.layerFrom + '-' + e.neuronFrom + '-' + e.layerTo + '-' + e.neuronTo + '-' + e.type) {
+          @let x1 = topoNx(e.layerFrom); @let y1 = topoNy(e.neuronFrom, e.layerFrom);
+          @let x2 = topoNx(e.layerTo); @let y2 = topoNy(e.neuronTo, e.layerTo);
+          <g (mouseenter)="onTopoEdgeEnter(e)">
+            <line [attr.x1]="x1" [attr.y1]="y1" [attr.x2]="x2" [attr.y2]="y2"
+                  stroke="transparent" stroke-width="16" style="cursor:crosshair"/>
+            <line [attr.x1]="x1" [attr.y1]="y1" [attr.x2]="x2" [attr.y2]="y2"
+                  [attr.stroke]="topoEdgeStroke(e)" [attr.stroke-width]="topoEdgeWidth(e)"
+                  [attr.opacity]="topoEdgeOpacity(e)" style="pointer-events:none"/>
+            @let pos = topoEdgeLabelPos(e);
+            <text [attr.x]="pos.mx" [attr.y]="pos.my" text-anchor="middle"
+                  [attr.fill]="topoEdgeStroke(e)" font-size="8" font-family="'Courier New', monospace" font-weight="600"
+                  style="pointer-events:none"
+                  [attr.transform]="'rotate(' + pos.angle + ',' + pos.mx + ',' + pos.my + ')'"
+            >{{ fmt(e.weight) }}</text>
+          </g>
+        }
+
+        <!-- Neurons per layer -->
+        @for (li of [0, 1, 2]; track li) {
+          <g>
+            @for (_ of [].constructor(topoCounts()[li]); track ni; let ni = $index) {
+              @let cx = topoNx(li); @let cy = topoNy(ni, li);
+              @let isSel = topoIsSelected(li, ni);
+              @if (isSel) {
+                <circle [attr.cx]="cx" [attr.cy]="cy" [attr.r]="TNR + 4"
+                        fill="none" stroke="rgba(99,102,241,0.5)" stroke-width="2"
+                        style="pointer-events:none"/>
+              }
+              <circle [attr.cx]="cx" [attr.cy]="cy" [attr.r]="TNR"
+                      [attr.fill]="topoNfill(li, ni)" stroke="#94a3b8" stroke-width="1"
+                      class="topo-neuron" (click)="selectTopoN(li, ni)"/>
+              <text [attr.x]="cx" [attr.y]="cy + 4" text-anchor="middle" fill="#1e293b"
+                    font-size="10" font-weight="600" style="pointer-events:none"
+              >{{ topoActs()[li]?.[ni] != null ? fmt(topoActs()[li][ni]) : '—' }}</text>
+              <!-- bias label below neuron -->
+              @for (b of topoBiases(); track b.layerIdx + '-' + b.neuronIdx) {
+                @if (b.layerIdx === li && b.neuronIdx === ni) {
+                  <text [attr.x]="cx" [attr.y]="cy + TNR + 14"
+                        text-anchor="middle" fill="#94a3b8" font-size="9"
+                        font-family="'Courier New', monospace" style="pointer-events:none"
+                  >b={{ fmt(b.bias) }}</text>
+                }
+              }
+            }
+            <!-- Layer name -->
+            <text [attr.x]="topoNx(li)" [attr.y]="TPAD - 18" text-anchor="middle"
+                  fill="#475569" font-size="12" font-weight="600"
+            >{{ topoLayerNames[li] }}</text>
+          </g>
+        }
+        <defs>
+          <marker id="loopArrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+          </marker>
+        </defs>
+      </svg>
+
+      <!-- Hover tooltip -->
+      @if (hoveredEdgeLabel(); as lbl) {
+        <div class="edge-tooltip" [style.left.px]="labelX" [style.top.px]="labelY - 36">
+          <span class="tooltip-text">{{ lbl }}</span>
+        </div>
+      }
+    </div>
+    <!-- Legend -->
+    <div class="topo-legend">
+      <span class="leg-item"><span class="leg-swatch wxh"></span>W_xh 输入→隐层</span>
+      <span class="leg-item"><span class="leg-swatch why"></span>W_hy 隐层→输出</span>
+      <span class="leg-item"><span class="leg-swatch loop"></span>W_hh 隐层自循环</span>
+      <span class="leg-item">点击神经元查看详情</span>
+    </div>
+    <div class="topo-note">
+      虚线框 = 隐层。橙色箭头 = W_hh 自循环（把上一时刻的隐状态加权后传回来）。
     </div>
   </div>
 
   <!-- Unrolled RNN -->
   <div class="rnn-card">
-    <h4>RNN 时间展开</h4>
+    <h4 appTeachingTerm="rnn-cell">RNN 时间展开</h4>
     <div class="rnn-scroll">
       <svg [attr.viewBox]="'0 0 ' + svgW() + ' ' + svgH()" class="rnn-svg">
         @for (t of [].constructor(timeSteps()); track t; let ti = $index) {
@@ -33,22 +128,23 @@
           <text [attr.x]="cx + CELL_W/2" [attr.y]="cy - 6" text-anchor="middle" fill="#64748b" font-size="10">t={{ ti }}</text>
 
           <!-- Input label -->
-          @if (step()?.forwardResult; as fr) {
-            <text [attr.x]="cx - 4" [attr.y]="cy + CELL_H/2" text-anchor="end" fill="#94a3b8" font-size="9">
-              x=&#91;{{ fr.states[ti] ? (ti < (step()?.timeSteps ?? 0) ? (step()?.forwardResult?.states?.[ti] ? '...' : '...') : '...') : '...' }}&#93;
+          @if (curSampleInputs()[ti]; as xVec) {
+            <text [attr.x]="cx - 4" [attr.y]="cy + CELL_H/2" text-anchor="end" fill="#94a3b8" font-size="8">
+              x{{ ti }}=[{{ xVec.join(',') }}]
             </text>
           }
 
           @if (step()?.forwardResult?.states?.[ti]; as state) {
+            @let txtY = cy + CELL_H/2 + maxBarH(state.hidden) + 8;
             <!-- Hidden state bars -->
             @for (d of [].constructor(step()?.hiddenDim ?? 0); track d; let di = $index) {
               @let val = state.hidden[di];
               @let bx = cx + 12 + di * (CELL_W - 24) / (step()?.hiddenDim ?? 1);
               <rect [attr.x]="bx" [attr.y]="cy + CELL_H/2 - (val > 0 ? barH(val) : 0)" [attr.width]="max(2, (CELL_W - 28) / (step()?.hiddenDim ?? 1))" [attr.height]="barH(val)" [attr.fill]="barColor(val)" rx="1"/>
-              <text [attr.x]="bx + (CELL_W - 28) / (step()?.hiddenDim ?? 1) / 2" [attr.y]="cy + CELL_H/2 + 6" text-anchor="middle" fill="#94a3b8" font-size="7">{{ fmt(val) }}</text>
+              <text [attr.x]="bx + (CELL_W - 28) / (step()?.hiddenDim ?? 1) / 2" [attr.y]="txtY" text-anchor="middle" fill="#475569" font-size="9" font-weight="600">{{ fmtShort(val) }}</text>
             }
 
-            <!-- Output probability -->
+            <!-- Output prob -->
             <text [attr.x]="cx + CELL_W/2" [attr.y]="cy + CELL_H + 14" text-anchor="middle" fill="#2563eb" font-size="9">
               y={{ fmtProbs(state.output) }}
             </text>
