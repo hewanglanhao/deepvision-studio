@@ -1293,7 +1293,12 @@ def dataset_url(path: Path, dataset_root: Path) -> str:
         rel = path.resolve().relative_to(dataset_root.resolve())
     except ValueError:
         return ""
-    return "/datasets/" + "/".join(quote(part) for part in rel.parts)
+    parts = rel.parts
+    if len(parts) >= 3 and parts[0] == "upload":
+        dataset_id = parts[1]
+        file_path = "/".join(quote(part) for part in parts[2:])
+        return f"/api/training/datasets/{quote(dataset_id)}/files/{file_path}"
+    return "/datasets/" + "/".join(quote(part) for part in parts)
 
 
 def compute_gradient_norm(model) -> float:

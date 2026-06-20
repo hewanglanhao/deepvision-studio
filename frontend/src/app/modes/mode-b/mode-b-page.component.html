@@ -1605,12 +1605,12 @@
             </div>
             @if (!authUser) {
               <div class="warn-box">需要登录后才能保存和加载自己的 checkpoint。</div>
-            } @else if (trainingCheckpoints.length) {
+            } @else if (datasetCheckpointHistory.length) {
               <div class="checkpoint-workbench">
                 <div class="checkpoint-picker-panel">
                   <label><span appTeachingTerm="checkpoint">选择 Checkpoint</span>
                     <select [(ngModel)]="selectedCheckpointId">
-                      @for (ckpt of trainingCheckpoints; track ckpt.id) {
+                      @for (ckpt of datasetCheckpointHistory; track ckpt.id) {
                         <option [ngValue]="ckpt.id">{{ ckpt.name }} · {{ ckpt.createdAt | date:'MM-dd HH:mm' }}</option>
                       }
                     </select>

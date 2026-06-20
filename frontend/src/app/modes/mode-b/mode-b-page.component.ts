@@ -524,7 +524,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get selectedPresetTask() { return this.presetTasks.find(task => task.id === this.selectedTaskId) ?? null; }
   get selectedTaskIsRegression(): boolean { return this.selectedPresetTask?.type === 'regression'; }
   get selectedLayer() { return this.layers.find(l => l.id === this.selectedLayerId); }
-  get selectedCheckpoint() { return this.trainingCheckpoints.find(item => item.id === this.selectedCheckpointId) ?? null; }
+  get selectedCheckpoint() { return this.datasetCheckpointHistory.find(item => item.id === this.selectedCheckpointId) ?? null; }
   get currentTrainingJobId(): string { return this.trainingSvc.currentBackendJobId; }
   get datasetCheckpointHistory(): TrainingCheckpointSummary[] {
     const datasetId = this.trainingDatasetDetail?.id;
@@ -2416,12 +2416,14 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   async loadTrainingCheckpoints(): Promise<void> {
     if (!this.authUser) return;
     try {
-      this.trainingCheckpoints = await this.trainingSvc.listCheckpoints();
-      if (!this.selectedCheckpointId && this.trainingCheckpoints.length) {
-        this.selectedCheckpointId = this.trainingCheckpoints[0].id;
+      const datasetId = this.trainingDatasetDetail?.id ?? this.selectedTrainingDatasetId;
+      this.trainingCheckpoints = await this.trainingSvc.listCheckpoints(datasetId);
+      const visibleCheckpoints = this.datasetCheckpointHistory;
+      if (!this.selectedCheckpointId && visibleCheckpoints.length) {
+        this.selectedCheckpointId = visibleCheckpoints[0].id;
       }
-      if (this.selectedCheckpointId && !this.trainingCheckpoints.some(item => item.id === this.selectedCheckpointId)) {
-        this.selectedCheckpointId = this.trainingCheckpoints[0]?.id ?? null;
+      if (this.selectedCheckpointId && !visibleCheckpoints.some(item => item.id === this.selectedCheckpointId)) {
+        this.selectedCheckpointId = visibleCheckpoints[0]?.id ?? null;
       }
       this.checkpointError = '';
     } catch (err) {

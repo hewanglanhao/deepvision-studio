@@ -246,6 +246,8 @@ export class TrainingRuntimeService implements OnDestroy {
   private backendTotalEpochs = 0;
   private backendTotalBatches = 0;
   private activeUsername = '';
+  private readonly privateImageUrls = new Map<string, Promise<string>>();
+  private imageUrlToken = '';
   private readonly authSubscription: Subscription;
 
   readonly state$ = new BehaviorSubject<TrainingRuntimeState>({
@@ -314,6 +316,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.logs$.next([]);
     this.testResult$.next(null);
     this.backprop$.next(null);
+    this.releaseAllPrivateImageUrls();
     this.patchState({
       status: 'idle',
       currentEpoch: 0,
@@ -355,6 +358,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.history$.next([]);
     this.testResult$.next(null);
     this.backprop$.next(null);
+    this.releaseAllPrivateImageUrls();
     this.patchState({
       status: 'running',
       currentEpoch: 0,
@@ -412,10 +416,7 @@ export class TrainingRuntimeService implements OnDestroy {
     });
     const normalized: TrainingTestResult = {
       ...result,
-      samples: (result.samples ?? []).map(sample => ({
-        ...sample,
-        imageUrl: sample.imageUrl ? this.normalizeResourceUrl(sample.imageUrl) : sample.imageUrl
-      }))
+      samples: await this.normalizePredictionSamples(result.samples ?? [])
     };
     this.testResult$.next(normalized);
     const accText = normalized.testAccuracy === null ? 'N/A' : `${(normalized.testAccuracy * 100).toFixed(1)}%`;
@@ -429,10 +430,7 @@ export class TrainingRuntimeService implements OnDestroy {
     );
     return {
       ...result,
-      samples: (result.samples ?? []).map(sample => ({
-        ...sample,
-        imageUrl: sample.imageUrl ? this.normalizeResourceUrl(sample.imageUrl) : sample.imageUrl
-      }))
+      samples: await this.normalizeInferenceSamples(result.samples ?? [])
     };
   }
 
@@ -446,10 +444,7 @@ export class TrainingRuntimeService implements OnDestroy {
     );
     return {
       ...result,
-      sample: {
-        ...result.sample,
-        imageUrl: result.sample?.imageUrl ? this.normalizeResourceUrl(result.sample.imageUrl) : result.sample?.imageUrl
-      },
+      sample: await this.normalizeInferenceSample(result.sample),
       activations: result.activations ?? []
     };
   }
@@ -473,6 +468,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.logs$.next([]);
     this.testResult$.next(null);
     this.backprop$.next(null);
+    this.releaseAllPrivateImageUrls();
     this.patchState({
       status: 'idle',
       currentEpoch: 0,
@@ -497,6 +493,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.logs$.next([]);
     this.testResult$.next(null);
     this.backprop$.next(null);
+    this.releaseAllPrivateImageUrls();
     this.patchState({
       status: 'running',
       currentEpoch: 0,
@@ -573,6 +570,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.authSubscription.unsubscribe();
     this.clearTimer();
     this.closeSocket();
+    this.releaseAllPrivateImageUrls();
   }
 
   private clearClientSession(): void {
@@ -585,6 +583,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.logs$.next([]);
     this.testResult$.next(null);
     this.backprop$.next(null);
+    this.releaseAllPrivateImageUrls();
     this.patchState({
       status: 'idle',
       currentEpoch: 0,
@@ -654,19 +653,18 @@ export class TrainingRuntimeService implements OnDestroy {
       return;
     }
     if (message.type === 'test_result') {
-      const result: TrainingTestResult = {
+      const baseResult: Omit<TrainingTestResult, 'samples'> = {
         jobId: message.jobId,
         testLoss: message.testLoss ?? null,
         testAccuracy: message.testAccuracy ?? null,
-        sampleCount: message.sampleCount ?? 0,
-        samples: (message.samples ?? []).map(sample => ({
-          ...sample,
-          imageUrl: sample.imageUrl ? this.normalizeResourceUrl(sample.imageUrl) : sample.imageUrl
-        }))
+        sampleCount: message.sampleCount ?? 0
       };
-      this.testResult$.next(result);
-      const accText = result.testAccuracy === null ? 'N/A' : `${(result.testAccuracy * 100).toFixed(1)}%`;
-      this.log('info', `测试集评估完成：accuracy=${accText}, samples=${result.sampleCount}`);
+      void this.normalizePredictionSamples(message.samples ?? []).then(samples => {
+        const result: TrainingTestResult = { ...baseResult, samples };
+        this.testResult$.next(result);
+        const accText = result.testAccuracy === null ? 'N/A' : `${(result.testAccuracy * 100).toFixed(1)}%`;
+        this.log('info', `测试集评估完成：accuracy=${accText}, samples=${result.sampleCount}`);
+      });
       return;
     }
     if (message.type === 'backprop') {
@@ -761,9 +759,83 @@ export class TrainingRuntimeService implements OnDestroy {
     return streamUrl;
   }
 
+  private async normalizePredictionSamples(samples: TrainingPredictionSample[]): Promise<TrainingPredictionSample[]> {
+    return Promise.all(samples.map(async sample => ({
+      ...sample,
+      imageUrl: await this.resolveImageUrl(sample.imageUrl)
+    })));
+  }
+
+  private async normalizeInferenceSamples(samples: InferenceSampleItem[]): Promise<InferenceSampleItem[]> {
+    return Promise.all(samples.map(sample => this.normalizeInferenceSample(sample)));
+  }
+
+  private async normalizeInferenceSample(sample: InferenceSampleItem | undefined): Promise<InferenceSampleItem> {
+    if (!sample) return sample as unknown as InferenceSampleItem;
+    return {
+      ...sample,
+      imageUrl: await this.resolveImageUrl(sample.imageUrl)
+    };
+  }
+
+  private async resolveImageUrl(url: string | undefined): Promise<string | undefined> {
+    if (!url) return url;
+    const normalized = this.normalizeResourceUrl(url);
+    if (!this.isPrivateDatasetFileUrl(normalized)) {
+      return normalized;
+    }
+    this.ensureImageUrlCacheOwner();
+    let cached = this.privateImageUrls.get(normalized);
+    if (!cached) {
+      cached = this.fetchPrivateImageUrl(normalized);
+      this.privateImageUrls.set(normalized, cached);
+    }
+    try {
+      return await cached;
+    } catch {
+      this.privateImageUrls.delete(normalized);
+      return normalized;
+    }
+  }
+
   private normalizeResourceUrl(url: string): string {
-    if (!url || /^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
+    if (!url || /^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return url;
     return `${this.api.baseUrl}${url.startsWith('/') ? url : '/' + url}`;
+  }
+
+  private isPrivateDatasetFileUrl(url: string): boolean {
+    try {
+      const path = new URL(url, window.location.origin).pathname;
+      return path.startsWith('/api/training/datasets/') && path.includes('/files/');
+    } catch {
+      return url.includes('/api/training/datasets/') && url.includes('/files/');
+    }
+  }
+
+  private async fetchPrivateImageUrl(url: string): Promise<string> {
+    const headers = new Headers();
+    if (this.api.token) {
+      headers.set('Authorization', `Bearer ${this.api.token}`);
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`Image HTTP ${response.status}`);
+    }
+    return URL.createObjectURL(await response.blob());
+  }
+
+  private ensureImageUrlCacheOwner(): void {
+    const token = this.api.token;
+    if (token === this.imageUrlToken) return;
+    this.releaseAllPrivateImageUrls();
+    this.imageUrlToken = token;
+  }
+
+  private releaseAllPrivateImageUrls(): void {
+    for (const imageUrl of this.privateImageUrls.values()) {
+      void imageUrl.then(value => URL.revokeObjectURL(value)).catch(() => undefined);
+    }
+    this.privateImageUrls.clear();
   }
 
   private startMock(): void {
