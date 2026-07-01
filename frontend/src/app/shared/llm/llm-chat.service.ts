@@ -17,7 +17,11 @@ export class LlmChatService {
   }
 
   /** 通过 SSE 接收 LLM 流式响应并逐段回调给界面。 */
-  async streamChat(request: LlmChatRequest, onDelta: (delta: string) => void): Promise<LlmChatResponse> {
+  async streamChat(
+    request: LlmChatRequest,
+    onDelta: (delta: string) => void,
+    onReasoningDelta?: (delta: string) => void
+  ): Promise<LlmChatResponse> {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     if (this.api.token) {
       headers.set('Authorization', `Bearer ${this.api.token}`);
@@ -39,6 +43,7 @@ export class LlmChatService {
     const decoder = new TextDecoder();
     let buffer = '';
     let fullText = '';
+    let reasoningText = '';
     let doneResponse: LlmChatResponse | null = null;
 
     while (true) {
@@ -56,6 +61,12 @@ export class LlmChatService {
             fullText += delta;
             onDelta(delta);
           }
+        } else if (event.name === 'reasoning') {
+          const delta = this.parseData<{ text?: string }>(event.data).text ?? '';
+          if (delta) {
+            reasoningText += delta;
+            onReasoningDelta?.(delta);
+          }
         } else if (event.name === 'done') {
           doneResponse = this.parseData<LlmChatResponse>(event.data);
         } else if (event.name === 'error') {
@@ -71,7 +82,7 @@ export class LlmChatService {
       }
     }
 
-    return doneResponse ?? { content: fullText, model: '', id: '' };
+    return doneResponse ?? { content: fullText, model: '', id: '', reasoningContent: reasoningText };
   }
 
   /** 组装 LLM 请求体，保留 A 模式传来的系统提示、上下文文本和最多几张特征图/输入图。 */

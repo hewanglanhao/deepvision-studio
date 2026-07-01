@@ -23,4 +23,5 @@ export interface LlmChatResponse {
   content: string;
   model: string;
   id: string;
+  reasoningContent?: string;
 }

@@ -276,7 +276,10 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
                 "user",
                 List.of(new ContentPart("text", assistantUserPrompt(requester, question, recentMessages), null))
             ))
-        ), delta -> {
+        ), (event, delta) -> {
+          if (!"delta".equals(event)) {
+            return;
+          }
           answer.append(delta);
           broadcastAssistantUpdate(requester.jobId(), messageId, answer.toString(), true);
         });

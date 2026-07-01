@@ -108,7 +108,12 @@
                 <span class="topic-chip">{{ topicLabels[question.topic] || question.topic }}</span>
                 <span class="difficulty-chip">难度 {{ question.difficulty }} · {{ difficultyLabel(question.difficulty) }}</span>
               </div>
-              <strong>{{ question.code }}</strong>
+              <div class="question-tools">
+                <strong>{{ question.code }}</strong>
+                <button type="button" class="ai-guide-button" (click)="askAiForCurrentQuestion(modeGAi)">
+                  AI 引导
+                </button>
+              </div>
             </header>
 
             <h1>{{ question.prompt }}</h1>
@@ -174,4 +179,12 @@
       </section>
     }
   </main>
+
+  <app-llm-floating-assistant
+    #modeGAi
+    title="Mode G 解题引导"
+    [systemPrompt]="llmSystemPrompt"
+    [contextProvider]="llmContextProvider"
+    [quickPrompts]="llmQuickPrompts"
+  />
 </div>

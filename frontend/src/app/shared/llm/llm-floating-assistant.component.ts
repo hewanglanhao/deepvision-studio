@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
+import { Component, Input, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DEFAULT_LLM_SYSTEM_PROMPT } from './llm-prompts';
 import { LlmChatService } from './llm-chat.service';
@@ -8,6 +8,18 @@ import { LlmChatContext, LlmChatMessage, LlmContentPart } from './llm.models';
 interface UiChatMessage {
   role: 'user' | 'assistant';
   text: string;
+  reasoningText?: string;
+  thinkingOpen?: boolean;
+}
+
+type ResizeDirection = 'left' | 'top' | 'top-left';
+
+interface ResizeState {
+  direction: ResizeDirection;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
 }
 
 export interface LlmQuickPrompt {
@@ -28,7 +40,22 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
   template: `
     <div class="llm-dock">
       @if (open) {
-        <section class="llm-popover">
+        <section class="llm-popover" [style.width.px]="assistantWidth" [style.height.px]="assistantHeight">
+          <span
+            class="resize-handle resize-left"
+            title="拖动调整宽度"
+            (pointerdown)="startResize($event, 'left')"
+          ></span>
+          <span
+            class="resize-handle resize-top"
+            title="拖动调整高度"
+            (pointerdown)="startResize($event, 'top')"
+          ></span>
+          <span
+            class="resize-handle resize-corner"
+            title="拖动调整大小"
+            (pointerdown)="startResize($event, 'top-left')"
+          ></span>
           <header class="llm-head">
             <div class="title-wrap">
               <div class="llm-title">{{ title }}</div>
@@ -59,7 +86,24 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
             @for (message of messages; track $index) {
               <article [class]="'chat-bubble ' + message.role">
                 @if (message.role === 'assistant') {
-                  <div class="md-body" [innerHTML]="renderMarkdown(message.text)"></div>
+                  @if (message.reasoningText) {
+                    <button
+                      type="button"
+                      class="thinking-toggle"
+                      [class.open]="message.thinkingOpen"
+                      (click)="toggleThinking(message)"
+                    >
+                      <span class="thinking-pulse"></span>
+                      <span>{{ message.thinkingOpen ? '收起思考过程' : '思考中' }}</span>
+                      <span class="thinking-count">{{ (message.reasoningText || '').length }} 字</span>
+                    </button>
+                    @if (message.thinkingOpen) {
+                      <div class="thinking-content">{{ message.reasoningText }}</div>
+                    }
+                  }
+                  @if (message.text) {
+                    <div class="md-body" [innerHTML]="renderMarkdown(message.text)"></div>
+                  }
                 } @else {
                   <div class="plain-body">{{ message.text }}</div>
                 }
@@ -132,6 +176,8 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
       bottom: 56px;
       width: 460px;
       height: 620px;
+      max-width: calc(100vw - 28px);
+      max-height: calc(100vh - 92px);
       display: grid;
       grid-template-rows: 42px 32px 24px minmax(0, 1fr) 28px 56px;
       overflow: hidden;
@@ -140,6 +186,49 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
       background: #fff;
       color: #182132;
       box-shadow: 0 18px 46px rgba(15, 23, 42, .2);
+    }
+
+    .resize-handle {
+      position: absolute;
+      z-index: 4;
+      opacity: 0;
+      transition: opacity .15s ease, background .15s ease;
+    }
+
+    .resize-left {
+      left: -3px;
+      top: 10px;
+      bottom: 10px;
+      width: 8px;
+      cursor: ew-resize;
+      border-radius: 999px;
+    }
+
+    .resize-top {
+      left: 10px;
+      right: 10px;
+      top: -3px;
+      height: 8px;
+      cursor: ns-resize;
+      border-radius: 999px;
+    }
+
+    .resize-corner {
+      left: -4px;
+      top: -4px;
+      width: 18px;
+      height: 18px;
+      cursor: nwse-resize;
+      border-radius: 7px;
+    }
+
+    .llm-popover:hover .resize-handle {
+      opacity: 1;
+      background: rgba(37, 99, 235, .18);
+    }
+
+    .resize-handle:hover {
+      background: rgba(37, 99, 235, .34) !important;
     }
 
     .llm-head {
@@ -285,6 +374,59 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
 
     .chat-bubble.pending {
       color: #64748b;
+    }
+
+    .thinking-toggle {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 7px;
+      padding: 7px 8px;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
+      color: #1d4ed8;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 800;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .thinking-toggle.open {
+      border-color: #93c5fd;
+      background: #eff6ff;
+    }
+
+    .thinking-pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #2563eb;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, .12);
+    }
+
+    .thinking-count {
+      color: #64748b;
+      font-size: 9px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .thinking-content {
+      max-height: 160px;
+      overflow-y: auto;
+      margin: 0 0 7px;
+      padding: 8px 9px;
+      border: 1px solid #dbeafe;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 10px;
+      line-height: 1.55;
+      white-space: pre-wrap;
     }
 
     .plain-body {
@@ -516,10 +658,14 @@ const DEFAULT_QUICK_PROMPTS: LlmQuickPrompt[] = [
         width: calc(100vw - 24px);
         height: min(620px, calc(100vh - 82px));
       }
+
+      .resize-handle {
+        display: none;
+      }
     }
   `]
 })
-export class LlmFloatingAssistantComponent {
+export class LlmFloatingAssistantComponent implements OnDestroy {
   @Input() title = 'AI 学习助手';
   @Input() systemPrompt = DEFAULT_LLM_SYSTEM_PROMPT;
   @Input() contextProvider?: () => LlmChatContext;
@@ -532,9 +678,21 @@ export class LlmFloatingAssistantComponent {
   error = '';
   contextSummary = '';
   messages: UiChatMessage[] = [];
+  assistantWidth = 460;
+  assistantHeight = 620;
+
+  private readonly minAssistantWidth = 340;
+  private readonly minAssistantHeight = 420;
+  private resizeState: ResizeState | null = null;
+  private previousUserSelect = '';
+  private previousCursor = '';
 
   /** 注入 LLM 请求服务，悬浮助手通过它把当前实验问题发送给后端大模型代理。 */
   constructor(private readonly llm: LlmChatService) {}
+
+  ngOnDestroy(): void {
+    this.stopResize();
+  }
 
   /** 打开或收起助手面板；如果启用了上下文，会在打开时同步当前网络结构和推理结果。 */
   toggle(): void {
@@ -562,9 +720,65 @@ export class LlmFloatingAssistantComponent {
   }
 
   /** 把预设问题写入输入框并立即提问，用于快速解释卷积、池化、softmax 等常见概念。 */
-  askPreset(question: string): void {
+  askPreset(question: string, useContext = this.includeContext): void {
+    this.open = true;
+    this.includeContext = useContext;
+    if (this.includeContext) {
+      this.refreshContext();
+    }
     this.draft = question;
     void this.send();
+  }
+
+  /** 从浮窗左边、上边或左上角拖拽改变尺寸。 */
+  startResize(event: PointerEvent, direction: ResizeDirection): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.resizeState = {
+      direction,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: this.assistantWidth,
+      startHeight: this.assistantHeight
+    };
+    this.previousUserSelect = document.body.style.userSelect;
+    this.previousCursor = document.body.style.cursor;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = direction === 'left' ? 'ew-resize' : direction === 'top' ? 'ns-resize' : 'nwse-resize';
+    window.addEventListener('pointermove', this.onResizeMove);
+    window.addEventListener('pointerup', this.stopResize);
+    window.addEventListener('pointercancel', this.stopResize);
+  }
+
+  private readonly onResizeMove = (event: PointerEvent): void => {
+    if (!this.resizeState) return;
+    const state = this.resizeState;
+    const maxWidth = Math.max(this.minAssistantWidth, window.innerWidth - 28);
+    const maxHeight = Math.max(this.minAssistantHeight, window.innerHeight - 92);
+
+    if (state.direction === 'left' || state.direction === 'top-left') {
+      const nextWidth = state.startWidth + state.startX - event.clientX;
+      this.assistantWidth = this.clamp(nextWidth, this.minAssistantWidth, maxWidth);
+    }
+
+    if (state.direction === 'top' || state.direction === 'top-left') {
+      const nextHeight = state.startHeight + state.startY - event.clientY;
+      this.assistantHeight = this.clamp(nextHeight, this.minAssistantHeight, maxHeight);
+    }
+  };
+
+  private readonly stopResize = (): void => {
+    if (!this.resizeState) return;
+    this.resizeState = null;
+    document.body.style.userSelect = this.previousUserSelect;
+    document.body.style.cursor = this.previousCursor;
+    window.removeEventListener('pointermove', this.onResizeMove);
+    window.removeEventListener('pointerup', this.stopResize);
+    window.removeEventListener('pointercancel', this.stopResize);
+  };
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, Math.round(value)));
   }
 
   /** 发送用户问题并流式接收模型回答，可附带当前神经网络结构、层输出和可视化图片作为上下文。 */
@@ -587,6 +801,7 @@ export class LlmFloatingAssistantComponent {
     try {
       const apiMessages = this.toApiMessages(question, context);
       let assistantText = '';
+      let reasoningText = '';
       this.messages = [...this.messages, { role: 'assistant', text: '' }];
       const response = await this.llm.streamChat(
         {
@@ -595,24 +810,71 @@ export class LlmFloatingAssistantComponent {
         },
         delta => {
           assistantText += delta;
-          this.messages = [
-            ...this.messages.slice(0, -1),
-            { role: 'assistant', text: assistantText }
-          ];
+          this.updateStreamingAssistant(assistantText, reasoningText);
+        },
+        delta => {
+          reasoningText += delta;
+          this.updateStreamingAssistant(assistantText, reasoningText);
         }
       );
 
-      if (!assistantText) {
-        this.messages = [
-          ...this.messages.slice(0, -1),
-          { role: 'assistant', text: response.content || '模型没有返回内容。' }
-        ];
+      if (!assistantText && response.content) {
+        assistantText = response.content;
       }
+      if (!reasoningText && response.reasoningContent) {
+        reasoningText = response.reasoningContent;
+      }
+      this.updateStreamingAssistant(assistantText || '模型没有返回内容。', reasoningText);
     } catch (err) {
       this.error = err instanceof Error ? err.message : '大模型请求失败。';
     } finally {
       this.busy = false;
     }
+  }
+
+  /** 展开或收起模型推理内容，默认不把思考过程直接混在回答正文里。 */
+  toggleThinking(message: UiChatMessage): void {
+    message.thinkingOpen = !message.thinkingOpen;
+    this.messages = [...this.messages];
+  }
+
+  /** 更新最后一条助手消息，同时把 reasoning_content 或 <think> 标签内容放进折叠区。 */
+  private updateStreamingAssistant(answerText: string, reasoningText: string): void {
+    const split = this.extractThinking(answerText);
+    const combinedReasoning = [reasoningText, split.reasoning]
+      .map(part => part.trim())
+      .filter(Boolean)
+      .join('\n\n');
+    const previous = this.messages[this.messages.length - 1];
+    this.messages = [
+      ...this.messages.slice(0, -1),
+      {
+        role: 'assistant',
+        text: split.answer.trim(),
+        reasoningText: combinedReasoning,
+        thinkingOpen: previous?.thinkingOpen ?? false
+      }
+    ];
+  }
+
+  /** 兼容少数模型把思考内容放入 <think> 标签的情况。 */
+  private extractThinking(text: string): { answer: string; reasoning: string } {
+    const reasoningParts: string[] = [];
+    let answer = text.replace(/<think>([\s\S]*?)<\/think>/gi, (_, reasoning: string) => {
+      reasoningParts.push(reasoning.trim());
+      return '';
+    });
+
+    const openThinkIndex = answer.toLowerCase().indexOf('<think>');
+    if (openThinkIndex >= 0) {
+      reasoningParts.push(answer.slice(openThinkIndex + '<think>'.length).trim());
+      answer = answer.slice(0, openThinkIndex);
+    }
+
+    return {
+      answer: answer.replace(/<\/think>/gi, '').trim(),
+      reasoning: reasoningParts.filter(Boolean).join('\n\n')
+    };
   }
 
   /** 将模型返回的 Markdown 转成受控 HTML，保留代码块以便展示公式、张量形状或示例代码。 */

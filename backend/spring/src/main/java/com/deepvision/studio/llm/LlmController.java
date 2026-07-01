@@ -49,7 +49,7 @@ public class LlmController {
     SseEmitter emitter = new SseEmitter(180_000L);
     streamExecutor.submit(() -> {
       try {
-        ChatResponse response = llmChatClient.stream(request, delta -> sendEvent(emitter, "delta", Map.of("text", delta)));
+        ChatResponse response = llmChatClient.stream(request, (event, delta) -> sendEvent(emitter, event, Map.of("text", delta)));
         sendEvent(emitter, "done", response);
         emitter.complete();
       } catch (RuntimeException ex) {

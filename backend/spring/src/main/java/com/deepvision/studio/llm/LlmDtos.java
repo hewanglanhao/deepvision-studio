@@ -51,6 +51,7 @@ public final class LlmDtos {
   public record ChatResponse(
       String content,
       String model,
-      String id
+      String id,
+      String reasoningContent
   ) {}
 }

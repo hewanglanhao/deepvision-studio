@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
@@ -78,12 +78,13 @@ public class LlmChatClient {
     }
   }
 
-  /** 调用上游流式接口，把模型生成的增量文本逐段回调给 SSE 层，前端可实时显示解释过程。 */
-  public ChatResponse stream(ChatRequest request, Consumer<String> onDelta) {
+  /** 调用上游流式接口，把回答和推理增量分别回调给 SSE 层，前端可分区显示。 */
+  public ChatResponse stream(ChatRequest request, BiConsumer<String, String> onDelta) {
     if (arkApiKey.isBlank()) {
       throw new IllegalStateException("ARK_API_KEY is not configured.");
     }
     StringBuilder content = new StringBuilder();
+    StringBuilder reasoningContent = new StringBuilder();
     try {
       restTemplate.execute(
           arkBaseUrl + "/chat/completions",
@@ -109,17 +110,26 @@ public class LlmChatClient {
                 if ("[DONE]".equals(data)) {
                   break;
                 }
-                String delta = streamDelta(data);
-                if (!delta.isBlank()) {
-                  content.append(delta);
-                  onDelta.accept(delta);
+                StreamDelta delta = streamDelta(data);
+                if (!delta.text().isBlank()) {
+                  if ("reasoning".equals(delta.kind())) {
+                    reasoningContent.append(delta.text());
+                  } else {
+                    content.append(delta.text());
+                  }
+                  onDelta.accept(delta.kind(), delta.text());
                 }
               }
             }
             return null;
           }
       );
-      return new ChatResponse(content.toString(), blankToDefault(request.model(), defaultModel), "");
+      return new ChatResponse(
+          content.toString(),
+          blankToDefault(request.model(), defaultModel),
+          "",
+          reasoningContent.toString()
+      );
     } catch (ResourceAccessException ex) {
       throw new IllegalStateException("LLM provider is unavailable.");
     }
@@ -170,50 +180,60 @@ public class LlmChatClient {
     return trimmed.substring(5).trim();
   }
 
-  /** 解析上游流式 JSON，优先取可展示回答，也兼容推理模型返回的 reasoning_content 字段。 */
-  private String streamDelta(String data) {
+  /** 解析上游流式 JSON，把可展示回答和推理模型的 reasoning_content 分开。 */
+  private StreamDelta streamDelta(String data) {
     try {
       JsonNode root = objectMapper.readTree(data);
       JsonNode choices = root.path("choices");
       if (!choices.isArray() || choices.isEmpty()) {
-        return "";
+        return StreamDelta.empty();
       }
       JsonNode choice = choices.get(0);
       JsonNode delta = choice.path("delta");
       JsonNode content = delta.path("content");
       if (content.isTextual()) {
-        return content.asText();
+        return new StreamDelta("delta", content.asText());
       }
       JsonNode reasoning = delta.path("reasoning_content");
       if (reasoning.isTextual()) {
-        return reasoning.asText();
+        return new StreamDelta("reasoning", reasoning.asText());
       }
       JsonNode messageContent = choice.path("message").path("content");
-      return messageContent.isTextual() ? messageContent.asText() : "";
+      return messageContent.isTextual() ? new StreamDelta("delta", messageContent.asText()) : StreamDelta.empty();
     } catch (JsonProcessingException ex) {
-      return "";
+      return StreamDelta.empty();
     }
   }
 
   /** 从非流式 Ark 响应中提取首个候选答案，并包装成前端统一使用的 ChatResponse。 */
   private ChatResponse parseArkResponse(Map<String, Object> response) {
     if (response == null) {
-      return new ChatResponse("", defaultModel, "");
+      return new ChatResponse("", defaultModel, "", "");
     }
     Object choicesObj = response.get("choices");
     String content = "";
+    String reasoningContent = "";
     if (choicesObj instanceof List<?> choices && !choices.isEmpty() && choices.get(0) instanceof Map<?, ?> choice) {
       Object messageObj = choice.get("message");
       if (messageObj instanceof Map<?, ?> message) {
         Object contentObj = message.get("content");
         content = contentObj == null ? "" : String.valueOf(contentObj);
+        Object reasoningObj = message.get("reasoning_content");
+        reasoningContent = reasoningObj == null ? "" : String.valueOf(reasoningObj);
       }
     }
     return new ChatResponse(
         content,
         String.valueOf(response.getOrDefault("model", defaultModel)),
-        String.valueOf(response.getOrDefault("id", ""))
+        String.valueOf(response.getOrDefault("id", "")),
+        reasoningContent
     );
+  }
+
+  private record StreamDelta(String kind, String text) {
+    private static StreamDelta empty() {
+      return new StreamDelta("delta", "");
+    }
   }
 
   /** 将空配置值替换为默认值，保证模型名和 reasoning_effort 不会传空到上游。 */
