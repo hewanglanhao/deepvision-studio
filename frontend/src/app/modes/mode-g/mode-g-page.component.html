@@ -1,0 +1,177 @@
+<div class="mode-g-shell">
+  <app-platform-topbar
+    modeLabel="Mode G"
+    modeTitle="个性化出题作题"
+    [user]="user"
+    [statusPills]="statusPills"
+    (logoutRequested)="logout()"
+  >
+    <div topbar-actions>
+      <a routerLink="/">首页</a>
+      <button type="button" (click)="refreshQuestions()" [disabled]="loading || !user">刷新题目</button>
+    </div>
+  </app-platform-topbar>
+
+  <main class="mode-g-main">
+    @if (!user) {
+      <section class="login-panel">
+        <div class="panel-title" data-icon="G">个性化练习需要登录</div>
+        <p>登录后会按账号维护学习画像、作答记录和推荐策略。</p>
+        <div class="login-actions">
+          <a routerLink="/login">登录</a>
+          <a routerLink="/register">注册</a>
+        </div>
+      </section>
+    } @else {
+      <aside class="left-column">
+        <section class="work-panel">
+          <div class="panel-title" data-icon="◎">出题策略</div>
+          <div class="strategy-list">
+            @for (strategy of strategies; track strategy.mode) {
+              <button
+                type="button"
+                class="strategy-button"
+                [class.active]="selectedMode === strategy.mode"
+                (click)="selectMode(strategy.mode)"
+              >
+                <span class="strategy-icon">{{ strategy.icon }}</span>
+                <span>
+                  <strong>{{ strategy.title }}</strong>
+                  <em>{{ strategy.short }}</em>
+                </span>
+              </button>
+            }
+          </div>
+
+          <label class="limit-control">
+            <span>题目数量</span>
+            <input type="number" min="3" max="30" step="1" [(ngModel)]="questionLimit" />
+          </label>
+          <button type="button" class="primary-action" (click)="refreshQuestions()" [disabled]="loading">
+            {{ loading ? '生成中' : '按策略生成' }}
+          </button>
+        </section>
+
+        <section class="work-panel profile-panel">
+          <div class="panel-title" data-icon="◇">用户画像</div>
+          @if (profile; as p) {
+            <div class="profile-summary">
+              <div>
+                <span>累计作答</span>
+                <strong>{{ p.answeredCount }}</strong>
+              </div>
+              <div>
+                <span>正确</span>
+                <strong>{{ p.correctCount }}</strong>
+              </div>
+              <div>
+                <span>连续正确</span>
+                <strong>{{ p.currentStreak }}</strong>
+              </div>
+            </div>
+          }
+
+          <div class="topic-bars">
+            @for (topic of topicViews; track topic.key) {
+              <div class="topic-row">
+                <div class="topic-head">
+                  <span>{{ topic.label }}</span>
+                  <strong>{{ topic.score }}</strong>
+                </div>
+                <div class="topic-track">
+                  <i [style.width.%]="topic.score"></i>
+                </div>
+                <em>{{ topic.level }}</em>
+              </div>
+            }
+          </div>
+        </section>
+      </aside>
+
+      <section class="question-column">
+        <div class="work-panel strategy-summary">
+          <div>
+            <div class="panel-title" data-icon="▣">{{ recommendation?.strategyName || '推荐策略' }}</div>
+            <p>{{ recommendation?.strategyDescription || '正在根据用户画像生成题目。' }}</p>
+          </div>
+          <div class="progress-pill">{{ progressText }}</div>
+        </div>
+
+        @if (error) {
+          <div class="error-box">{{ error }}</div>
+        }
+
+        @if (currentQuestion; as question) {
+          <article class="question-card">
+            <header class="question-head">
+              <div>
+                <span class="topic-chip">{{ topicLabels[question.topic] || question.topic }}</span>
+                <span class="difficulty-chip">难度 {{ question.difficulty }} · {{ difficultyLabel(question.difficulty) }}</span>
+              </div>
+              <strong>{{ question.code }}</strong>
+            </header>
+
+            <h1>{{ question.prompt }}</h1>
+            <p class="reason">{{ question.recommendationReason }}</p>
+
+            <div class="option-list">
+              @for (option of question.options; track option; let i = $index) {
+                <button
+                  type="button"
+                  class="option-button"
+                  [ngClass]="optionClass(i)"
+                  (click)="chooseOption(i)"
+                  [disabled]="!!answerResult"
+                >
+                  <span>{{ ['A', 'B', 'C', 'D', 'E'][i] }}</span>
+                  <strong>{{ option }}</strong>
+                </button>
+              }
+            </div>
+
+            @if (answerResult; as result) {
+              <div class="answer-panel" [class.ok]="result.correct" [class.bad]="!result.correct">
+                <div>
+                  <strong>{{ result.correct ? '回答正确' : '回答错误' }}</strong>
+                  <span>正确答案：{{ ['A', 'B', 'C', 'D', 'E'][result.answerIndex] }}</span>
+                </div>
+                <p>{{ result.explanation }}</p>
+              </div>
+            }
+
+            <footer class="question-actions">
+              <button type="button" (click)="previousQuestion()" [disabled]="currentIndex === 0">上一题</button>
+              <button type="button" class="submit-button" (click)="submitAnswer()" [disabled]="selectedOption === null || !!answerResult || answering">
+                {{ answering ? '提交中' : '提交答案' }}
+              </button>
+              <button type="button" (click)="nextQuestion()" [disabled]="currentIndex >= questions.length - 1">下一题</button>
+            </footer>
+          </article>
+        } @else {
+          <section class="empty-panel">
+            <div class="panel-title" data-icon="…">暂无题目</div>
+            <button type="button" class="primary-action" (click)="refreshQuestions()" [disabled]="loading">生成题目</button>
+          </section>
+        }
+
+        <section class="work-panel recent-panel">
+          <div class="panel-title" data-icon="↺">最近作答</div>
+          @if (profile?.recentAttempts?.length) {
+            <div class="attempt-list">
+              @for (attempt of profile?.recentAttempts; track attempt.answeredAt + attempt.questionCode) {
+                <div class="attempt-row" [class.correct]="attempt.correct">
+                  <span>{{ attempt.correct ? '✓' : '×' }}</span>
+                  <strong>{{ topicLabels[attempt.topic] || attempt.topic }}</strong>
+                  <em>难度 {{ attempt.difficulty }}</em>
+                  <time>{{ attempt.answeredAt | date:'MM-dd HH:mm' }}</time>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="muted">完成第一题后，这里会出现你的练习轨迹。</p>
+          }
+        </section>
+      </section>
+    }
+  </main>
+</div>

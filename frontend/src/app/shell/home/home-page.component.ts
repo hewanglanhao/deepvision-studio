@@ -83,10 +83,19 @@ export class HomePageComponent {
       accent: 'cyan',
       highlights: ['时间展开', '隐状态', 'BPTT'],
     },
+    {
+      id: 'G',
+      title: '模式 G',
+      label: '个性化出题作题',
+      description: '根据用户画像推荐 AI 与深度学习选择题，支持补弱练习、间隔复习和套题组卷三种出题模式。',
+      route: '/mode-g',
+      accent: 'green',
+      highlights: ['用户画像', '智能推荐', '组卷练习'],
+    },
   ];
 
   readonly metrics = [
-    { label: '学习模式', value: '5' },
+    { label: '学习模式', value: '7' },
     { label: '可视化主线', value: 'Forward / Train / CNN Explain / Transformer / Museum' },
     { label: '高级能力', value: 'Web3D + AI + WebSocket + First-person Museum' },
   ];
