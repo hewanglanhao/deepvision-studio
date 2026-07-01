@@ -468,6 +468,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 接收训练 worker 的反向传播事件，并为每层维护最近的梯度/更新曲线。
   private handleBackpropSnapshot(snapshot: TrainingBackpropSnapshot | null): void {
     if (!snapshot) {
       this.latestBackprop = null;
@@ -580,6 +581,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (!ds) return 0;
     return Math.round((ds.trainRatio + ds.valRatio + ds.testRatio) * 1000) / 10;
   }
+  // 校验训练集、验证集、测试集划分比例是否有效。
   get datasetSplitError(): string {
     const ds = this.trainingDatasetDetail;
     if (!ds) return '请先选择或导入一个训练数据集。';
@@ -592,6 +594,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   get hasTrainingModelError(): boolean {
     return this.trainingModelIssues.some(issue => issue.level === 'error');
   }
+  // 从数据集类型、输入输出层、损失函数和层连接角度检查当前网络是否可训练。
   get trainingModelIssues(): Array<{ level: 'ok' | 'warn' | 'error'; message: string }> {
     const issues: Array<{ level: 'ok' | 'warn' | 'error'; message: string }> = [];
     const ds = this.trainingDatasetDetail;
@@ -1026,6 +1029,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (status === 'exploding') return '梯度可能爆炸';
     return '梯度稳定';
   }
+  // 根据最新梯度范数、更新范数和验证指标生成反向传播诊断提示。
   get backpropDiagnosis(): Array<{ level: 'ok' | 'warn' | 'error'; text: string }> {
     const bp = this.latestBackprop;
     if (!bp) return [{ level: 'warn', text: '等待后端训练产生真实反向传播数据。' }];
@@ -1827,6 +1831,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   }
 
   // ── Training ──────────────────────────────────────────
+  // 加载 B 端训练数据集列表，并在用户切换后自动选择可见的数据集。
   async loadTrainingDatasets(): Promise<void> {
     const requestSeq = ++this.trainingDatasetLoadSeq;
     this.trainingDatasetLoading = true;
@@ -1857,6 +1862,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 选择某个训练数据集，拉取详情后同步模板、checkpoint 和预设任务状态。
   async selectTrainingDataset(id: string): Promise<void> {
     if (id === 'custom-upload') {
       this.useImportedTrainingDataset();
@@ -1888,6 +1894,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (this.authUser) void this.loadTrainingCheckpoints();
   }
 
+  // 仅在前端本地切换训练数据集选项，不触发后端详情加载。
   private selectTrainingDatasetLocal(id: string): void {
     const option = this.builtinTrainingDatasets.find(d => d.id === id);
     if (!option) return;
@@ -1895,6 +1902,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.trainingDatasetDetail = this.buildBuiltinTrainingDatasetDetail(option);
   }
 
+  // 将刚上传成功的数据集设置为当前训练数据集。
   useImportedTrainingDataset(): void {
     if (!this.datasetImportDraft.detail) return;
     this.selectedTrainingDatasetId = this.datasetImportDraft.detail.id;
@@ -1902,6 +1910,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.trainingDatasetError = '';
   }
 
+  // 清除上传数据集草稿，并在必要时切回可用的内置数据集。
   clearImportedTrainingDataset(): void {
     const importedId = this.datasetImportDraft.detail?.id;
     this.resetImportedDatasetDraft();
@@ -1910,6 +1919,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 重置上传数据集表单状态，清空文件、CSV 表头、错误和预览信息。
   private resetImportedDatasetDraft(): void {
     this.datasetImportDraft = {
       status: 'idle',
@@ -1923,6 +1933,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     };
   }
 
+  // 处理用户选择的 CSV、图片或 ZIP 文件，先做前端识别再决定是否直接上传。
   async onTrainingDatasetUpload(e: Event): Promise<void> {
     const input = e.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
@@ -2008,6 +2019,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // CSV 数据集需要用户确认标签列和类别数后再正式上传到后端。
   async confirmCsvDatasetImport(): Promise<void> {
     if (!this.authUser) {
       this.openAuthModal('login');
@@ -2047,6 +2059,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     await this.importTrainingDatasetFiles(files, labelColumn, classCount);
   }
 
+  // 调用数据集 API 上传文件，并把成功导入的数据集插入当前候选列表。
   private async importTrainingDatasetFiles(files: File[], labelColumn?: string, classCount?: number): Promise<void> {
     if (!this.authUser) {
       this.openAuthModal('login');
@@ -2092,6 +2105,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 将新导入或刷新后的数据集写入前端列表，已有 ID 则覆盖更新。
   private upsertTrainingDatasetOption(detail: TrainingDatasetDetail): void {
     const option: TrainingDatasetOption = {
       id: detail.id,
@@ -2111,6 +2125,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       : [option, ...this.builtinTrainingDatasets];
   }
 
+  // 删除用户上传的数据集，并同步移除当前选择、草稿和 checkpoint 缓存。
   async deleteUploadedTrainingDataset(detail: TrainingDatasetDetail): Promise<void> {
     if (detail.source !== 'upload') {
       this.trainingDatasetError = '内置数据集不能删除。';
@@ -2151,6 +2166,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 启动真实后端训练：先做登录、数据集、划分和模型校验，再提交训练请求。
   async startTraining(): Promise<void> {
     this.showSingleInferencePrompt = false;
     if (!this.authUser) {
@@ -2199,6 +2215,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 训练启动后滚动到状态区域，让用户立即看到实时指标。
   private scrollToTrainingStatus(): void {
     window.requestAnimationFrame(() => {
       this.trainingStatusBlock?.nativeElement.scrollIntoView({
@@ -2212,6 +2229,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
   pauseTraining(): void  { void this.trainingSvc.pause(); }
   resumeTraining(): void { void this.trainingSvc.resume(); }
   stopTraining(): void   { void this.trainingSvc.stop(); }
+  // 重置训练运行时，并清空反向传播面板和单样本推理提示状态。
   async resetTraining(): Promise<void> {
     if (this.trainingResetting) return;
     this.showSingleInferencePrompt = false;
@@ -2227,10 +2245,12 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 用户关闭单样本推理提示后，当前会话内不再主动弹出。
   dismissSingleInferencePrompt(): void {
     this.showSingleInferencePrompt = false;
   }
 
+  // 汇总 B 端页面上下文，供 AI 浮窗根据当前训练状态进行有针对性的回答。
   private buildModeBLlmContext(): LlmChatContext {
     const ds = this.trainingDatasetDetail;
     const lines: string[] = [
@@ -2344,6 +2364,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return { text: lines.join('\n'), images: [] };
   }
 
+  // 安全序列化层参数等上下文信息，避免过长 JSON 撑爆 LLM prompt。
   private safeJson(value: unknown): string {
     try {
       const text = JSON.stringify(value);
@@ -2353,6 +2374,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 基于当前训练 jobId 新建或打开训练协作聊天室。
   openCurrentTrainingChat(): void {
     const target = this.trainingSvc.currentBackendJobId.trim();
     if (!target) {
@@ -2364,6 +2386,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.openCollaborationWindow(target, true);
   }
 
+  // 校验用户输入的房间 ID 是否存在，存在才打开已有训练聊天室。
   async openExistingTrainingChat(): Promise<void> {
     const target = this.collaborationJoinId.trim();
     if (!target) {
@@ -2389,6 +2412,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.openCollaborationWindow(target);
   }
 
+  // 加载当前活跃的训练协作房间列表，供用户选择加入。
   async loadCollaborationRooms(): Promise<void> {
     this.collaborationRoomsOpen = true;
     this.collaborationRoomsLoading = true;
@@ -2402,17 +2426,20 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 从房间列表中选择一个协作房间，并填入待加入的 jobId。
   joinListedCollaborationRoom(room: CollaborationRoomSummary): void {
     this.collaborationJoinId = room.jobId;
     this.openCollaborationWindow(room.jobId);
   }
 
+  // 打开独立协作页面，并通过 query 参数传递 jobId 和是否创建房间。
   openCollaborationWindow(jobId = '', createRoom = false): void {
     const query = jobId.trim() ? `?jobId=${encodeURIComponent(jobId.trim())}` : '';
     const create = jobId.trim() && createRoom ? `${query ? '&' : '?'}create=true` : '';
     window.open(`/training/collaboration${query}${create}`, '_blank', 'noopener,noreferrer');
   }
 
+  // 查询当前数据集相关的 checkpoint，用于实验对比和训练完成后的测试入口。
   async loadTrainingCheckpoints(): Promise<void> {
     if (!this.authUser) return;
     try {
@@ -2431,6 +2458,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 使用用户选中的 checkpoint 重新跑测试集，并将结果写回训练运行时。
   async runSelectedCheckpointTest(): Promise<void> {
     const checkpoint = this.selectedCheckpoint;
     if (!checkpoint) return;
@@ -2448,6 +2476,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 切换 B 端预设任务，并应用对应数据集、模板、损失函数和输出形状。
   selectTask(id: string): void {
     this.selectedTaskId = id;
     const task = this.presetTasks.find(t => t.id === id);
@@ -2455,6 +2484,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     void this.applyPresetTask(task);
   }
 
+  // 根据预设任务自动选择模型模板、数据集、训练参数和推荐输出层配置。
   private async applyPresetTask(task: PresetTask): Promise<void> {
     if (task.templateId && this.modelTemplates.some(t => t.id === task.templateId)) {
       this.selectedTemplateId = task.templateId;
@@ -2480,6 +2510,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     this.runForward();
   }
 
+  // 按预设任务修正输出层单元数和激活函数，确保类别数或回归输出匹配。
   private applyTaskOutputShape(task: PresetTask): void {
     const output = this.layers.find(layer => layer.type === 'output');
     if (output?.type !== 'output') return;
@@ -2491,6 +2522,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  // 跳转到 B 端实验对比页，查看历史 checkpoint 与训练曲线。
   runExperiments(): void {
     const task = this.presetTasks.find(t => t.id === this.selectedTaskId) ?? this.presetTasks[0];
     const base = SimEngine.evaluateTask(task, this.layers, this.trainingConfig.optimizer as any, this.trainingConfig.totalEpochs);
@@ -2568,6 +2600,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
       && Math.abs(this.datasetSplitPercent('test') - test) < 0.05;
   }
 
+  // 应用常用数据集划分比例，并同步更新当前数据集详情。
   applyDatasetSplitPreset(train: number, val: number, test: number): void {
     const ds = this.trainingDatasetDetail;
     if (!ds) return;
@@ -2576,6 +2609,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     ds.testRatio = test / 100;
   }
 
+  // 处理用户手动输入的划分百分比，并限制在 0 到 100% 范围内。
   onDatasetSplitInput(kind: 'train' | 'val' | 'test', rawValue: string | number): void {
     const ds = this.trainingDatasetDetail;
     if (!ds) return;
@@ -2586,6 +2620,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     if (kind === 'test') ds.testRatio = ratio;
   }
 
+  // 静态推导训练网络的层形状和结构问题，给启动训练前的校验面板使用。
   private analyzeTrainingNetwork(): { issues: LayerValidationIssue[]; shapeMap: Record<number, string> } {
     const issues: LayerValidationIssue[] = [];
     const shapeMap: Record<number, string> = {};
@@ -2752,6 +2787,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return a.length === b.length && a.every((value, index) => value === b[index]);
   }
 
+  // 根据当前数据集和输入层参数推断训练网络的初始张量形状。
   private trainingInputShape(): TensorShape {
     const ds = this.trainingDatasetDetail;
     if (ds?.kind === 'image') {
@@ -2768,6 +2804,7 @@ export class ModeBPageComponent implements OnInit, OnDestroy {
     return [featureMatch ? Math.max(1, Number(featureMatch[1])) : 1];
   }
 
+  // 数据集切换后同步推荐模板、输入形状和输出层类别数。
   private syncTemplateWithTrainingDataset(): void {
     const ds = this.trainingDatasetDetail;
     if (!ds) return;

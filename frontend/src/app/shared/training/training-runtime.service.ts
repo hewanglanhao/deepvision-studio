@@ -299,11 +299,13 @@ export class TrainingRuntimeService implements OnDestroy {
     return this.backendJobId;
   }
 
+  // 缓存训练配置和网络层，供后续启动训练或本地状态展示使用。
   configure(config: TrainingConfig, layers: NetworkLayer[]): void {
     this.config = { ...config };
     this.layers = layers;
   }
 
+  // 在开始训练前重置运行时状态、历史曲线、日志和已有 WebSocket 连接。
   prepare(config: TrainingConfig, layers: NetworkLayer[]): void {
     this.clearTimer();
     this.closeSocket();
@@ -347,6 +349,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.startMock();
   }
 
+  // 向 Spring 后端提交真实训练请求，并在获得 jobId 后连接训练指标 WebSocket。
   async startBackend(request: BackendTrainingStartRequest): Promise<void> {
     this.clearTimer();
     this.closeSocket();
@@ -404,11 +407,13 @@ export class TrainingRuntimeService implements OnDestroy {
     }
   }
 
+  // 查询当前用户保存过的 checkpoint，可按数据集过滤用于实验对比。
   async listCheckpoints(datasetId?: string): Promise<TrainingCheckpointSummary[]> {
     const query = datasetId ? `?datasetId=${encodeURIComponent(datasetId)}` : '';
     return this.api.request<TrainingCheckpointSummary[]>(`/api/training/checkpoints${query}`);
   }
 
+  // 触发后端用指定 checkpoint 重新跑测试集，并把预测样本预览规范化。
   async testCheckpoint(checkpointId: number, request: Pick<BackendTrainingStartRequest, 'datasetId' | 'layers'>): Promise<TrainingTestResult> {
     const result = await this.api.request<TrainingTestResult>(`/api/training/checkpoints/${encodeURIComponent(String(checkpointId))}/test`, {
       method: 'POST',
@@ -424,6 +429,7 @@ export class TrainingRuntimeService implements OnDestroy {
     return normalized;
   }
 
+  // 获取 checkpoint 可推理的样本列表，供单样本推理页面选择。
   async listInferenceSamples(checkpointId: number, limit = 60): Promise<InferenceSampleListResponse> {
     const result = await this.api.request<InferenceSampleListResponse>(
       `/api/training/checkpoints/${encodeURIComponent(String(checkpointId))}/samples?limit=${encodeURIComponent(String(limit))}`
@@ -434,6 +440,7 @@ export class TrainingRuntimeService implements OnDestroy {
     };
   }
 
+  // 对 checkpoint 中的指定样本执行单样本推理，并返回预测结果与层激活。
   async inferCheckpointSample(checkpointId: number, sampleIndex: number): Promise<SingleInferenceResult> {
     const result = await this.api.request<SingleInferenceResult>(
       `/api/training/checkpoints/${encodeURIComponent(String(checkpointId))}/infer`,
@@ -449,15 +456,18 @@ export class TrainingRuntimeService implements OnDestroy {
     };
   }
 
+  // 连接训练任务拥有者的指标流，用于刷新后继续观察已有训练。
   observeBackendJob(jobId: string): void {
     this.beginBackendObservation(jobId, '/api/training/stream');
   }
 
+  // 连接协作房间的旁观指标流，clientId 用于后端确认房间成员身份。
   observeCollaborationJob(jobId: string, clientId: string): void {
     const query = `clientId=${encodeURIComponent(clientId)}`;
     this.beginBackendObservation(jobId, `/api/training/collaboration/stream?${query}`);
   }
 
+  // 断开后端训练观察流，并清空当前观察任务的本地状态。
   disconnectBackendObservation(): void {
     this.clearTimer();
     this.closeSocket();
@@ -481,6 +491,7 @@ export class TrainingRuntimeService implements OnDestroy {
     });
   }
 
+  // 统一初始化已有训练任务的观察状态，并拼接正确的 WebSocket 查询参数。
   private beginBackendObservation(jobId: string, streamPath: string): void {
     const target = jobId.trim();
     if (!target) return;
@@ -507,6 +518,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.connectWebSocket(`${streamPath}${separator}jobId=${encodeURIComponent(target)}`);
   }
 
+  // 暂停当前训练；有后端 job 时转发到 Spring 控制接口。
   async pause(): Promise<void> {
     if (this.backendJobId) {
       await this.controlBackend('pause', 'Training paused.');
@@ -519,6 +531,7 @@ export class TrainingRuntimeService implements OnDestroy {
     }
   }
 
+  // 恢复当前训练；后端 job 通过控制接口恢复，本地 mock 则重启定时器。
   async resume(): Promise<void> {
     if (this.backendJobId) {
       await this.controlBackend('resume', 'Training resumed.');
@@ -531,6 +544,7 @@ export class TrainingRuntimeService implements OnDestroy {
     }
   }
 
+  // 停止当前训练，关闭后端指标流或清空本地 mock 状态。
   async stop(): Promise<void> {
     if (this.backendJobId) {
       await this.controlBackend('stop', 'Training stopped.');
@@ -559,6 +573,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.log('warn', 'Training stopped and reset.');
   }
 
+  // 重置训练运行时状态；若后端任务仍在运行，先发送停止命令。
   async reset(): Promise<void> {
     if (this.backendJobId) {
       await this.controlBackend('stop', 'Training stopped.');
@@ -573,6 +588,7 @@ export class TrainingRuntimeService implements OnDestroy {
     this.releaseAllPrivateImageUrls();
   }
 
+  // 清除当前用户相关的训练缓存，登录用户切换时防止串用旧任务状态。
   private clearClientSession(): void {
     this.clearTimer();
     this.closeSocket();
@@ -604,6 +620,7 @@ export class TrainingRuntimeService implements OnDestroy {
     });
   }
 
+  // 建立训练指标 WebSocket，并在 URL 上附带 JWT 以通过后端鉴权。
   private connectWebSocket(streamUrl: string): void {
     this.closeSocket();
     const wsUrl = this.normalizeWebSocketUrl(streamUrl);
@@ -629,6 +646,7 @@ export class TrainingRuntimeService implements OnDestroy {
     };
   }
 
+  // 解析后端推送的训练事件，并分发到 metric/backprop/test/control/error 状态流。
   private handleBackendMetric(payload: string): void {
     let message: BackendMetricMessage;
     try {
@@ -722,6 +740,7 @@ export class TrainingRuntimeService implements OnDestroy {
     }
   }
 
+  // 调用后端训练控制接口，将暂停、恢复、停止、重置命令传给 Spring。
   private async controlBackend(action: 'pause' | 'resume' | 'stop' | 'reset', fallback: string): Promise<void> {
     if (!this.backendJobId) return;
     try {
@@ -737,6 +756,7 @@ export class TrainingRuntimeService implements OnDestroy {
     }
   }
 
+  // 主动关闭当前 WebSocket，并解绑回调避免关闭事件重复修改状态。
   private closeSocket(): void {
     if (this.socket) {
       const socket = this.socket;
@@ -746,6 +766,7 @@ export class TrainingRuntimeService implements OnDestroy {
     }
   }
 
+  // 将后端返回的相对路径或 HTTP 地址转换成浏览器可连接的 ws/wss 地址。
   private normalizeWebSocketUrl(streamUrl: string): string {
     if (streamUrl.startsWith('ws://') || streamUrl.startsWith('wss://')) {
       return streamUrl;

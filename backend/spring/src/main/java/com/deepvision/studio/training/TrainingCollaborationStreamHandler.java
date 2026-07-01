@@ -20,6 +20,7 @@ public class TrainingCollaborationStreamHandler extends TextWebSocketHandler {
   }
 
   @Override
+  // 建立协作旁观训练流，要求 clientId 已经加入对应聊天室。
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
     String jobId = TrainingJobService.jobIdFromSession(session);
     if (jobId == null || jobId.isBlank()) {
@@ -39,16 +40,19 @@ public class TrainingCollaborationStreamHandler extends TextWebSocketHandler {
   }
 
   @Override
+  // 协作旁观流只读，客户端文本消息不参与训练控制。
   protected void handleTextMessage(WebSocketSession session, TextMessage message) {
     // Collaboration observers receive a read-only stream.
   }
 
   @Override
+  // 连接关闭时取消该旁观者的训练指标订阅。
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
     jobService.removeSession(session);
   }
 
   @Override
+  // 传输异常时清理旁观者 session。
   public void handleTransportError(WebSocketSession session, Throwable exception) {
     jobService.removeSession(session);
   }

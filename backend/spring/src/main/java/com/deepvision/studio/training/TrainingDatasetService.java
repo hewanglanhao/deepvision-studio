@@ -74,10 +74,12 @@ public class TrainingDatasetService {
     cleanupOrphanUploadedDatasets();
   }
 
+  // 查询未区分用户时的数据集列表，主要兼容旧调用路径。
   public List<TrainingDatasetOption> listDatasets(String source) {
     return listDatasets(source, null);
   }
 
+  // 查询当前用户可见的数据集列表：内置数据集全部可见，上传数据集仅本人可见。
   public List<TrainingDatasetOption> listDatasets(String source, String username) {
     String normalizedSource = source == null ? "" : source.trim();
     String owner = username == null ? "" : username.trim();
@@ -101,23 +103,28 @@ public class TrainingDatasetService {
         .toList();
   }
 
+  // 查询内置数据集列表，供前端默认数据集入口使用。
   public List<TrainingDatasetOption> listBuiltin() {
     return listDatasets("builtin");
   }
 
+  // 获取数据集详情的兼容重载，不做用户可见性过滤。
   public TrainingDatasetDetail getDetail(String datasetId) {
     return getDetail(datasetId, null);
   }
 
+  // 获取当前用户可见的数据集详情，并反序列化预览和告警 JSON。
   public TrainingDatasetDetail getDetail(String datasetId, String username) {
     TrainingDataset row = requireVisibleDataset(datasetId, username);
     return toDetail(row);
   }
 
+  // 判断数据集是否存在，用于训练任务启动前的基础校验。
   public boolean exists(String datasetId) {
     return datasets.existsById(datasetId);
   }
 
+  // 根据数据集 ID 和相对路径定位上传文件，同时校验用户权限和路径边界。
   public Path uploadDatasetFile(String datasetId, String relativePath, String username) {
     TrainingDataset row = requireVisibleDataset(datasetId, username);
     if (!"upload".equals(row.getSource())) {
@@ -136,10 +143,12 @@ public class TrainingDatasetService {
     return target;
   }
 
+  // 删除上传数据集的兼容重载，不区分用户。
   public void deleteUploadedDataset(String datasetId) {
     deleteUploadedDataset(datasetId, null);
   }
 
+  // 删除当前用户上传的数据集，并清理磁盘目录。
   public void deleteUploadedDataset(String datasetId, String username) {
     TrainingDataset row = requireVisibleDataset(datasetId, username);
     if (!"upload".equals(row.getSource())) {
@@ -154,10 +163,12 @@ public class TrainingDatasetService {
     }
   }
 
+  // 上传数据集的兼容重载，不绑定用户。
   public DatasetImportResponse importDataset(MultipartFile[] files, String labelColumn, Integer requestedClassCount) {
     return importDataset(files, labelColumn, requestedClassCount, null);
   }
 
+  // 校验数据集对当前用户可见，防止读取或删除他人上传数据。
   private TrainingDataset requireVisibleDataset(String datasetId, String username) {
     TrainingDataset row = datasets.findById(datasetId)
         .orElseThrow(() -> new IllegalArgumentException("Dataset not found."));
@@ -172,6 +183,7 @@ public class TrainingDatasetService {
     return row;
   }
 
+  // 识别上传文件类型并分派到 CSV、散图或 ZIP 图片集导入流程。
   public DatasetImportResponse importDataset(MultipartFile[] files, String labelColumn, Integer requestedClassCount, String username) {
     String owner = username == null ? "" : username.trim();
     if (owner.isBlank()) {
@@ -240,6 +252,7 @@ public class TrainingDatasetService {
         """.formatted(background, foreground, escapeXml(text));
   }
 
+  // 解析上传 CSV，校验标签列/类别数/缺失值，并生成表格预览和数据质量告警。
   private TrainingDatasetDetail importCsv(MultipartFile file, String labelColumn, Integer requestedClassCount) {
     String datasetId = nextUploadId();
     Path datasetDir = uploadDatasetDir(datasetId);
@@ -362,6 +375,7 @@ public class TrainingDatasetService {
     );
   }
 
+  // 导入用户直接上传的多张图片，按文件名前缀推断类别并生成图片预览。
   private TrainingDatasetDetail importImages(List<MultipartFile> files) {
     if (files.size() > MAX_IMAGE_COUNT) {
       throw new IllegalArgumentException("Image dataset has too many files. Please keep it under " + MAX_IMAGE_COUNT + " images.");
@@ -441,6 +455,7 @@ public class TrainingDatasetService {
     );
   }
 
+  // 导入 ZIP 图片分类数据集，要求 ZIP 内使用类别文件夹组织图片。
   private TrainingDatasetDetail importImageZip(MultipartFile file) {
     String datasetId = nextUploadId();
     Path imageRoot = uploadDatasetDir(datasetId).resolve("images").normalize();
@@ -542,6 +557,7 @@ public class TrainingDatasetService {
     );
   }
 
+  // 初始化内置训练数据集元信息，应用启动时写入或补齐数据库记录。
   private void registerBuiltinDatasets() {
     saveBuiltinIfMissing(builtinImage(
         "mnist-1000",
@@ -637,10 +653,12 @@ public class TrainingDatasetService {
     ));
   }
 
+  // 如果内置数据集记录不存在，则保存到 H2，避免重复覆盖已有元信息。
   private void saveBuiltinIfMissing(TrainingDatasetDetail detail) {
     datasets.save(toEntity(detail));
   }
 
+  // 清理磁盘上已无数据库记录的上传数据集目录。
   private void cleanupOrphanUploadedDatasets() {
     for (TrainingDataset row : datasets.findBySourceOrderByNameAsc("upload")) {
       String owner = row.getOwnerUsername() == null ? "" : row.getOwnerUsername().trim();
@@ -656,10 +674,12 @@ public class TrainingDatasetService {
     }
   }
 
+  // 将数据集详情转换为数据库实体的兼容重载。
   private TrainingDataset toEntity(TrainingDatasetDetail detail) {
     return toEntity(detail, null);
   }
 
+  // 将数据集详情转换为数据库实体，并写入上传数据集所有者。
   private TrainingDataset toEntity(TrainingDatasetDetail detail, String ownerUsername) {
     return new TrainingDataset(
         detail.id(),
@@ -685,6 +705,7 @@ public class TrainingDatasetService {
     );
   }
 
+  // 将数据库实体还原为前端需要的数据集详情 DTO。
   private TrainingDatasetDetail toDetail(TrainingDataset row) {
     int classCount = row.getClassCount();
     if ("upload".equals(row.getSource()) && "table".equals(row.getKind())) {
@@ -727,6 +748,7 @@ public class TrainingDatasetService {
     }
   }
 
+  // 将预览、标签分布和告警等结构化信息序列化为数据库 JSON 字段。
   private String writeJson(Object value) {
     try {
       return objectMapper.writeValueAsString(value == null ? List.of() : value);
@@ -735,6 +757,7 @@ public class TrainingDatasetService {
     }
   }
 
+  // 从数据库 JSON 字段中读取列表类型，解析失败时返回空列表。
   private <T> List<T> readList(String json, Class<T> itemType) {
     if (json == null || json.isBlank() || "null".equals(json)) {
       return List.of();
@@ -749,6 +772,7 @@ public class TrainingDatasetService {
     }
   }
 
+  // 从数据库 JSON 字段中读取可空对象，兼容旧数据或空字段。
   private <T> T readNullable(String json, Class<T> itemType) {
     if (json == null || json.isBlank() || "null".equals(json) || "[]".equals(json)) {
       return null;
@@ -792,6 +816,7 @@ public class TrainingDatasetService {
     );
   }
 
+  // 为存在真实内置图片文件的数据集生成本地图片预览列表。
   private List<ImagePreviewItem> localImagePreviews(String datasetId) {
     Path imagesRoot = datasetsRoot.resolve("builtin").resolve(datasetId).resolve("images").normalize();
     if (!imagesRoot.startsWith(datasetsRoot) || !Files.isDirectory(imagesRoot)) {
@@ -833,6 +858,7 @@ public class TrainingDatasetService {
     return previews;
   }
 
+  // 按类别收集少量图片预览，避免前端一次性展示过多样本。
   private void addImagePreview(Map<String, List<ImagePreviewItem>> previewsByLabel, String label, ImagePreviewItem item) {
     List<ImagePreviewItem> items = previewsByLabel.computeIfAbsent(label, ignored -> new ArrayList<>());
     if (items.size() < PREVIEW_IMAGES_PER_CLASS) {
@@ -840,6 +866,7 @@ public class TrainingDatasetService {
     }
   }
 
+  // 将按类别分组的图片预览压平成前端统一消费的列表。
   private List<ImagePreviewItem> flattenPreviewGroups(Map<String, List<ImagePreviewItem>> previewsByLabel) {
     return previewsByLabel.values().stream()
         .flatMap(List::stream)
@@ -858,6 +885,7 @@ public class TrainingDatasetService {
     return filename.toLowerCase(Locale.ROOT).contains("_lite_");
   }
 
+  // 过滤 ZIP 中的目录项、系统隐藏文件和 macOS 资源文件。
   private boolean isIgnoredZipEntry(String entryName) {
     String normalized = entryName.replace('\\', '/');
     if (normalized.startsWith("__MACOSX/") || normalized.contains("/__MACOSX/")) {
@@ -871,6 +899,7 @@ public class TrainingDatasetService {
     return false;
   }
 
+  // 生成二维点分类内置数据集的散点预览。
   private List<PointPreviewItem> makePointPreview() {
     List<PointPreviewItem> points = new ArrayList<>();
     for (int i = 0; i < 36; i += 1) {
@@ -884,6 +913,7 @@ public class TrainingDatasetService {
     return points;
   }
 
+  // 读取或生成 Iris 数据集的表格预览。
   private TablePreview irisTablePreview() {
     Path path = datasetsRoot.resolve("builtin").resolve("iris").resolve("iris.csv").normalize();
     try {
@@ -928,6 +958,7 @@ public class TrainingDatasetService {
     );
   }
 
+  // 为类别均匀的内置数据集生成标签分布。
   private List<LabelDistributionItem> evenDistribution(List<String> labels, int sampleCount) {
     Map<String, Integer> counts = new LinkedHashMap<>();
     int base = sampleCount / Math.max(1, labels.size());
@@ -938,6 +969,7 @@ public class TrainingDatasetService {
     return mapToDistribution(counts);
   }
 
+  // 将类别计数 Map 转换为前端柱状图需要的分布 DTO。
   private List<LabelDistributionItem> mapToDistribution(Map<String, Integer> counts) {
     List<LabelDistributionItem> result = new ArrayList<>();
     int i = 0;
@@ -948,6 +980,7 @@ public class TrainingDatasetService {
     return result;
   }
 
+  // 根据各类别样本数差异生成类别不平衡告警。
   private List<String> imbalanceWarnings(Map<String, Integer> counts) {
     if (counts.size() < 2) {
       return List.of();
@@ -960,6 +993,7 @@ public class TrainingDatasetService {
     return List.of();
   }
 
+  // 估算 CSV 经数值列和类别列编码后的特征维度。
   private int encodedCsvFeatureCount(List<String> headers, List<List<String>> rows, int labelIndex) {
     int count = 0;
     for (int i = 0; i < headers.size(); i += 1) {
@@ -995,12 +1029,14 @@ public class TrainingDatasetService {
         || normalized.endsWith("id");
   }
 
+  // 根据文件名和 content-type 判断是否为 CSV 上传。
   private boolean isCsvFile(MultipartFile file) {
     String name = safeLowerName(file);
     String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
     return name.endsWith(".csv") || "text/csv".equals(type) || "application/vnd.ms-excel".equals(type);
   }
 
+  // 根据文件名和 content-type 判断是否为 ZIP 图片数据集。
   private boolean isZipFile(MultipartFile file) {
     String name = safeLowerName(file);
     String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
@@ -1009,6 +1045,7 @@ public class TrainingDatasetService {
         || "application/x-zip-compressed".equals(type);
   }
 
+  // 根据文件扩展名和 content-type 判断是否为图片文件。
   private boolean isImageFile(MultipartFile file) {
     String name = safeLowerName(file);
     String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
@@ -1026,6 +1063,7 @@ public class TrainingDatasetService {
     }
   }
 
+  // 校验图片分类数据至少包含两个类别，且每类样本数达到最低要求。
   private void validateImageLabels(Map<String, Integer> labelCounts) {
     List<String> labels = labelCounts.keySet().stream().filter(label -> !"未标注".equals(label)).toList();
     if (labels.size() < MIN_CLASS_COUNT) {
@@ -1039,12 +1077,14 @@ public class TrainingDatasetService {
     }
   }
 
+  // 计算上传数据集的磁盘目录，并确保路径不逃逸 datasets 根目录。
   private Path uploadDatasetDir(String datasetId) {
     Path dir = datasetsRoot.resolve("upload").resolve(datasetId).normalize();
     ensureUnder(datasetsRoot, dir);
     return dir;
   }
 
+  // 生成前端访问上传数据集私有文件的后端 URL。
   private String uploadDatasetFileUrl(String datasetId, String relativePath) {
     String encodedPath = java.util.Arrays.stream(relativePath.replace('\\', '/').split("/"))
         .map(part -> URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"))
@@ -1052,12 +1092,14 @@ public class TrainingDatasetService {
     return "/api/training/datasets/" + URLEncoder.encode(datasetId, StandardCharsets.UTF_8).replace("+", "%20") + "/files/" + encodedPath;
   }
 
+  // 防路径穿越：确保目标路径规范化后仍位于指定根目录下。
   private void ensureUnder(Path root, Path target) {
     if (!target.normalize().startsWith(root.normalize())) {
       throw new IllegalArgumentException("Invalid dataset path.");
     }
   }
 
+  // 递归删除上传数据集目录，删除前调用方已完成路径边界校验。
   private void deleteDirectoryIfExists(Path directory) throws IOException {
     Path uploadRoot = datasetsRoot.resolve("upload").normalize();
     ensureUnder(uploadRoot, directory);
@@ -1100,6 +1142,7 @@ public class TrainingDatasetService {
     return cells;
   }
 
+  // 在 CSV 表头中解析用户选择的标签列，支持大小写和符号归一化匹配。
   private int resolveRequiredLabelColumn(List<String> headers, String labelColumn) {
     if (labelColumn == null || labelColumn.isBlank()) {
       throw new IllegalArgumentException("Please choose a CSV label column before importing.");
@@ -1119,6 +1162,7 @@ public class TrainingDatasetService {
     throw new IllegalArgumentException("Selected CSV label column does not exist: " + requested);
   }
 
+  // 校验用户输入的类别数，确保监督分类任务输出维度可确定。
   private int resolveRequiredClassCount(Integer classCount) {
     if (classCount == null) {
       throw new IllegalArgumentException("Please enter CSV class count before importing.");
@@ -1133,6 +1177,7 @@ public class TrainingDatasetService {
     return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
   }
 
+  // 从图片文件名中提取类别前缀，例如 cat_001.jpg -> cat。
   private String labelFromImageName(String originalName) {
     if (originalName == null || originalName.isBlank()) {
       return "未标注";
@@ -1164,6 +1209,7 @@ public class TrainingDatasetService {
     return result;
   }
 
+  // 读取上传图片的宽高，用于校验图片合法性和生成输入形状提示。
   private ImageInfo readImageInfo(MultipartFile file) {
     try (InputStream input = file.getInputStream()) {
       BufferedImage image = ImageIO.read(input);
@@ -1173,6 +1219,7 @@ public class TrainingDatasetService {
     }
   }
 
+  // 读取 ZIP 内图片字节的宽高，用于校验压缩包中的图片合法性。
   private ImageInfo readImageInfo(byte[] bytes) {
     try (InputStream input = new ByteArrayInputStream(bytes)) {
       BufferedImage image = ImageIO.read(input);
@@ -1182,15 +1229,18 @@ public class TrainingDatasetService {
     }
   }
 
+  // 生成上传数据集 ID，包含时间戳和随机后缀以降低冲突概率。
   private String nextUploadId() {
     return "upload-" + LocalDateTime.now().format(UPLOAD_ID_TIME) + "-" + UUID.randomUUID().toString().substring(0, 8);
   }
 
+  // 清理文件名中的危险字符，避免写入非法路径。
   private String sanitizeFilename(String filename) {
     String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
     return encoded.replace("%", "_");
   }
 
+  // 清理路径片段，主要用于类别目录名。
   private String sanitizePathSegment(String value) {
     String cleaned = value == null || value.isBlank() ? "unknown" : value.trim();
     cleaned = cleaned.replace('\\', '_').replace('/', '_').replace("..", "_");

@@ -94,6 +94,7 @@ public class TrainingJobService {
     this.workerScript = Path.of(workerScript).toAbsolutePath().normalize();
   }
 
+  // 创建训练任务、校验数据集和划分比例，并启动 Python/PyTorch worker。
   public TrainingStartResponse start(StartTrainingRequest request, String username) {
     requireUser(username);
     TrainingDatasetDetail dataset = datasetService.getDetail(request.datasetId(), username);
@@ -111,7 +112,7 @@ public class TrainingJobService {
     String jobId = nextJobId();
     TrainingJob job = new TrainingJob(jobId, request, username, modelSignature(request), totalEpochs, totalBatches);
     jobs.put(jobId, job);
-    startPythonWorker(job);
+    startPythonWorker(job);// 启动 Python worker 后，worker 会在 stdout 输出 metric/backprop/test/control/error 事件，服务端会解析并广播给前端。
     return new TrainingStartResponse(
         jobId,
         job.status(),
@@ -121,10 +122,12 @@ public class TrainingJobService {
     );
   }
 
+  // 按 jobId 查询训练状态；该重载主要供内部或协作房间校验任务存在性使用。
   public TrainingStatusResponse status(String jobId) {
     return getJob(jobId).toStatus();
   }
 
+  // 查询当前用户拥有的训练任务状态，避免跨用户读取训练信息。
   public TrainingStatusResponse status(String username, String jobId) {
     return requireOwnedJob(username, jobId).toStatus();
   }
@@ -138,6 +141,7 @@ public class TrainingJobService {
     return histogram(requireOwnedJob(username, jobId));
   }
 
+  // 根据最新权重均值和方差生成前端展示用的权重直方图。
   private WeightHistogramResponse histogram(TrainingJob job) {
     TrainingMetricMessage metric = job.latestMetric();
     double mean = metric == null ? 0 : metric.weightMean();
@@ -160,6 +164,7 @@ public class TrainingJobService {
     return pause(requireOwnedJob(username, jobId));
   }
 
+  // 通过 control.json 写入 paused 命令，让 worker 在 batch 边界暂停。
   private TrainingControlResponse pause(TrainingJob job) {
     writeControl(job, "paused");
     job.setStatus("paused");
@@ -175,6 +180,7 @@ public class TrainingJobService {
     return resume(requireOwnedJob(username, jobId));
   }
 
+  // 将 control.json 改回 running，使暂停中的 worker 继续训练。
   private TrainingControlResponse resume(TrainingJob job) {
     writeControl(job, "running");
     if ("paused".equals(job.status())) {
@@ -192,6 +198,7 @@ public class TrainingJobService {
     return stop(requireOwnedJob(username, jobId));
   }
 
+  // 写入 stopped 命令并销毁当前进程，停止训练任务。
   private TrainingControlResponse stop(TrainingJob job) {
     writeControl(job, "stopped");
     job.destroyProcess();
@@ -208,6 +215,7 @@ public class TrainingJobService {
     return reset(requireOwnedJob(username, jobId));
   }
 
+  // 停止当前训练进程并重置内存中的任务指标和历史事件。
   private TrainingControlResponse reset(TrainingJob job) {
     writeControl(job, "stopped");
     job.destroyProcess();
@@ -225,6 +233,7 @@ public class TrainingJobService {
     return save(requireOwnedJob(username, jobId));
   }
 
+  // 在 checkpoint 文件已存在时，将当前训练实验元信息持久化到数据库。
   private TrainingControlResponse save(TrainingJob job) {
     if (job.username() == null || job.username().isBlank()) {
       throw new IllegalArgumentException("Please login before saving checkpoints.");
@@ -236,6 +245,7 @@ public class TrainingJobService {
     return new TrainingControlResponse(job.jobId(), job.status(), "Checkpoint saved: " + checkpoint.getName());
   }
 
+  // 查询当前用户 checkpoint，并可按数据集过滤用于实验对比页。
   public List<TrainingCheckpointSummary> listCheckpoints(String username, String datasetId) {
     requireUser(username);
     List<TrainingCheckpoint> rows = datasetId == null || datasetId.isBlank()
@@ -246,12 +256,14 @@ public class TrainingJobService {
         .toList();
   }
 
+  // 调用 Python worker 加载 checkpoint 并重新跑测试集。
   public CheckpointTestResult testCheckpoint(String username, Long checkpointId, TestCheckpointRequest request) {
     requireUser(username);
     TrainingCheckpoint checkpoint = requireCheckpoint(username, checkpointId);
     return runCheckpointTest(checkpoint);
   }
 
+  // 调用 Python worker 列出 checkpoint 所属数据集的可推理样本。
   public InferenceSampleListResponse listCheckpointSamples(String username, Long checkpointId, int limit) {
     requireUser(username);
     TrainingCheckpoint checkpoint = requireCheckpoint(username, checkpointId);
@@ -270,6 +282,7 @@ public class TrainingJobService {
     }
   }
 
+  // 对指定 checkpoint 和样本执行单样本推理，并返回预测与层激活。
   public SingleInferenceResult inferCheckpointSample(String username, Long checkpointId, SingleInferenceRequest request) {
     requireUser(username);
     TrainingCheckpoint checkpoint = requireCheckpoint(username, checkpointId);
@@ -288,15 +301,18 @@ public class TrainingJobService {
     }
   }
 
+  // 将训练拥有者的 WebSocket session 注册到对应 job，用于接收指标流。
   public void addSession(String username, String jobId, WebSocketSession session) {
     TrainingJob job = requireOwnedJob(username, jobId);
     addSession(job, session);
   }
 
+  // 将协作旁观者的 WebSocket session 注册到训练指标广播集合。
   public void addCollaborationObserverSession(String jobId, WebSocketSession session) {
     addSession(getJob(jobId), session);
   }
 
+  // 注册 session 后补发最近事件，避免刷新或重连后丢失关键训练状态。
   private void addSession(TrainingJob job, WebSocketSession session) {
     sessions.computeIfAbsent(job.jobId(), ignored -> new CopyOnWriteArraySet<>()).add(session);
     List<String> recentEvents = job.recentStreamEvents();
@@ -312,6 +328,7 @@ public class TrainingJobService {
     }
   }
 
+  // 从所有 job 的广播集合中移除已关闭的 WebSocket session。
   public void removeSession(WebSocketSession session) {
     sessions.values().forEach(set -> set.remove(session));
   }
@@ -322,6 +339,7 @@ public class TrainingJobService {
     executor.shutdownNow();
   }
 
+  // 为训练任务写入 request/control 文件，并通过 ProcessBuilder 启动 Python worker。
   private void startPythonWorker(TrainingJob job) {
     try {
       Files.createDirectories(jobRoot);
@@ -348,6 +366,7 @@ public class TrainingJobService {
     }
   }
 
+  // 持续读取 Python worker 的 stdout，每一行 JSON 都会被当作训练事件处理。
   private void readWorkerOutput(TrainingJob job, Process process) {
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
       String line;
@@ -364,6 +383,7 @@ public class TrainingJobService {
     }
   }
 
+  // 解析 worker 输出的 metric/backprop/test/control/error 事件，并更新状态和广播。
   private void handleWorkerLine(TrainingJob job, String line) {
     if (line.isBlank()) {
       return;
@@ -417,6 +437,7 @@ public class TrainingJobService {
     }
   }
 
+  // 等待 worker 进程结束，并根据退出码修正训练任务最终状态。
   private void waitForWorkerExit(TrainingJob job, Process process) {
     try {
       int exitCode = process.waitFor();
@@ -436,6 +457,7 @@ public class TrainingJobService {
     }
   }
 
+  // 将结构化训练指标广播给当前 job 的所有 WebSocket 订阅者。
   private void broadcast(String jobId, TrainingMetricMessage metric) {
     CopyOnWriteArraySet<WebSocketSession> jobSessions = sessions.get(jobId);
     if (jobSessions == null || jobSessions.isEmpty()) {
@@ -460,6 +482,7 @@ public class TrainingJobService {
     }
   }
 
+  // 将原始 JSON 事件广播给前端，适用于 backprop、test_result 和 control。
   private void broadcastRaw(String jobId, String payload) {
     CopyOnWriteArraySet<WebSocketSession> jobSessions = sessions.get(jobId);
     if (jobSessions == null || jobSessions.isEmpty()) {
@@ -478,6 +501,7 @@ public class TrainingJobService {
     }
   }
 
+  // 向单个 WebSocket session 发送训练指标对象。
   private void send(WebSocketSession session, TrainingMetricMessage metric) {
     if (!session.isOpen()) {
       return;
@@ -489,6 +513,7 @@ public class TrainingJobService {
     }
   }
 
+  // 向单个 WebSocket session 发送已经序列化好的 JSON 字符串。
   private void sendRaw(WebSocketSession session, String payload) {
     if (!session.isOpen()) {
       return;
@@ -500,6 +525,7 @@ public class TrainingJobService {
     }
   }
 
+  // 写入 control.json，让 Python worker 读取暂停、恢复或停止命令。
   private void writeControl(TrainingJob job, String command) {
     try {
       Files.writeString(job.controlFile(), objectMapper.writeValueAsString(Map.of("command", command)), StandardCharsets.UTF_8);
@@ -508,6 +534,7 @@ public class TrainingJobService {
     }
   }
 
+  // 从内存任务表中取训练任务，不存在时抛出统一业务异常。
   private TrainingJob getJob(String jobId) {
     TrainingJob job = jobs.get(jobId);
     if (job == null) {
@@ -516,12 +543,14 @@ public class TrainingJobService {
     return job;
   }
 
+  // 校验当前操作必须已登录。
   private void requireUser(String username) {
     if (username == null || username.isBlank()) {
       throw new IllegalArgumentException("Please login first.");
     }
   }
 
+  // 校验训练任务归属于当前用户，防止跨用户访问 job。
   private TrainingJob requireOwnedJob(String username, String jobId) {
     requireUser(username);
     TrainingJob job = getJob(jobId);
@@ -531,6 +560,7 @@ public class TrainingJobService {
     return job;
   }
 
+  // 将训练完成后的 checkpoint 元信息写入数据库，权重文件只保存路径。
   private TrainingCheckpoint saveCheckpoint(TrainingJob job, JsonNode testResult) {
     AppUser user = users.findByUsername(job.username())
         .orElseThrow(() -> new IllegalArgumentException("User not found."));
@@ -615,6 +645,7 @@ public class TrainingJobService {
     );
   }
 
+  // 读取 checkpoint 中保存的 JSON 字段，解析失败时返回安全默认值。
   private JsonNode readCheckpointJson(String raw, JsonNode fallback) {
     if (raw == null || raw.isBlank()) {
       return fallback;
@@ -626,11 +657,13 @@ public class TrainingJobService {
     }
   }
 
+  // 将网络层列表转换成适合实验对比页展示的结构描述。
   private String describeNetwork(List<JsonNode> layers) {
     List<String> parts = summarizeLayers(layers == null ? objectMapper.createArrayNode() : objectMapper.valueToTree(layers));
     return String.join(" -> ", parts);
   }
 
+  // 逐层提取网络摘要，忽略被禁用的层。
   private List<String> summarizeLayers(JsonNode layers) {
     List<String> summary = new ArrayList<>();
     if (layers == null || !layers.isArray()) {
@@ -645,6 +678,7 @@ public class TrainingJobService {
     return summary;
   }
 
+  // 将单个前端层 JSON 转换成中文摘要文本。
   private String summarizeLayer(JsonNode layer) {
     String type = layer.path("type").asText("layer");
     JsonNode params = layer.path("params");
@@ -668,6 +702,7 @@ public class TrainingJobService {
     };
   }
 
+  // 运行 checkpoint 测试子任务，并把 worker 返回结果转换成 DTO。
   private CheckpointTestResult runCheckpointTest(TrainingCheckpoint checkpoint) {
     try {
       JsonNode result = runCheckpointWorker(checkpoint, "test_checkpoint", Map.of(), "test_result", 10);
@@ -677,6 +712,7 @@ public class TrainingJobService {
     }
   }
 
+  // 为 checkpoint 测试、样本列表和单样本推理创建一次性 Python worker 子任务。
   private JsonNode runCheckpointWorker(
       TrainingCheckpoint checkpoint,
       String action,
@@ -750,21 +786,25 @@ public class TrainingJobService {
     }
   }
 
+  // 校验 checkpoint 属于当前用户并返回实体。
   private TrainingCheckpoint requireCheckpoint(String username, Long checkpointId) {
     return checkpoints.findByIdAndUserUsername(checkpointId, username)
         .orElseThrow(() -> new IllegalArgumentException("Checkpoint not found."));
   }
 
+  // 单样本推理只允许使用已完成训练的 checkpoint。
   private void requireCompletedCheckpoint(TrainingCheckpoint checkpoint) {
     if ("stopped".equals(checkpoint.getStatus()) || checkpoint.getEpoch() < checkpoint.getTotalEpochs()) {
       throw new IllegalArgumentException("Only completed checkpoints can be used for single-sample inference.");
     }
   }
 
+  // 根据训练请求生成模型签名，用于标识同一数据集下的结构配置。
   private String modelSignature(StartTrainingRequest request) {
     return modelSignature(request.datasetId(), request.layers());
   }
 
+  // 将数据集 ID 和归一化后的层配置做 SHA-256，得到稳定的模型结构指纹。
   private String modelSignature(String datasetId, List<JsonNode> layers) {
     ObjectNode root = objectMapper.createObjectNode();
     root.put("datasetId", datasetId);
@@ -785,6 +825,7 @@ public class TrainingJobService {
     }
   }
 
+  // 校验 train/val/test 划分比例，确保训练集非空且总和为 1。
   private void validateSplit(SplitRequest split) {
     if (split.train() <= 0) {
       throw new IllegalArgumentException("split.train must be greater than 0.");
@@ -798,14 +839,17 @@ public class TrainingJobService {
     }
   }
 
+  // 对可选整数参数提供默认值，避免无效 batch/epoch 进入训练任务。
   private int valueOrDefault(Integer value, int fallback) {
     return value == null || value <= 0 ? fallback : value;
   }
 
+  // 生成带时间戳和随机后缀的训练任务 ID。
   private String nextJobId() {
     return "train-" + LocalDateTime.now().format(JOB_ID_TIME) + "-" + UUID.randomUUID().toString().substring(0, 8);
   }
 
+  // 规范化配置中的 URL 前缀，避免拼接 WebSocket 地址时出现双斜杠。
   private String trimTrailingSlash(String value) {
     if (value == null || value.isBlank()) {
       return "";
@@ -813,15 +857,18 @@ public class TrainingJobService {
     return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
   }
 
+  // 生成前端连接训练指标 WebSocket 所需的 streamUrl。
   private String streamUrl(String jobId) {
     String path = "/api/training/stream?jobId=" + jobId;
     return streamBaseUrl.isBlank() ? path : streamBaseUrl + path;
   }
 
+  // 从 WebSocket 查询参数中读取 jobId。
   static String jobIdFromSession(WebSocketSession session) {
     return queryParamFromSession(session, "jobId");
   }
 
+  // 从 WebSocket URI query 中解析指定参数。
   static String queryParamFromSession(WebSocketSession session, String name) {
     URI uri = session.getUri();
     if (uri == null || uri.getQuery() == null) {
@@ -869,6 +916,7 @@ public class TrainingJobService {
       this.checkpointFile = directory.resolve("checkpoint.pt");
     }
 
+    // 将训练请求写入 request.json，供 Python worker 启动后读取。
     private void writeRequest() throws IOException {
       Map<String, Object> payload = Map.of(
           "jobId", jobId,
@@ -885,6 +933,7 @@ public class TrainingJobService {
       Files.writeString(requestFile, objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8);
     }
 
+    // 将内存任务状态转换成前端可消费的状态 DTO。
     private TrainingStatusResponse toStatus() {
       TrainingMetricMessage metric = latestMetric;
       return new TrainingStatusResponse(
@@ -903,6 +952,7 @@ public class TrainingJobService {
       );
     }
 
+    // 清空当前 job 的指标、测试结果、checkpoint 标记和事件缓存。
     private void reset() {
       latestMetric = null;
       testResult = null;

@@ -61,6 +61,7 @@ public class TrainingController {
     this.collaborationHandler = collaborationHandler;
   }
 
+  // 查询当前用户可见的训练数据集列表，支持按来源过滤内置或上传数据集。
   @GetMapping("/datasets")
   @Operation(summary = "List training datasets")
   public List<TrainingDatasetOption> listDatasets(
@@ -71,12 +72,14 @@ public class TrainingController {
     return datasetService.listDatasets(source, username(principal));
   }
 
+  // 查询平台内置训练数据集，供 B 端默认选择区展示。
   @GetMapping("/datasets/builtin")
   @Operation(summary = "List built-in training datasets")
   public List<TrainingDatasetOption> listBuiltinDatasets() {
     return datasetService.listBuiltin();
   }
 
+  // 查询单个训练数据集详情，包含预览、类别分布、划分比例和告警信息。
   @GetMapping("/datasets/{datasetId}")
   @Operation(summary = "Get dataset detail")
   @ApiResponse(responseCode = "200", description = "Dataset detail")
@@ -85,6 +88,7 @@ public class TrainingController {
     return datasetService.getDetail(datasetId, username(principal));
   }
 
+  // 删除当前用户上传的数据集；内置数据集和其他用户数据集不会被删除。
   @DeleteMapping("/datasets/{datasetId}")
   @Operation(summary = "Delete an uploaded dataset")
   @ApiResponse(responseCode = "204", description = "Dataset deleted")
@@ -94,6 +98,7 @@ public class TrainingController {
     return ResponseEntity.noContent().build();
   }
 
+  // 鉴权读取上传数据集中的私有文件，主要用于图片预览。
   @GetMapping("/datasets/{datasetId}/files/**")
   @Operation(summary = "Get a private uploaded dataset file")
   @ApiResponse(responseCode = "200", description = "Dataset file")
@@ -116,6 +121,7 @@ public class TrainingController {
         .body(new FileSystemResource(file));
   }
 
+  // 为内置图片数据集生成轻量 SVG 预览，避免前端加载大量真实图片。
   @GetMapping(value = "/datasets/{datasetId}/preview/{index}", produces = "image/svg+xml")
   @Operation(summary = "Get SVG preview for a built-in dataset sample")
   @ApiResponse(responseCode = "200", description = "SVG preview")
@@ -126,6 +132,7 @@ public class TrainingController {
         .body(datasetService.builtInPreviewSvg(datasetId, index));
   }
 
+  // 上传 CSV、图片或 ZIP 数据集，并将解析后的元信息写入数据集表。
   @PostMapping(value = "/datasets/imports", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Operation(summary = "Import an uploaded training dataset")
   @ApiResponse(responseCode = "200", description = "Dataset imported")
@@ -140,6 +147,7 @@ public class TrainingController {
     return datasetService.importDataset(files, labelColumn, classCount, username(principal));
   }
 
+  // 启动真实 PyTorch 训练任务，返回 jobId 和训练指标 WebSocket 地址。
   @PostMapping("/start")
   @Operation(summary = "Start a training job")
   @ApiResponse(responseCode = "200", description = "Training job started")
@@ -148,6 +156,7 @@ public class TrainingController {
     return jobService.start(request, principal == null ? null : principal.getName());
   }
 
+  // 查询当前用户保存的训练 checkpoint，可按数据集过滤用于实验对比。
   @GetMapping("/checkpoints")
   @Operation(summary = "List saved training checkpoints")
   public List<TrainingCheckpointSummary> checkpoints(
@@ -157,12 +166,14 @@ public class TrainingController {
     return jobService.listCheckpoints(principal == null ? null : principal.getName(), datasetId);
   }
 
+  // 查询当前活跃的训练协作聊天室列表。
   @GetMapping("/collaboration/rooms")
   @Operation(summary = "List active training collaboration rooms")
   public List<CollaborationRoomSummary> collaborationRooms() {
     return collaborationHandler.listRooms();
   }
 
+  // 使用指定 checkpoint 重新跑测试集，返回测试指标和样本预测结果。
   @PostMapping("/checkpoints/{checkpointId}/test")
   @Operation(summary = "Run checkpoint test evaluation")
   @ApiResponse(responseCode = "200", description = "Checkpoint test result")
@@ -175,6 +186,7 @@ public class TrainingController {
     return jobService.testCheckpoint(principal == null ? null : principal.getName(), checkpointId, request);
   }
 
+  // 查询 checkpoint 可用于单样本推理的样本列表。
   @GetMapping("/checkpoints/{checkpointId}/samples")
   @Operation(summary = "List samples available for single checkpoint inference")
   @ApiResponse(responseCode = "200", description = "Sample list")
@@ -187,6 +199,7 @@ public class TrainingController {
     return jobService.listCheckpointSamples(principal == null ? null : principal.getName(), checkpointId, limit);
   }
 
+  // 对 checkpoint 的指定样本做推理，并返回预测结果和层激活。
   @PostMapping("/checkpoints/{checkpointId}/infer")
   @Operation(summary = "Run single-sample inference with layer activations")
   @ApiResponse(responseCode = "200", description = "Single inference result")
@@ -199,54 +212,63 @@ public class TrainingController {
     return jobService.inferCheckpointSample(principal == null ? null : principal.getName(), checkpointId, request);
   }
 
+  // 查询训练任务当前权重分布直方图，用于 B 端训练过程可视化。
   @GetMapping("/{jobId}/weights/histogram")
   @Operation(summary = "Get weight histogram for a training job")
   public WeightHistogramResponse histogram(Principal principal, @PathVariable String jobId) {
     return jobService.histogram(username(principal), jobId);
   }
 
+  // 查询训练任务当前状态，包含 epoch、batch、最新指标和状态文本。
   @GetMapping("/{jobId}/status")
   @Operation(summary = "Get training job status")
   public TrainingStatusResponse status(Principal principal, @PathVariable String jobId) {
     return jobService.status(username(principal), jobId);
   }
 
+  // 暂停训练任务，底层通过 control.json 通知 Python worker。
   @PostMapping("/{jobId}/pause")
   @Operation(summary = "Pause a training job")
   public TrainingControlResponse pause(Principal principal, @PathVariable String jobId) {
     return jobService.pause(username(principal), jobId);
   }
 
+  // 恢复已暂停的训练任务。
   @PostMapping("/{jobId}/resume")
   @Operation(summary = "Resume a paused training job")
   public TrainingControlResponse resume(Principal principal, @PathVariable String jobId) {
     return jobService.resume(username(principal), jobId);
   }
 
+  // 停止训练任务，通知 Python worker 在安全边界退出。
   @PostMapping("/{jobId}/stop")
   @Operation(summary = "Stop a training job")
   public TrainingControlResponse stop(Principal principal, @PathVariable String jobId) {
     return jobService.stop(username(principal), jobId);
   }
 
+  // 重置训练任务状态，当前实现等价于停止并清空内存状态。
   @PostMapping("/{jobId}/reset")
   @Operation(summary = "Reset a training job")
   public TrainingControlResponse reset(Principal principal, @PathVariable String jobId) {
     return jobService.reset(username(principal), jobId);
   }
 
+  // 手动保存当前训练任务 checkpoint 元信息。
   @PostMapping("/{jobId}/save")
   @Operation(summary = "Save a training checkpoint")
   public TrainingControlResponse save(Principal principal, @PathVariable String jobId) {
     return jobService.save(username(principal), jobId);
   }
 
+  // 将训练模块抛出的业务参数错误统一转成 400 响应。
   @ExceptionHandler(IllegalArgumentException.class)
   ResponseEntity<DatasetErrorResponse> trainingBadRequest(IllegalArgumentException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new DatasetErrorResponse("BAD_REQUEST", ex.getMessage()));
   }
 
+  // 从 Spring Security Principal 中取用户名，未登录时返回 null。
   private String username(Principal principal) {
     return principal == null ? null : principal.getName();
   }

@@ -51,6 +51,7 @@ export class TrainingCollaborationService implements OnDestroy {
     return this.clientId;
   }
 
+  // 建立训练协作聊天室连接；createRoom 为 true 时允许后端创建新房间。
   connect(jobId: string, displayName = '', createRoom = false): void {
     const room = jobId.trim();
     if (!room) return;
@@ -83,10 +84,12 @@ export class TrainingCollaborationService implements OnDestroy {
     };
   }
 
+  // 查询后端当前仍然活跃的训练协作房间列表。
   async listRooms(): Promise<CollaborationRoomSummary[]> {
     return this.api.request<CollaborationRoomSummary[]>('/api/training/collaboration/rooms');
   }
 
+  // 向当前聊天室发送文本消息，空内容或未连接时直接忽略。
   send(text: string): void {
     const content = text.trim();
     if (!content || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -95,6 +98,7 @@ export class TrainingCollaborationService implements OnDestroy {
     this.socket.send(JSON.stringify({ type: 'chat', text: content }));
   }
 
+  // 主动断开聊天室 WebSocket，并清空当前房间标识。
   disconnect(): void {
     if (this.socket) {
       const socket = this.socket;
@@ -110,10 +114,12 @@ export class TrainingCollaborationService implements OnDestroy {
     }
   }
 
+  // 服务销毁时关闭聊天室连接，避免页面离开后仍保留在线成员。
   ngOnDestroy(): void {
     this.disconnect();
   }
 
+  // 解析聊天室后端消息，并按 history/presence/chat/assistant_update 更新状态流。
   private handleMessage(raw: string): void {
     let payload: CollaborationInbound;
     try {
@@ -147,6 +153,7 @@ export class TrainingCollaborationService implements OnDestroy {
     }
   }
 
+  // 根据 API baseUrl 和当前页面协议推导 WebSocket 基础地址。
   private wsBaseUrl(): string {
     if (this.api.baseUrl) {
       return this.api.baseUrl.replace(/^http/i, 'ws');
@@ -154,6 +161,7 @@ export class TrainingCollaborationService implements OnDestroy {
     return `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
   }
 
+  // 生成浏览器端临时 clientId，供协作旁观流校验房间成员身份。
   private createClientId(): string {
     return globalThis.crypto?.randomUUID?.()
       ?? `collab-${Date.now()}-${Math.random().toString(16).slice(2)}`;

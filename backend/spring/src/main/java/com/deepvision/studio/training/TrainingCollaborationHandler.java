@@ -64,6 +64,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     this.objectMapper = objectMapper;
   }
 
+  // 返回当前仍有成员在线的训练协作房间摘要。
   public List<CollaborationRoomSummary> listRooms() {
     return rooms.entrySet().stream()
         .map(entry -> {
@@ -81,6 +82,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
         .toList();
   }
 
+  // 校验某个 clientId 是否已经加入指定训练房间，供旁观训练流鉴权。
   public boolean hasParticipant(String jobId, String clientId) {
     if (jobId == null || clientId == null || clientId.isBlank()) {
       return false;
@@ -90,6 +92,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
   }
 
   @Override
+  // 建立聊天室连接：校验 jobId、房间是否存在，并向新成员补发历史消息。
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
     Map<String, String> query = queryParams(session.getUri());
     String jobId = query.getOrDefault("jobId", "");
@@ -124,6 +127,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
   }
 
   @Override
+  // 处理客户端聊天消息，写入房间历史并在提到智能助手时触发 LLM 回复。
   protected void handleTextMessage(WebSocketSession session, TextMessage message) {
     Participant participant = participants.get(session.getId());
     if (participant == null) {
@@ -162,6 +166,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
   }
 
   @Override
+  // 成员离开时更新在线列表；如果房间没人则销毁房间状态。
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
     Participant participant = participants.remove(session.getId());
     if (participant == null) {
@@ -179,6 +184,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
   }
 
   @Override
+  // WebSocket 异常时复用关闭逻辑清理成员状态。
   public void handleTransportError(WebSocketSession session, Throwable exception) {
     afterConnectionClosed(session, CloseStatus.SERVER_ERROR);
   }
@@ -188,6 +194,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     assistantExecutor.shutdownNow();
   }
 
+  // 根据 JWT 或访客名称识别聊天室参与者，并保留 clientId 供旁观流校验。
   private Participant identifyParticipant(WebSocketSession session, Map<String, String> query, String jobId) {
     String clientId = query.getOrDefault("clientId", "").trim();
     if (clientId.isBlank()) {
@@ -212,6 +219,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     return new Participant(jobId, "guest-" + session.getId(), guestName, clientId);
   }
 
+  // 广播当前房间在线成员列表，并把智能助手作为固定成员展示。
   private void broadcastPresence(String jobId) {
     RoomState room = rooms.get(jobId);
     if (room == null) {
@@ -237,6 +245,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     ));
   }
 
+  // 向房间广播系统提示，例如成员加入或离开。
   private void broadcastSystem(String jobId, String text) {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("type", "system");
@@ -246,6 +255,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     broadcast(jobId, payload);
   }
 
+  // 调用 LLM 流式生成智能助手回复，并将增量内容广播到房间。
   private void requestAssistantReply(Participant requester, String rawText, List<Map<String, Object>> recentMessages) {
     String question = stripAssistantMention(rawText);
     if (question.isBlank()) {
@@ -278,6 +288,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     });
   }
 
+  // 发送一条完整的智能助手普通消息。
   private void broadcastAssistant(String jobId, String text) {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("type", "chat");
@@ -294,6 +305,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     broadcast(jobId, payload);
   }
 
+  // 先广播一条空的助手消息，占位用于后续流式更新。
   private void broadcastAssistantStart(String jobId, String messageId) {
     Map<String, Object> payload = assistantPayload(jobId, messageId, "", true);
     RoomState room = rooms.get(jobId);
@@ -303,6 +315,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     broadcast(jobId, payload);
   }
 
+  // 更新指定助手消息的流式内容和 streaming 状态。
   private void broadcastAssistantUpdate(String jobId, String messageId, String text, boolean streaming) {
     RoomState room = rooms.get(jobId);
     if (room != null) {
@@ -318,6 +331,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     broadcast(jobId, payload);
   }
 
+  // 构造智能助手消息载荷，统一普通消息和流式占位消息格式。
   private Map<String, Object> assistantPayload(String jobId, String messageId, String text, boolean streaming) {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("type", "chat");
@@ -331,14 +345,17 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     return payload;
   }
 
+  // 判断聊天文本是否显式 @智能助手。
   private boolean mentionsAssistant(String text) {
     return text.startsWith("@" + ASSISTANT_NAME) || text.contains("@" + ASSISTANT_NAME + " ");
   }
 
+  // 去掉 @智能助手 前缀，提取真正要发给 LLM 的问题。
   private String stripAssistantMention(String text) {
     return text.replace("@" + ASSISTANT_NAME, "").trim();
   }
 
+  // 构造智能助手系统提示词，把当前训练状态注入回答上下文。
   private String assistantSystemPrompt(TrainingStatusResponse status) {
     return """
         你是深度学习演示平台训练聊天室中的智能助手。
@@ -371,6 +388,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     );
   }
 
+  // 构造用户提示词，包含提问者、问题和最近聊天室上下文。
   private String assistantUserPrompt(Participant requester, String question, List<Map<String, Object>> recentMessages) {
     List<String> context = recentMessages.stream()
         .filter(message -> "chat".equals(String.valueOf(message.get("type"))))
@@ -383,6 +401,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
         + "\n\n最近聊天室上下文：\n" + (context.isEmpty() ? "无" : String.join("\n", context));
   }
 
+  // 将消息序列化后广播给房间内所有仍然打开的 WebSocket session。
   private void broadcast(String jobId, Object payload) {
     RoomState room = rooms.get(jobId);
     if (room == null) {
@@ -407,6 +426,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     }
   }
 
+  // 向单个 session 发送 JSON 消息，主要用于新成员补发历史记录。
   private void send(WebSocketSession session, Object payload) {
     if (!session.isOpen()) {
       return;
@@ -418,6 +438,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     }
   }
 
+  // 解析 WebSocket 连接 URI 中的 query 参数。
   private Map<String, String> queryParams(URI uri) {
     Map<String, String> params = new LinkedHashMap<>();
     if (uri == null || uri.getQuery() == null) {
@@ -442,6 +463,7 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
     private final ArrayDeque<Map<String, Object>> recentMessages = new ArrayDeque<>();
     private final Instant createdAt = Instant.now();
 
+    // 添加房间历史消息，并限制缓存条数避免内存无限增长。
     private synchronized void addMessage(Map<String, Object> message) {
       recentMessages.addLast(message);
       while (recentMessages.size() > MAX_RECENT_MESSAGES) {
@@ -449,10 +471,12 @@ public class TrainingCollaborationHandler extends TextWebSocketHandler {
       }
     }
 
+    // 返回房间历史消息快照，用于新成员加入时补发。
     private synchronized List<Map<String, Object>> recentMessages() {
       return new ArrayList<>(recentMessages);
     }
 
+    // 根据消息 ID 更新助手流式回复内容。
     private synchronized void updateMessage(String id, String text, boolean streaming) {
       for (Map<String, Object> message : recentMessages) {
         if (id.equals(String.valueOf(message.get("id")))) {

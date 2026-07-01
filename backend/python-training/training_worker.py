@@ -20,12 +20,14 @@ from torch.utils.data import DataLoader, Dataset, Subset
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif"}
 
 
+# 包装 PyTorch Sequential，同时保存前端层与 PyTorch module 的映射关系。
 class ModelBundle(nn.Sequential):
     def __init__(self, modules: list[nn.Module], layer_refs: list[dict[str, Any]]) -> None:
         super().__init__(*modules)
         self.layer_refs = layer_refs
 
 
+# 图片分类数据集：从类别文件夹读取图片并转换成 CxHxW 张量。
 class ImageClassificationDataset(Dataset):
     def __init__(self, root: Path, width: int, height: int, channels: int) -> None:
         self.root = root
@@ -66,6 +68,7 @@ class ImageClassificationDataset(Dataset):
         return data, torch.tensor(label, dtype=torch.long)
 
 
+# CSV 分类数据集：解析标签列，数值特征转 float，类别特征做 one-hot 编码。
 class CsvClassificationDataset(Dataset):
     def __init__(self, path: Path, label_column: str, class_count: int | None = None) -> None:
         rows: list[list[str]]
@@ -143,6 +146,7 @@ class CsvClassificationDataset(Dataset):
         return self.x[index], self.y[index]
 
 
+# 合成回归数据集：为房价回归预设任务提供轻量训练样本。
 class SyntheticRegressionDataset(Dataset):
     def __init__(self, count: int = 240, seed: int = 20260518) -> None:
         rng = random.Random(seed)
@@ -186,6 +190,7 @@ class SyntheticRegressionDataset(Dataset):
         return self.x[index], self.y[index]
 
 
+# 自动展平层：把图像特征图转成全连接层可接收的向量。
 class AutoFlatten(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.ndim > 2:
@@ -193,6 +198,7 @@ class AutoFlatten(nn.Module):
         return x
 
 
+# 小型残差块：支持 shortcut 投影，保证主分支和旁路维度可相加。
 class ResidualBlock(nn.Module):
     def __init__(
         self,
@@ -222,6 +228,7 @@ class ResidualBlock(nn.Module):
         return self.act(out)
 
 
+# worker 入口：读取 request.json，根据 action 分发到训练、测试或推理流程。
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", required=True)
@@ -240,6 +247,7 @@ def main() -> int:
     return 0
 
 
+# 执行一次完整训练任务：加载数据、构建模型、训练验证、保存 checkpoint 并测试。
 def train(request: dict[str, Any]) -> None:
     job_id = request["jobId"]
     dataset_root = Path(request["datasetRoot"]).resolve()
@@ -340,6 +348,7 @@ def train(request: dict[str, Any]) -> None:
     emit({"type": "control", "jobId": job_id, "status": "completed", "message": "Training completed. Test set evaluated."})
 
 
+# 加载指定 checkpoint 重新跑测试集，用于实验对比页验证历史模型。
 def test_checkpoint(request: dict[str, Any]) -> None:
     job_id = request.get("jobId", "checkpoint-test")
     dataset_root = Path(request["datasetRoot"]).resolve()
@@ -386,6 +395,7 @@ def test_checkpoint(request: dict[str, Any]) -> None:
     })
 
 
+# 列出 checkpoint 所属数据集的可推理样本，供前端单样本推理选择。
 def list_checkpoint_samples(request: dict[str, Any]) -> None:
     dataset_root = Path(request["datasetRoot"]).resolve()
     dataset_id = request["datasetId"]
@@ -403,6 +413,7 @@ def list_checkpoint_samples(request: dict[str, Any]) -> None:
     })
 
 
+# 加载 checkpoint 对单个样本做推理，并收集各层激活用于可视化解释。
 def infer_checkpoint_sample(request: dict[str, Any]) -> None:
     job_id = request.get("jobId", "single-sample-inference")
     dataset_root = Path(request["datasetRoot"]).resolve()
@@ -471,10 +482,12 @@ def infer_checkpoint_sample(request: dict[str, Any]) -> None:
     })
 
 
+# 兼容旧请求：当 request 中没有 checkpointFile 时推断默认任务目录。
 def request_path_fallback(job_id: str) -> Path:
     return Path.cwd() / "training-jobs" / job_id
 
 
+# 保存 PyTorch 权重和训练配置，供后续测试、实验对比和单样本推理加载。
 def save_checkpoint(
     checkpoint_file: Path,
     model: nn.Module,
@@ -495,6 +508,7 @@ def save_checkpoint(
     }, checkpoint_file)
 
 
+# 根据 datasetId 加载内置或上传数据集，并结合输入层推断图片尺寸。
 def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any]]) -> Dataset:
     input_shape = infer_input_shape(layers, dataset_id)
     if dataset_id in {"mnist-1000", "cifar10-500", "cifar10-5000"}:
@@ -525,6 +539,7 @@ def load_dataset(dataset_root: Path, dataset_id: str, layers: list[dict[str, Any
     raise ValueError(f"Dataset {dataset_id} is not available to the Python trainer.")
 
 
+# 按前端配置的 train/val/test 比例和固定 seed 划分数据集。
 def split_dataset(dataset: Dataset, split: dict[str, float], seed: int) -> tuple[Subset, Subset, Subset]:
     count = len(dataset)
     train_count = max(1, int(round(count * float(split.get("train", 0.7)))))
@@ -541,6 +556,7 @@ def split_dataset(dataset: Dataset, split: dict[str, float], seed: int) -> tuple
     return Subset(dataset, train_indices), Subset(dataset, val_indices), Subset(dataset, test_indices)
 
 
+# 将前端网络层 JSON 动态转换成 PyTorch 模型，并保留 layer_refs 映射。
 def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_count: int) -> nn.Module:
     modules: list[nn.Module] = []
     layer_refs: list[dict[str, Any]] = []
@@ -645,6 +661,7 @@ def build_model(layers: list[dict[str, Any]], sample_x: torch.Tensor, class_coun
     return model
 
 
+# 构造前端 layerId 到 PyTorch module 下标的映射记录。
 def layer_ref(layer: dict[str, Any], layer_type: str, module_indices: list[int], trainable: bool) -> dict[str, Any]:
     return {
         "layerId": int(layer.get("id") or -1),
@@ -655,6 +672,7 @@ def layer_ref(layer: dict[str, Any], layer_type: str, module_indices: list[int],
     }
 
 
+# 根据层参数向 module 列表追加激活函数，Identity 不实际加入。
 def append_activation(modules: list[nn.Module], activation: Any) -> None:
     module = activation_module(activation)
     if isinstance(module, nn.Identity):
@@ -662,6 +680,7 @@ def append_activation(modules: list[nn.Module], activation: Any) -> None:
     modules.append(module)
 
 
+# 将前端激活函数字符串映射为 PyTorch 激活层。
 def activation_module(activation: Any) -> nn.Module:
     if activation in {None, "none", "softmax"}:
         return nn.Identity()
@@ -676,6 +695,7 @@ def activation_module(activation: Any) -> nn.Module:
     return nn.Identity()
 
 
+# 根据训练配置创建优化器，支持 SGD、Momentum、Adam、AdamW 等。
 def build_optimizer(parameters, config: dict[str, Any]):
     lr = float(config.get("learningRate") or 0.001)
     name = str(config.get("optimizer") or "Adam").lower()
@@ -696,6 +716,7 @@ def build_optimizer(parameters, config: dict[str, Any]):
     return torch.optim.Adam(parameters, lr=lr)
 
 
+# 根据训练配置创建学习率调度器，未启用时返回 None。
 def build_scheduler(optimizer, config: dict[str, Any], total_epochs: int):
     scheduler = str(config.get("scheduler") or "none").lower()
     decay = float(config.get("lrDecay") or 0.9)
@@ -706,6 +727,7 @@ def build_scheduler(optimizer, config: dict[str, Any], total_epochs: int):
     return None
 
 
+# 从 Dataset 或 DataLoader 包装的 Subset 中安全读取自定义属性。
 def dataset_attr(loader_or_dataset: Any, name: str, default: Any = None) -> Any:
     current = loader_or_dataset
     if isinstance(current, DataLoader):
@@ -715,6 +737,7 @@ def dataset_attr(loader_or_dataset: Any, name: str, default: Any = None) -> Any:
     return getattr(current, name, default)
 
 
+# 根据配置和数据集类型判断当前任务是分类、二分类还是回归。
 def loss_mode(config: dict[str, Any], dataset: Any) -> str:
     configured = str(config.get("lossFunction") or "").lower()
     if configured in {"mse", "mean_squared_error"} or bool(getattr(dataset, "is_regression", False)):
@@ -724,6 +747,7 @@ def loss_mode(config: dict[str, Any], dataset: Any) -> str:
     return "cross_entropy"
 
 
+# 根据损失函数实例反推训练目标模式，方便统一计算指标。
 def criterion_mode(criterion: nn.Module) -> str:
     if isinstance(criterion, nn.MSELoss):
         return "mse"
@@ -732,6 +756,7 @@ def criterion_mode(criterion: nn.Module) -> str:
     return "cross_entropy"
 
 
+# 根据前端 lossFunction 和数据集类型创建 PyTorch 损失函数。
 def build_criterion(config: dict[str, Any], dataset: Dataset) -> nn.Module:
     mode = loss_mode(config, dataset)
     if mode == "mse":
@@ -741,6 +766,7 @@ def build_criterion(config: dict[str, Any], dataset: Dataset) -> nn.Module:
     return nn.CrossEntropyLoss()
 
 
+# 将标签张量转换成当前损失函数需要的目标格式。
 def prepare_targets(logits: torch.Tensor, y: torch.Tensor, mode: str) -> torch.Tensor:
     if mode == "mse":
         return y.float().view(logits.shape)
@@ -751,6 +777,7 @@ def prepare_targets(logits: torch.Tensor, y: torch.Tensor, mode: str) -> torch.T
     return y.long()
 
 
+# 计算一个 batch 的分类准确率或回归近似正确率。
 def batch_score(logits: torch.Tensor, y: torch.Tensor, mode: str, target_scale: float = 1.0) -> float:
     if mode == "mse":
         prediction = logits.detach().float().view(-1)
@@ -765,6 +792,7 @@ def batch_score(logits: torch.Tensor, y: torch.Tensor, mode: str, target_scale: 
     return float((pred == y.long()).sum().detach().cpu())
 
 
+# 训练一个 epoch，并在代表 batch 输出前向、损失、反向和参数更新事件。
 def train_epoch(
     model,
     loader,
@@ -885,6 +913,7 @@ def train_epoch(
     return total_loss / max(1, total), total_score / max(1, total), last_gradient_norm, latest_backprop
 
 
+# 在 optimizer.step 前保存可训练参数快照，用于后续计算参数更新范数。
 def snapshot_trainable_parameters(model: nn.Module) -> dict[str, torch.Tensor]:
     return {
         name: parameter.detach().clone()
@@ -893,6 +922,7 @@ def snapshot_trainable_parameters(model: nn.Module) -> dict[str, torch.Tensor]:
     }
 
 
+# 按前端层收集梯度范数、梯度均值、直方图和权重范数等反向传播统计。
 def collect_layer_backprop_stats(model: nn.Module, before: dict[str, torch.Tensor]) -> list[dict[str, Any]]:
     refs = list(getattr(model, "layer_refs", []))
     rows: list[dict[str, Any]] = []
@@ -923,6 +953,7 @@ def collect_layer_backprop_stats(model: nn.Module, before: dict[str, torch.Tenso
     return rows
 
 
+# optimizer.step 后对比参数快照，补充每层参数更新范数。
 def apply_update_norms(rows: list[dict[str, Any]], model: nn.Module, before: dict[str, torch.Tensor]) -> None:
     refs = list(getattr(model, "layer_refs", []))
     modules = list(model)
@@ -939,6 +970,7 @@ def apply_update_norms(rows: list[dict[str, Any]], model: nn.Module, before: dic
         row["updateNorm"] = round(tensor_norm(deltas), 6)
 
 
+# 构造发送给前端的反向传播教学事件，包含阶段、梯度、更新和预测解释。
 def build_backprop_event(
     job_id: str,
     epoch: int,
@@ -990,12 +1022,14 @@ def build_backprop_event(
     }
 
 
+# 计算一组张量拼接后的 L2 范数。
 def tensor_norm(values: list[torch.Tensor]) -> float:
     if not values:
         return 0.0
     return math.sqrt(sum(float(value.detach().norm(2).cpu()) ** 2 for value in values))
 
 
+# 计算一组张量拼接后的均值。
 def tensor_mean(values: list[torch.Tensor]) -> float:
     if not values:
         return 0.0
@@ -1003,6 +1037,7 @@ def tensor_mean(values: list[torch.Tensor]) -> float:
     return float(merged.mean()) if merged.numel() else 0.0
 
 
+# 计算一组张量拼接后的绝对值最大值。
 def tensor_abs_max(values: list[torch.Tensor]) -> float:
     if not values:
         return 0.0
@@ -1010,6 +1045,7 @@ def tensor_abs_max(values: list[torch.Tensor]) -> float:
     return float(merged.max()) if merged.numel() else 0.0
 
 
+# 将梯度张量压缩成直方图数据，供前端反向传播面板展示。
 def tensor_histogram(values: list[torch.Tensor], bins: int = 14) -> list[dict[str, Any]]:
     if not values:
         return []
@@ -1034,6 +1070,7 @@ def tensor_histogram(values: list[torch.Tensor], bins: int = 14) -> list[dict[st
     ]
 
 
+# 根据预测类别、真实类别和置信度生成一句中文教学解释。
 def prediction_explanation(predicted_index: int, true_index: int, confidence: float, true_probability: float) -> str:
     if predicted_index == true_index:
         return f"当前样本预测正确，真实类别概率约 {true_probability:.1%}，反向传播会继续巩固这一路输出。"
@@ -1043,6 +1080,7 @@ def prediction_explanation(predicted_index: int, true_index: int, confidence: fl
     )
 
 
+# 在验证集或测试集上评估平均 loss 和准确率/回归得分。
 def evaluate(model, loader, criterion, device) -> tuple[float, float]:
     model.eval()
     mode = criterion_mode(criterion)
@@ -1064,6 +1102,7 @@ def evaluate(model, loader, criterion, device) -> tuple[float, float]:
     return total_loss / max(1, total), total_score / max(1, total)
 
 
+# 收集少量测试集预测样本，用于前端展示模型正确/错误案例。
 def collect_prediction_samples(
     model: nn.Module,
     dataset: Dataset,
@@ -1120,10 +1159,12 @@ def collect_prediction_samples(
     return samples
 
 
+# 从数据集中收集样本元信息列表，供单样本推理选择器使用。
 def collect_dataset_samples(dataset: Dataset, dataset_root: Path, limit: int = 60) -> list[dict[str, Any]]:
     return [sample_metadata(dataset, index, dataset_root) for index in range(min(limit, len(dataset)))]
 
 
+# 构造单个样本的标签、索引和图片 URL 等元信息。
 def sample_metadata(dataset: Dataset, index: int, dataset_root: Path) -> dict[str, Any]:
     x, y = dataset[index]
     classes = list(getattr(dataset, "classes", []))
@@ -1161,6 +1202,7 @@ def sample_metadata(dataset: Dataset, index: int, dataset_root: Path) -> dict[st
     return item
 
 
+# 对单样本逐层前向推理，并捕获每个前端层对应的激活输出。
 def infer_with_activations(model: nn.Module, sample_x: torch.Tensor) -> tuple[torch.Tensor, list[dict[str, Any]]]:
     modules = list(model)
     refs = list(getattr(model, "layer_refs", []))
@@ -1181,6 +1223,7 @@ def infer_with_activations(model: nn.Module, sample_x: torch.Tensor) -> tuple[to
     return current, activations
 
 
+# 将某层激活张量转换为前端可展示的摘要、预览和 Top 激活值。
 def activation_payload(ref: dict[str, Any], tensor: torch.Tensor, order: int) -> dict[str, Any]:
     detached = tensor.detach().cpu()
     without_batch = detached[0] if detached.ndim > 0 and detached.shape[0] == 1 else detached
@@ -1203,6 +1246,7 @@ def activation_payload(ref: dict[str, Any], tensor: torch.Tensor, order: int) ->
     }
 
 
+# 按张量维度生成灰度图、向量或标量形式的激活预览。
 def activation_preview(tensor: torch.Tensor) -> dict[str, Any]:
     data = tensor.float()
     if data.ndim == 3:
@@ -1232,6 +1276,7 @@ def activation_preview(tensor: torch.Tensor) -> dict[str, Any]:
     }
 
 
+# 将二维特征图降采样到较小尺寸，减少单样本推理响应体积。
 def downsample_channel(channel: torch.Tensor, max_side: int = 18) -> tuple[list[float], int, int]:
     height, width = int(channel.shape[0]), int(channel.shape[1])
     out_height = min(max_side, height)
@@ -1245,6 +1290,7 @@ def downsample_channel(channel: torch.Tensor, max_side: int = 18) -> tuple[list[
     return values, out_width, out_height
 
 
+# 将激活值归一化到 0 到 1，方便前端绘制热力预览。
 def normalize_values(values: list[float]) -> list[float]:
     if not values:
         return []
@@ -1254,6 +1300,7 @@ def normalize_values(values: list[float]) -> list[float]:
     return [round((value - min_value) / span, 6) for value in values]
 
 
+# 提取激活张量中数值最大的若干位置和数值。
 def top_activation_values(flat: torch.Tensor, limit: int = 6) -> list[dict[str, Any]]:
     if flat.numel() <= 0:
         return []
@@ -1268,6 +1315,7 @@ def top_activation_values(flat: torch.Tensor, limit: int = 6) -> list[dict[str, 
     ]
 
 
+# 从类别概率中提取 Top-K 预测结果。
 def top_class_predictions(probs: torch.Tensor, classes: list[str], limit: int = 5) -> list[dict[str, Any]]:
     values, indices = torch.topk(probs, k=min(limit, probs.numel()))
     return [
@@ -1280,6 +1328,7 @@ def top_class_predictions(probs: torch.Tensor, classes: list[str], limit: int = 
     ]
 
 
+# 如果样本来自图片数据集，返回原始图片路径。
 def sample_image_path(dataset: Dataset, index: int) -> Path | None:
     raw_samples = getattr(dataset, "samples", None)
     if not isinstance(raw_samples, list) or index < 0 or index >= len(raw_samples):
@@ -1288,6 +1337,7 @@ def sample_image_path(dataset: Dataset, index: int) -> Path | None:
     return path if isinstance(path, Path) else Path(path)
 
 
+# 将数据集文件路径转换成 Spring 可代理访问的资源 URL。
 def dataset_url(path: Path, dataset_root: Path) -> str:
     try:
         rel = path.resolve().relative_to(dataset_root.resolve())
@@ -1301,6 +1351,7 @@ def dataset_url(path: Path, dataset_root: Path) -> str:
     return "/datasets/" + "/".join(quote(part) for part in parts)
 
 
+# 计算整个模型所有梯度的全局 L2 范数。
 def compute_gradient_norm(model) -> float:
     total = 0.0
     for parameter in model.parameters():
@@ -1309,6 +1360,7 @@ def compute_gradient_norm(model) -> float:
     return math.sqrt(total)
 
 
+# 统计模型所有参数的均值和标准差，用于权重分布可视化。
 def weight_stats(model) -> tuple[float, float]:
     values = []
     for name, parameter in model.named_parameters():
@@ -1320,6 +1372,7 @@ def weight_stats(model) -> tuple[float, float]:
     return float(weights.mean()), float(weights.std(unbiased=False))
 
 
+# 根据梯度范数粗略判断梯度稳定、消失或爆炸。
 def gradient_status(norm: float) -> str:
     if norm < 0.02:
         return "vanishing"
@@ -1328,6 +1381,7 @@ def gradient_status(norm: float) -> str:
     return "stable"
 
 
+# 读取 control.json；如果处于 paused 状态就循环等待恢复或停止命令。
 def wait_if_paused(control_file: Path) -> str:
     while True:
         command = read_control(control_file)
@@ -1336,6 +1390,7 @@ def wait_if_paused(control_file: Path) -> str:
         time.sleep(0.25)
 
 
+# 安全读取 control.json 中的训练控制命令。
 def read_control(control_file: Path) -> str:
     try:
         data = json.loads(control_file.read_text(encoding="utf-8"))
@@ -1344,6 +1399,7 @@ def read_control(control_file: Path) -> str:
         return "running"
 
 
+# 根据输入层参数或数据集默认值推断图片输入宽高和通道数。
 def infer_input_shape(layers: list[dict[str, Any]], dataset_id: str) -> tuple[int, int, int]:
     for layer in layers:
         if layer.get("type") == "input":
@@ -1356,12 +1412,14 @@ def infer_input_shape(layers: list[dict[str, Any]], dataset_id: str) -> tuple[in
     return default_shape(dataset_id)
 
 
+# 返回内置图像数据集的默认输入尺寸。
 def default_shape(dataset_id: str) -> tuple[int, int, int]:
     if dataset_id in {"cifar10-500", "cifar10-5000"}:
         return 32, 32, 3
     return 28, 28, 1
 
 
+# 在 CSV 表头中查找标签列，支持归一化后的宽松匹配。
 def resolve_label_column(headers: list[str], label_column: str) -> int:
     requested = label_column.strip()
     for i, header in enumerate(headers):
@@ -1374,10 +1432,12 @@ def resolve_label_column(headers: list[str], label_column: str) -> int:
     return -1
 
 
+# 归一化列名，便于中英文和大小写混合情况下匹配标签列。
 def normalize_column_name(name: str) -> str:
     return "".join(ch for ch in name.lower() if ch.isalnum() or "\u4e00" <= ch <= "\u9fff")
 
 
+# 判断字符串是否可以解析为浮点数。
 def is_float(value: str) -> bool:
     try:
         float(value)
@@ -1386,11 +1446,13 @@ def is_float(value: str) -> bool:
         return False
 
 
+# 过滤 ID、姓名等不适合作为训练特征的 CSV 列。
 def is_ignored_feature_column(header: str) -> bool:
     normalized = normalize_column_name(header)
     return normalized in {"id", "studentid", "name", "姓名"} or normalized.endswith("id")
 
 
+# 向 stdout 输出一行 JSON，Spring 后端会逐行读取并转发给前端。
 def emit(payload: dict[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False), flush=True)
 
