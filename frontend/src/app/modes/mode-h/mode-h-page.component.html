@@ -1,0 +1,140 @@
+<div class="mode-h-shell">
+  <app-platform-topbar
+    modeLabel="Mode H"
+    modeTitle="学习情况看板"
+    [user]="user"
+    [statusPills]="statusPills"
+    (logoutRequested)="logout()"
+  >
+    <div topbar-actions>
+      <a routerLink="/mode-g">去练习</a>
+      <button type="button" (click)="loadDashboard()" [disabled]="loading || !user">刷新看板</button>
+    </div>
+  </app-platform-topbar>
+
+  <main class="dashboard-main">
+    @if (!user) {
+      <section class="login-panel">
+        <div class="panel-title" data-icon="H">学习情况看板需要登录</div>
+        <p>登录后可以查看你的薄弱知识点、复习状态和错题本。</p>
+        <div class="login-actions">
+          <a routerLink="/login">登录</a>
+          <a routerLink="/register">注册</a>
+        </div>
+      </section>
+    } @else {
+      @if (error) {
+        <div class="error-box">{{ error }}</div>
+      }
+
+      <section class="overview-band">
+        <div class="overview-copy">
+          <p class="eyebrow">Learning Dashboard</p>
+          <h1>学习情况看板</h1>
+          <p>根据 G 模式作答记录，汇总薄弱知识点、复习间隔和仍需订正的错题。</p>
+        </div>
+        <div class="overview-metrics">
+          <div>
+            <span>累计作答</span>
+            <strong>{{ dashboard?.profile?.answeredCount ?? 0 }}</strong>
+          </div>
+          <div>
+            <span>正确率</span>
+            <strong>{{ ((dashboard?.profile?.accuracy ?? 0) * 100) | number:'1.0-0' }}%</strong>
+          </div>
+          <div>
+            <span>错题数</span>
+            <strong>{{ wrongQuestions.length }}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel weak-panel">
+          <div class="panel-head">
+            <div class="panel-title" data-icon="!">薄弱知识点</div>
+            <a routerLink="/mode-g">补弱练习</a>
+          </div>
+          @if (weakTopics.length) {
+            <div class="weak-list">
+              @for (topic of weakTopics; track topic.topic) {
+                <div class="weak-card">
+                  <div class="weak-top">
+                    <strong>{{ topic.label }}</strong>
+                    <span>{{ scoreLevel(topic.score) }}</span>
+                  </div>
+                  <div class="score-track"><i [style.width.%]="topic.score"></i></div>
+                  <div class="weak-bottom">
+                    <em>{{ topic.score | number:'1.0-0' }} 分</em>
+                    <p>{{ topic.suggestion }}</p>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="muted">暂无画像数据，先去 G 模式完成几道题。</p>
+          }
+        </article>
+
+        <article class="panel review-panel">
+          <div class="panel-head">
+            <div class="panel-title" data-icon="↻">复习情况</div>
+            <a routerLink="/mode-g">间隔复习</a>
+          </div>
+          <div class="review-table">
+            <div class="review-row header">
+              <span>知识点</span>
+              <span>状态</span>
+              <span>练习</span>
+              <span>正确率</span>
+              <span>间隔</span>
+            </div>
+            @for (row of reviewRows; track row.topic) {
+              <div class="review-row">
+                <strong>{{ row.label }}</strong>
+                <span class="status-pill" [ngClass]="reviewClass(row.status)">{{ row.status }}</span>
+                <span>{{ row.attemptCount }} 次</span>
+                <span>{{ (row.accuracy * 100) | number:'1.0-0' }}%</span>
+                <span>{{ row.lastReviewedAt ? row.hoursSinceReview + 'h' : '未练习' }}</span>
+                <p>{{ row.suggestion }}</p>
+              </div>
+            }
+          </div>
+        </article>
+      </section>
+
+      <section class="panel wrong-panel">
+        <div class="panel-head">
+          <div class="panel-title" data-icon="×">错题本</div>
+          <a routerLink="/mode-g">重新练习</a>
+        </div>
+        @if (wrongQuestions.length) {
+          <div class="wrong-list">
+            @for (item of wrongQuestions; track item.questionCode) {
+              <article class="wrong-card">
+                <header>
+                  <div>
+                    <span class="topic-chip">{{ item.topicLabel }}</span>
+                    <span class="difficulty-chip">难度 {{ item.difficulty }}</span>
+                  </div>
+                  <time>{{ item.answeredAt | date:'MM-dd HH:mm' }}</time>
+                </header>
+                <h2>{{ item.prompt }}</h2>
+                <div class="wrong-answer">
+                  <span>你的答案：{{ optionLabel(item.selectedIndex) }}</span>
+                  <strong>正确答案：{{ optionLabel(item.answerIndex) }}</strong>
+                </div>
+                <p>{{ item.explanation }}</p>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <strong>暂时没有错题</strong>
+            <p>完成 G 模式练习后，最近一次仍答错的题会自动进入这里。</p>
+          </div>
+        }
+      </section>
+    }
+  </main>
+</div>

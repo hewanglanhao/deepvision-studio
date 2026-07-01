@@ -46,12 +46,57 @@ export interface QuizAnswerResponse {
   profile: QuizProfileResponse;
 }
 
+export interface QuizWeakTopic {
+  topic: string;
+  label: string;
+  score: number;
+  level: string;
+  suggestion: string;
+}
+
+export interface QuizReviewStatus {
+  topic: string;
+  label: string;
+  score: number;
+  attemptCount: number;
+  wrongCount: number;
+  accuracy: number;
+  lastReviewedAt: string | null;
+  hoursSinceReview: number;
+  status: string;
+  suggestion: string;
+}
+
+export interface QuizWrongQuestion {
+  questionCode: string;
+  topic: string;
+  topicLabel: string;
+  difficulty: number;
+  prompt: string;
+  options: string[];
+  selectedIndex: number;
+  answerIndex: number;
+  explanation: string;
+  answeredAt: string;
+}
+
+export interface QuizDashboardResponse {
+  profile: QuizProfileResponse;
+  weakTopics: QuizWeakTopic[];
+  reviewStatus: QuizReviewStatus[];
+  wrongQuestions: QuizWrongQuestion[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class QuizApiService {
   constructor(private readonly api: ApiClientService) {}
 
   profile(): Promise<QuizProfileResponse> {
     return this.api.request<QuizProfileResponse>('/api/quiz/profile');
+  }
+
+  dashboard(): Promise<QuizDashboardResponse> {
+    return this.api.request<QuizDashboardResponse>('/api/quiz/dashboard');
   }
 
   recommendations(mode: QuizMode, limit: number): Promise<QuizRecommendationResponse> {

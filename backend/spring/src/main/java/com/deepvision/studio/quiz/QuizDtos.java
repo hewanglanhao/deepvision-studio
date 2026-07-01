@@ -60,4 +60,45 @@ public final class QuizDtos {
       boolean correct,
       Instant answeredAt
   ) {}
+
+  public record QuizDashboardResponse(
+      QuizProfileResponse profile,
+      List<WeakTopicResponse> weakTopics,
+      List<ReviewStatusResponse> reviewStatus,
+      List<WrongQuestionResponse> wrongQuestions
+  ) {}
+
+  public record WeakTopicResponse(
+      String topic,
+      String label,
+      double score,
+      String level,
+      String suggestion
+  ) {}
+
+  public record ReviewStatusResponse(
+      String topic,
+      String label,
+      double score,
+      int attemptCount,
+      int wrongCount,
+      double accuracy,
+      Instant lastReviewedAt,
+      long hoursSinceReview,
+      String status,
+      String suggestion
+  ) {}
+
+  public record WrongQuestionResponse(
+      String questionCode,
+      String topic,
+      String topicLabel,
+      int difficulty,
+      String prompt,
+      List<String> options,
+      int selectedIndex,
+      int answerIndex,
+      String explanation,
+      Instant answeredAt
+  ) {}
 }

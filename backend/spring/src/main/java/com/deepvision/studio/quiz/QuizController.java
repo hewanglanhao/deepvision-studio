@@ -2,6 +2,7 @@ package com.deepvision.studio.quiz;
 
 import com.deepvision.studio.quiz.QuizDtos.QuizAnswerRequest;
 import com.deepvision.studio.quiz.QuizDtos.QuizAnswerResponse;
+import com.deepvision.studio.quiz.QuizDtos.QuizDashboardResponse;
 import com.deepvision.studio.quiz.QuizDtos.QuizProfileResponse;
 import com.deepvision.studio.quiz.QuizDtos.QuizRecommendationResponse;
 import com.deepvision.studio.quiz.QuizDtos.QuizQuestionResponse;
@@ -27,6 +28,11 @@ public class QuizController {
   @GetMapping("/profile")
   public QuizProfileResponse profile(Principal principal) {
     return quizService.profile(username(principal));
+  }
+
+  @GetMapping("/dashboard")
+  public QuizDashboardResponse dashboard(Principal principal) {
+    return quizService.dashboard(username(principal));
   }
 
   @GetMapping("/questions")

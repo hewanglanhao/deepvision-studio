@@ -5,9 +5,13 @@ import com.deepvision.studio.auth.AppUserRepository;
 import com.deepvision.studio.quiz.QuizDtos.QuizAnswerRequest;
 import com.deepvision.studio.quiz.QuizDtos.QuizAnswerResponse;
 import com.deepvision.studio.quiz.QuizDtos.QuizAttemptSummary;
+import com.deepvision.studio.quiz.QuizDtos.QuizDashboardResponse;
 import com.deepvision.studio.quiz.QuizDtos.QuizProfileResponse;
 import com.deepvision.studio.quiz.QuizDtos.QuizRecommendationResponse;
 import com.deepvision.studio.quiz.QuizDtos.QuizQuestionResponse;
+import com.deepvision.studio.quiz.QuizDtos.ReviewStatusResponse;
+import com.deepvision.studio.quiz.QuizDtos.WeakTopicResponse;
+import com.deepvision.studio.quiz.QuizDtos.WrongQuestionResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,6 +71,19 @@ public class QuizService {
   @Transactional
   public QuizProfileResponse profile(String username) {
     return toProfileResponse(profileFor(user(username)));
+  }
+
+  @Transactional
+  public QuizDashboardResponse dashboard(String username) {
+    AppUser user = user(username);
+    QuizUserProfile profile = profileFor(user);
+    List<QuizAttempt> history = attempts.findByUserOrderByAnsweredAtDesc(user);
+    return new QuizDashboardResponse(
+        toProfileResponse(profile),
+        weakTopics(profile),
+        reviewStatus(profile, history),
+        wrongQuestions(history)
+    );
   }
 
   @Transactional(readOnly = true)
@@ -169,6 +186,138 @@ public class QuizService {
         attempt.isCorrect(),
         attempt.getAnsweredAt()
     );
+  }
+
+  private List<WeakTopicResponse> weakTopics(QuizUserProfile profile) {
+    return profile.scores().entrySet().stream()
+        .sorted(Map.Entry.comparingByValue())
+        .limit(5)
+        .map(entry -> {
+          double score = entry.getValue();
+          return new WeakTopicResponse(
+              entry.getKey(),
+              topicLabel(entry.getKey()),
+              score,
+              masteryLevel(score),
+              weakTopicSuggestion(entry.getKey(), score)
+          );
+        })
+        .toList();
+  }
+
+  private List<ReviewStatusResponse> reviewStatus(QuizUserProfile profile, List<QuizAttempt> history) {
+    Map<String, TopicReviewStats> stats = new LinkedHashMap<>();
+    for (String topic : profile.scores().keySet()) {
+      stats.put(topic, new TopicReviewStats());
+    }
+    for (QuizAttempt attempt : history) {
+      String topic = attempt.getQuestion().getTopic();
+      TopicReviewStats stat = stats.computeIfAbsent(topic, ignored -> new TopicReviewStats());
+      stat.attemptCount += 1;
+      if (!attempt.isCorrect()) {
+        stat.wrongCount += 1;
+      }
+      if (stat.lastReviewedAt == null || attempt.getAnsweredAt().isAfter(stat.lastReviewedAt)) {
+        stat.lastReviewedAt = attempt.getAnsweredAt();
+      }
+    }
+    Instant now = Instant.now();
+    return stats.entrySet().stream()
+        .map(entry -> {
+          TopicReviewStats stat = entry.getValue();
+          double accuracy = stat.attemptCount <= 0 ? 0 : (double) (stat.attemptCount - stat.wrongCount) / stat.attemptCount;
+          long hours = hoursSince(stat.lastReviewedAt, now);
+          double score = profile.score(entry.getKey());
+          String status = reviewStatusText(score, hours, stat.wrongCount);
+          return new ReviewStatusResponse(
+              entry.getKey(),
+              topicLabel(entry.getKey()),
+              score,
+              stat.attemptCount,
+              stat.wrongCount,
+              accuracy,
+              stat.lastReviewedAt,
+              hours,
+              status,
+              reviewSuggestion(entry.getKey(), score, hours, stat.wrongCount)
+          );
+        })
+        .sorted(Comparator
+            .comparing((ReviewStatusResponse item) -> reviewStatusRank(item.status()))
+            .thenComparing(ReviewStatusResponse::score))
+        .toList();
+  }
+
+  private List<WrongQuestionResponse> wrongQuestions(List<QuizAttempt> history) {
+    Map<String, QuizAttempt> latestByQuestion = new LinkedHashMap<>();
+    for (QuizAttempt attempt : history) {
+      latestByQuestion.putIfAbsent(attempt.getQuestion().getCode(), attempt);
+    }
+    return latestByQuestion.values().stream()
+        .filter(attempt -> !attempt.isCorrect())
+        .limit(30)
+        .map(attempt -> {
+          QuizQuestion question = attempt.getQuestion();
+          return new WrongQuestionResponse(
+              question.getCode(),
+              question.getTopic(),
+              topicLabel(question.getTopic()),
+              question.getDifficulty(),
+              question.getPrompt(),
+              readOptions(question),
+              attempt.getSelectedIndex(),
+              question.getAnswerIndex(),
+              question.getExplanation(),
+              attempt.getAnsweredAt()
+          );
+        })
+        .toList();
+  }
+
+  private String masteryLevel(double score) {
+    if (score >= 80) return "稳固";
+    if (score >= 60) return "发展";
+    if (score >= 40) return "待巩固";
+    return "薄弱";
+  }
+
+  private String weakTopicSuggestion(String topic, double score) {
+    if (score < 40) {
+      return "建议优先做入门和基础题，先补齐 " + topicLabel(topic) + " 的核心概念。";
+    }
+    if (score < 60) {
+      return "建议做基础到进阶题，保持最近发展区内的挑战。";
+    }
+    return "当前不是最薄弱项，可穿插少量进阶题保持熟练度。";
+  }
+
+  private String reviewStatusText(double score, long hours, int wrongCount) {
+    if (wrongCount > 0 && score < 65) return "需要复习";
+    if (hours >= 72) return "到期复习";
+    if (hours >= 24) return "建议巩固";
+    return "保持中";
+  }
+
+  private int reviewStatusRank(String status) {
+    return switch (status) {
+      case "需要复习" -> 0;
+      case "到期复习" -> 1;
+      case "建议巩固" -> 2;
+      default -> 3;
+    };
+  }
+
+  private String reviewSuggestion(String topic, double score, long hours, int wrongCount) {
+    if (wrongCount > 0 && score < 65) {
+      return "近期有错题且掌握度偏低，建议回到 G 模式使用优先补弱策略。";
+    }
+    if (hours >= 72) {
+      return "距离上次练习已超过 3 天，建议进行间隔复习。";
+    }
+    if (score >= 80) {
+      return topicLabel(topic) + " 掌握较稳，可以在套题中保持覆盖。";
+    }
+    return "保持少量练习，避免记忆衰退。";
   }
 
   private List<QuizQuestionResponse> weaknessQuestions(
@@ -447,4 +596,10 @@ public class QuizService {
       int answerIndex,
       String explanation
   ) {}
+
+  private static class TopicReviewStats {
+    private int attemptCount;
+    private int wrongCount;
+    private Instant lastReviewedAt;
+  }
 }

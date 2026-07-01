@@ -10,4 +10,6 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
   List<QuizAttempt> findTop20ByUserOrderByAnsweredAtDesc(AppUser user);
 
   List<QuizAttempt> findTop200ByUserOrderByAnsweredAtDesc(AppUser user);
+
+  List<QuizAttempt> findByUserOrderByAnsweredAtDesc(AppUser user);
 }

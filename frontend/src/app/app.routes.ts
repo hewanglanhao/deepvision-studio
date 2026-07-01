@@ -76,6 +76,11 @@ export const routes: Routes = [
       .then(m => m.ModeGPageComponent)
   },
   {
+    path: 'mode-h',
+    loadComponent: () => import('@modes/mode-h/mode-h-page.component')
+      .then(m => m.ModeHPageComponent)
+  },
+  {
     path: 'ai-museum',
     loadComponent: () => import('@modes/ai-museum/ai-museum-page.component')
       .then(m => m.AiMuseumPageComponent)

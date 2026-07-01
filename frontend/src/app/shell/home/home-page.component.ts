@@ -92,10 +92,19 @@ export class HomePageComponent {
       accent: 'green',
       highlights: ['用户画像', '智能推荐', '组卷练习'],
     },
+    {
+      id: 'H',
+      title: '模式 H',
+      label: '学习情况看板',
+      description: '汇总个性化练习后的薄弱知识点、复习状态和错题本，帮助用户决定下一步学习重点。',
+      route: '/mode-h',
+      accent: 'blue',
+      highlights: ['薄弱知识点', '复习情况', '错题本'],
+    },
   ];
 
   readonly metrics = [
-    { label: '学习模式', value: '7' },
+    { label: '学习模式', value: '8' },
     { label: '可视化主线', value: 'Forward / Train / CNN Explain / Transformer / Museum' },
     { label: '高级能力', value: 'Web3D + AI + WebSocket + First-person Museum' },
   ];
