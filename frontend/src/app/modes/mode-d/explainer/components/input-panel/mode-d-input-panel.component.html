@@ -56,7 +56,17 @@
   </div>
 
   <div class="phase-zero-head">
-    <strong>真实推理</strong>
+    <div class="inference-source">
+      <strong>推理数据源</strong>
+      <span
+        class="inference-status"
+        [class.real]="state.inferenceSource() === 'real'"
+        [class.fallback]="state.inferenceSource() === 'fallback'"
+        [class.loading]="state.inferenceSource() === 'loading'"
+      >
+        {{ state.inferenceSourceLabel() }}
+      </span>
+    </div>
     <button
       type="button"
       class="probe-btn"
@@ -69,6 +79,10 @@
 
   @if (state.inferenceError()) {
     <p class="probe-error">{{ state.inferenceError() }}</p>
+  }
+
+  @if (state.inferenceSource() === 'fallback') {
+    <p class="fallback-note">当前页面仍可用于教学交互，但 Top-K 与注意力矩阵不是 GPT-2 的真实输出。</p>
   }
 
   <div class="token-strip" aria-label="当前 token 序列">

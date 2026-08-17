@@ -64,7 +64,9 @@ Thumbs.db
 /frontend/public/mode-d-assets/preview/
 /frontend/public/mode-d-assets/vendor/
 !/frontend/public/mode-d-assets/README.md
-/frontend/public/mode-d-assets/models/Xenova/gpt2
+/frontend/public/mode-d-assets/asset-manifest.json
+/frontend/public/mode-d-assets/models/
+/frontend/public/mode-d-assets/**/*.download
 
 # Legacy local transformer asset mirrors
 /frontend/public/mode-d/

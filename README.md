@@ -20,9 +20,12 @@ DeepVision Studio 是一个面向深度学习教学的可视化实验平台，�
 
 ```powershell
 cd frontend
-npm install
+npm ci
+npm run setup:mode-d
 npm start
 ```
+
+`setup:mode-d` 会下载并校验约 626 MiB 的 GPT-2 ONNX 资源。只体验其他模式时可以跳过；此时 D 模式会明确标注为“教学降级数据”。完整说明见 [Mode D 资源安装与验证](docs/mode-d-assets.md)。
 
 ```powershell
 cd backend/spring
@@ -51,7 +54,14 @@ python app.py
 
 ```powershell
 cd frontend
+npm run check:mode-d
 npm run build
+```
+
+也可以从全新克隆直接使用 Docker；前端镜像会在构建阶段自动安装 Mode D 资源：
+
+```powershell
+docker compose up --build
 ```
 
 ```powershell

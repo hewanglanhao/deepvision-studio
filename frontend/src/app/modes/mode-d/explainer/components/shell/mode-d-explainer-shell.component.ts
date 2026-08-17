@@ -26,7 +26,7 @@ export class ModeDExplainerShellComponent {
   @Input() user: AuthUser | null = null;
   @Output() readonly logoutRequested = new EventEmitter<void>();
 
-  readonly statusPills = ['Transformer 可解释', '真实 Top-K + 注意力'];
+  readonly statusPills = ['Transformer 可解释', '推理数据源可验证'];
 
   requestLogout(): void {
     this.logoutRequested.emit();

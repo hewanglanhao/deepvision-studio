@@ -29,6 +29,15 @@ export class ModeDStateService {
   readonly inferenceLoading = signal(false);
   readonly inferenceError = signal('');
   readonly inferenceResult = signal<ModeDInferenceResult | null>(null);
+  readonly inferenceSource = signal<'loading' | 'real' | 'fallback'>('loading');
+
+  readonly inferenceSourceLabel = computed(() => {
+    switch (this.inferenceSource()) {
+      case 'real': return '真实 GPT-2 ONNX 推理';
+      case 'fallback': return '教学降级数据';
+      default: return '正在加载模型资源';
+    }
+  });
 
   readonly currentExample = computed<ModeDExample | null>(() =>
     this.examples.find(example => example.id === this.selectedExampleId()) ?? null
@@ -161,6 +170,12 @@ export class ModeDStateService {
 
     return [
       {
+        title: '推理数据源',
+        body: this.inferenceSource() === 'real'
+          ? '当前 Top-K、token 和注意力矩阵来自浏览器内运行的 GPT-2 ONNX 模型。'
+          : '当前使用教学降级数据，不代表 GPT-2 的真实模型输出。请先安装 Mode D 资源后重新推理。'
+      },
+      {
         title: '当前样例',
         body: example
           ? `${example.title}：${example.subtitle}。当前输入为“${this.inputText()}”。`
@@ -249,6 +264,7 @@ export class ModeDStateService {
     const head = this.headOptions[this.selectedHeadIndex()]?.label ?? '当前头';
 
     return [
+      `当前数据源：${this.inferenceSourceLabel()}。`,
       '当前页面重点解释下一词预测和单头注意力如何共同决定模型输出。',
       `当前输入末尾语境让模型最倾向输出“${top1?.token ?? ''}”，概率约 ${(((top1?.probability) ?? 0) * 100).toFixed(1)}%。`,
       `${block} 的 ${head} 主要把注意力从“${strongest.sourceToken}”指向“${strongest.targetToken}”，说明模型正在利用这部分上下文决定下一词分布。`,
@@ -261,14 +277,18 @@ export class ModeDStateService {
   async runInference(): Promise<void> {
     this.inferenceLoading.set(true);
     this.inferenceError.set('');
+    this.inferenceSource.set('loading');
     try {
       const result = await this.inference.runInference(this.inputText(), 10);
       this.inferenceResult.set(result);
+      this.inferenceSource.set('real');
       this.hoveredCell.set(null);
       this.selectedCell.set(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transformer 推理失败。';
-      this.inferenceError.set(message);
+      this.inferenceResult.set(null);
+      this.inferenceSource.set('fallback');
+      this.inferenceError.set(`${message} 请在 frontend 目录执行 npm run setup:mode-d 后重试。`);
     } finally {
       this.inferenceLoading.set(false);
     }

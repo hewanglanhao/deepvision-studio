@@ -5,6 +5,8 @@
     "ng": "ng",
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
+    "setup:mode-d": "node scripts/setup-mode-d-assets.mjs",
+    "check:mode-d": "node scripts/setup-mode-d-assets.mjs --check",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },

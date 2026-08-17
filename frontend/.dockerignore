@@ -2,5 +2,9 @@
 dist
 node_modules
 npm-debug.log
+public/mode-d-assets/asset-manifest.json
+public/mode-d-assets/model-v2
+public/mode-d-assets/models
+public/mode-d-assets/vendor
 Dockerfile
 .dockerignore

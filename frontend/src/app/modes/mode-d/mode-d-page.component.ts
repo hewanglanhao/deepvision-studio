@@ -67,6 +67,7 @@ export class ModeDPageComponent implements OnInit, OnDestroy {
       '当前页面是 DeepVision Studio 的模式 D，用于演示 Transformer 下一词预测与注意力可视化。',
       example ? `当前样例：${example.title}。${example.subtitle}` : '',
       `当前输入：${this.state.inputText()}`,
+      `推理数据源：${this.state.inferenceSourceLabel()}`,
       `当前 token 序列：${this.state.tokens().join(' | ')}`,
       `当前视角：${block}，${head}`,
       `Top-K：${topK.slice(0, 5).map(item => `${item.rank}. ${item.token} ${(item.probability * 100).toFixed(1)}%`).join('；')}`,
